@@ -138,7 +138,6 @@ export function createProjectService(options: ServiceOptions = {}) {
   const fallbackCacheMs = options.fallbackCacheMs ?? 30_000;
   let cache: { value: ProjectData; expiresAt: number } | null = null;
   let lastGood: ProjectData | null = null;
-  let inFlight: Promise<ProjectData> | null = null;
 
   async function requestLive(): Promise<ProjectData> {
     const controller = new AbortController();
@@ -202,34 +201,49 @@ export function createProjectService(options: ServiceOptions = {}) {
 
   return async function getProject(): Promise<ProjectData> {
     if (cache && cache.expiresAt > now()) return cache.value;
-    if (inFlight) return inFlight;
-    inFlight = (async () => {
-      try {
-        const value = await requestLive();
-        lastGood = value;
-        cache = { value, expiresAt: now() + cacheMs };
-        return value;
-      } catch (error) {
-        // Deliberately log only our fixed category and numeric HTTP statuses.
-        // Upstream bodies, exception messages, headers and credentials stay out.
-        console.warn("[github-activity]", JSON.stringify({
-          category: error instanceof ProjectRequestError ? error.category : "network",
-          ...(error instanceof ProjectRequestError && error.statuses ? { statuses: error.statuses } : {}),
-        }));
-        const value: ProjectData = lastGood ? {
-          ...lastGood,
-          source: "snapshot",
-          snapshotDate: lastGood.fetchedAt ?? SNAPSHOT_DATE,
-          notice: "Live GitHub activity is temporarily unavailable. Showing the most recent successful server snapshot.",
-        } : { ...PROJECT_SNAPSHOT };
-        cache = { value, expiresAt: now() + fallbackCacheMs };
-        return value;
-      } finally {
-        inFlight = null;
-      }
-    })();
-    return inFlight;
+    // Cache completed data only. Pending I/O and abort signals belong to the
+    // initiating Worker request and must never be reused by another invocation.
+    try {
+      const value = await requestLive();
+      lastGood = value;
+      cache = { value, expiresAt: now() + cacheMs };
+      return value;
+    } catch (error) {
+      // Deliberately log only our fixed category and numeric HTTP statuses.
+      // Upstream bodies, exception messages, headers and credentials stay out.
+      console.warn("[github-activity]", JSON.stringify({
+        category: error instanceof ProjectRequestError ? error.category : "network",
+        ...(error instanceof ProjectRequestError && error.statuses ? { statuses: error.statuses } : {}),
+      }));
+      // Another independent request may already have refreshed the cache.
+      if (cache && cache.expiresAt > now() && cache.value.source === "github") return cache.value;
+      const value: ProjectData = lastGood ? {
+        ...lastGood,
+        source: "snapshot",
+        snapshotDate: lastGood.fetchedAt ?? SNAPSHOT_DATE,
+        notice: "Live GitHub activity is temporarily unavailable. Showing the most recent successful server snapshot.",
+      } : { ...PROJECT_SNAPSHOT };
+      cache = { value, expiresAt: now() + fallbackCacheMs };
+      return value;
+    }
   };
 }
 
 export const getProject = createProjectService();
+
+/** Last-resort route boundary: unexpected runtime rejection still yields honest data. */
+export async function createProjectResponse(loader: () => Promise<ProjectData> = getProject): Promise<Response> {
+  let project: ProjectData;
+  try {
+    project = await loader();
+  } catch {
+    console.warn("[github-activity]", '{"category":"runtime"}');
+    project = { ...PROJECT_SNAPSHOT };
+  }
+  return Response.json(project, {
+    headers: {
+      "Cache-Control": "public, max-age=30, s-maxage=60",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}

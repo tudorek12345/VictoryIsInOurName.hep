@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createProjectService, PROJECT_STATUS, REPOSITORY, REPOSITORY_URL } from '../app/lib/project-data.ts';
+import { createProjectService, createProjectResponse, PROJECT_STATUS, REPOSITORY, REPOSITORY_URL } from '../app/lib/project-data.ts';
 
 const sha = 'a'.repeat(40);
 function responseFor(url) {
@@ -23,13 +23,17 @@ test('live data uses only fixed GitHub endpoints and constructs canonical links'
   assert.equal(data.repo.fullName, REPOSITORY);
 });
 
-test('concurrent calls share one fetch pair and fresh cached data', async () => {
+test('concurrent calls use independent request I/O and reuse completed cached data', async () => {
   let count = 0;
-  const get = createProjectService({ fetcher: async (url) => { count++; await new Promise(resolve => setTimeout(resolve, 5)); return responseFor(url); } });
+  const signals = [];
+  const get = createProjectService({ now: () => 1795453200000, fetcher: async (url, init) => { count++; signals.push(init.signal); await new Promise(resolve => setTimeout(resolve, 5)); return responseFor(url); } });
   const [first, second] = await Promise.all([get(), get()]);
   await get();
   assert.deepEqual(first, second);
-  assert.equal(count, 2);
+  assert.equal(count, 4);
+  assert.equal(signals[0], signals[1]);
+  assert.equal(signals[2], signals[3]);
+  assert.notEqual(signals[0], signals[2]);
 });
 
 test('rate limiting returns an honest checked snapshot without upstream errors', async () => {
@@ -85,4 +89,17 @@ test('status distinguishes upstream observations from unverified first-frame goa
   assert.equal(PROJECT_STATUS.forkFirstFrameVerified, false);
   assert.equal(PROJECT_STATUS.milestones.find(m => m.id === 'frame').state, 'goal');
   assert.match(PROJECT_STATUS.currentBlocker.sourceUrl, /8e3c7c72/);
+});
+
+test('route boundary returns a labeled snapshot when a runtime loader unexpectedly rejects', async (t) => {
+  const logs = [];
+  t.mock.method(console, 'warn', (...args) => logs.push(args));
+  const response = await createProjectResponse(async () => { throw new Error('private runtime detail'); });
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.source, 'snapshot');
+  assert.equal(data.fetchedAt, null);
+  assert.match(data.notice, /snapshot/i);
+  assert.equal(JSON.stringify(data).includes('private runtime detail'), false);
+  assert.deepEqual(logs, [['[github-activity]', '{"category":"runtime"}']]);
 });
