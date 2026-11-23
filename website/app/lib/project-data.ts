@@ -30,26 +30,56 @@ export type ProjectData = {
 };
 
 export const PROJECT_SNAPSHOT: ProjectData = {
-  repo: {
-    name: "Leonida",
-    fullName: REPOSITORY,
-    url: REPOSITORY_URL,
-    defaultBranch: "main",
-    pushedAt: "2026-11-23T11:36:50Z",
-    stars: null,
-    forks: null,
+  "repo": {
+    "name": "Leonida",
+    "fullName": "tudorek12345/Leonida",
+    "url": "https://github.com/tudorek12345/Leonida",
+    "defaultBranch": "main",
+    "pushedAt": "2026-11-23T17:20:26Z",
+    "stars": 3,
+    "forks": 0
   },
-  commits: [{
-    sha: "561b65a832218fbb9e6d2effd392a8eef093a3f8",
-    message: "Merge remote-tracking branch 'origin/main' into triage-r44",
-    author: "ItsNotRexed",
-    date: "2026-11-23T11:28:03Z",
-    url: `${REPOSITORY_URL}/commit/561b65a832218fbb9e6d2effd392a8eef093a3f8`,
-  }],
-  source: "snapshot",
-  fetchedAt: null,
-  snapshotDate: SNAPSHOT_DATE,
-  notice: "Showing the repository snapshot checked on 23 November 2026. Live GitHub activity is temporarily unavailable.",
+  "commits": [
+    {
+      "sha": "2a724e779ddce7d74cb9fdda6d402776ef99f87b",
+      "message": "Refresh fork README, community links and announcements",
+      "author": "tudorek12345",
+      "date": "2026-11-23T17:20:25Z",
+      "url": "https://github.com/tudorek12345/Leonida/commit/2a724e779ddce7d74cb9fdda6d402776ef99f87b"
+    },
+    {
+      "sha": "43d2f4d858e9ce7dff2b92fa0f6faec2a239c64f",
+      "message": "Harden website activity fallback and add Discord announcement",
+      "author": "tudorek12345",
+      "date": "2026-11-23T17:11:34Z",
+      "url": "https://github.com/tudorek12345/Leonida/commit/43d2f4d858e9ce7dff2b92fa0f6faec2a239c64f"
+    },
+    {
+      "sha": "a27dfb6b00547540a7a26a64fe31c518ba9e545a",
+      "message": "Fix GitHub activity requests on Cloudflare Workers",
+      "author": "tudorek12345",
+      "date": "2026-11-23T17:03:30Z",
+      "url": "https://github.com/tudorek12345/Leonida/commit/a27dfb6b00547540a7a26a64fe31c518ba9e545a"
+    },
+    {
+      "sha": "ed7c310ecae7fd01873be2b948789006f2243e2a",
+      "message": "Add Heperkoo project website and first-frame developer handoff",
+      "author": "tudorek12345",
+      "date": "2026-11-23T16:58:25Z",
+      "url": "https://github.com/tudorek12345/Leonida/commit/ed7c310ecae7fd01873be2b948789006f2243e2a"
+    },
+    {
+      "sha": "9ce9a7923e41e3973a734218e9088ff6f0a6786e",
+      "message": "docs(i18n): find llvm-mc with where.exe in the de, fr and zh-CN quickstarts (EGEN-I18N-WHEREEXE) (#6717)",
+      "author": "evilclanker9000",
+      "date": "2026-11-23T16:52:35Z",
+      "url": "https://github.com/tudorek12345/Leonida/commit/9ce9a7923e41e3973a734218e9088ff6f0a6786e"
+    }
+  ],
+  "source": "snapshot",
+  "fetchedAt": null,
+  "snapshotDate": "2026-11-23",
+  "notice": "Showing a saved GitHub snapshot from 23 November 2026. Live activity is temporarily unavailable."
 };
 
 export const PROJECT_STATUS = {

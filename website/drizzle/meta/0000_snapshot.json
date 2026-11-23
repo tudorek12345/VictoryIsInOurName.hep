@@ -1,0 +1,73 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "721cca4e-b999-4554-88cb-7799c8539c04",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "site_visits": {
+      "name": "site_visits",
+      "columns": {
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "browser_id": {
+          "name": "browser_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "site_visits_browser_idx": {
+          "name": "site_visits_browser_idx",
+          "columns": [
+            "browser_id"
+          ],
+          "isUnique": false
+        },
+        "site_visits_recorded_at_idx": {
+          "name": "site_visits_recorded_at_idx",
+          "columns": [
+            "recorded_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "site_visits_request_length": {
+          "name": "site_visits_request_length",
+          "value": "length(\"site_visits\".\"request_id\") = 36"
+        },
+        "site_visits_browser_length": {
+          "name": "site_visits_browser_length",
+          "value": "\"site_visits\".\"browser_id\" IS NULL OR length(\"site_visits\".\"browser_id\") = 36"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
