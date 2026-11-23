@@ -1,3 +1,5 @@
+import { PROGRESS_UPDATE, SHOWCASE_EVENT_URL } from "./progress-update.ts";
+
 /** Public project metadata only. Game files, traces and credentials never enter this API. */
 export const REPOSITORY = "tudorek12345/Leonida";
 export const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
@@ -84,42 +86,61 @@ export const PROJECT_SNAPSHOT: ProjectData = {
 
 export const PROJECT_STATUS = {
   project: "Leonida · Heperkoo experimental fork",
-  lastReviewed: SNAPSHOT_DATE,
-  evidenceScope: "A pinned upstream report, not an independently reproduced run of this fork or a live assessment of the latest upstream branches.",
-  headline: "Working toward the first real frame",
+  lastReviewed: PROGRESS_UPDATE.date,
+  evidenceScope: PROGRESS_UPDATE.scope,
+  headline: "Boot and menus reported working; first-mission rendering remains blocked",
   renderedGameplayVerified: false,
   forkFirstFrameVerified: false,
-  verificationScope: "this-fork-and-cited-report",
+  verificationScope: "reported-single-machine",
   currentBlocker: {
-    label: "Documented upstream checkpoint",
-    title: "Descriptor heap address contract",
-    detail: "The pinned upstream experiment stopped on a CPU descriptor-handle assertion after creating its first descriptor heap. The documented resource stand-in also lacks the required connection between CPU virtual-address writes and GPU resource backing. Later branches may have progressed further; GitHub activity refresh does not update this curated runtime assessment.",
-    classification: "observed-upstream",
-    sourceUrl: EVIDENCE_URL,
+    label: "Maintainer-reported · one tested machine",
+    title: "Black first-mission image and host GPU failure",
+    detail: `${PROGRESS_UPDATE.stages.find((stage) => stage.id === "world")!.detail} The cause has not been established. Stable rendered gameplay and independent reproduction are not demonstrated by this report.`,
+    classification: "maintainer-reported",
+    sourceUrl: "https://leonida-heperkoo.meshedgoby9.chatgpt.site/progress-update.md",
   },
   experiment: {
+    date: PROGRESS_UPDATE.date,
+    environment: PROGRESS_UPDATE.environment,
+    testedMachineCount: 1,
+    classification: "maintainer-reported",
+    independentlyReproduced: false,
+    note: "The 30 fps report applies to first-boot screens. World loading is reported at about 50 seconds. The exact runtime revision, local changes and GPU driver still need to be captured for a reproducible handoff.",
+  },
+  historicalReference: {
+    label: "Historical pinned upstream experiment; not the current reported blocker",
     date: "2026-11-23",
     baselineCommit: "1cc6e3c12",
     locallyCombinedPullRequests: [6709, 4531, 6582, 4313, 4348, 2490],
     additionalLocalStandIns: true,
     environment: "Windows 11 · RTX 4090 · Vulkan backend",
-    note: "Local experimental fixes were combined for this report; this is not a claim that the same result is available from a clean upstream or fork checkout.",
+    sourceUrl: EVIDENCE_URL,
+    note: "This earlier pinned report stopped at a descriptor-heap CPU-handle assertion without reaching a draw or present. Its locally combined fixes and stand-ins describe that experiment only; it must not replace the newer maintainer-reported status.",
   },
-  milestones: [
-    { id: "image", title: "Executable mapped", state: "observed-upstream" },
-    { id: "startup", title: "Startup entered", state: "observed-upstream" },
-    { id: "graphics", title: "Device and queues created", state: "observed-upstream" },
-    { id: "heap", title: "Descriptor heap assertion", state: "blocked-upstream" },
-    { id: "frame", title: "Real game draw and presentation", state: "goal" },
-    { id: "play", title: "Repeatable playable session", state: "goal" },
+  milestones: PROGRESS_UPDATE.stages.map((stage) => ({
+    id: stage.id,
+    title: stage.stage,
+    state: stage.id === "world" ? "reported-blocked" : "reported-working",
+    reportedState: stage.state,
+    detail: stage.detail,
+    classification: "maintainer-reported",
+    independentlyVerified: false,
+  })),
+  nextMilestones: [
+    { id: "world-frame", title: "Correctly rendered first world frame", state: "goal" },
+    { id: "stable-world-entry", title: "Repeatable world entry without the reported GPU failure", state: "goal" },
+    { id: "independent-reproduction", title: "Independent reproduction on a recorded build and environment", state: "goal" },
   ],
   priorities: [
-    "Reconcile the fork with current upstream fixes and reproduce the startup trace.",
-    "Implement the measured descriptor and CPU/GPU memory semantics.",
-    "Capture a real game-generated frame with reproducible evidence.",
+    "Capture the exact runtime revision, local changes, package/build identifier and GPU driver for the reported RX 9070 XT run.",
+    "Reproduce the transition from world loading to the first-mission intro and collect the black-image and host-GPU-failure diagnostics without assuming a cause.",
+    "Reach a correctly rendered world frame and stable world entry, then verify that another developer can reproduce the result.",
   ],
+  credit: PROGRESS_UPDATE.credit,
+  showcaseEventUrl: SHOWCASE_EVENT_URL,
   sources: [
-    { title: "Pinned retail boot-chain report", url: EVIDENCE_URL },
+    { title: "Maintainer progress report · 23 November 2026", url: "https://leonida-heperkoo.meshedgoby9.chatgpt.site/progress-update.md" },
+    { title: "Historical pinned retail boot-chain report", url: EVIDENCE_URL },
     { title: "Fork source", url: REPOSITORY_URL },
     { title: "Upstream project", url: "https://github.com/ItsNotRexed/Leonida" },
     { title: "Startup tracing runbook", url: "https://github.com/ItsNotRexed/Leonida/blob/main/docs/boot.md" },

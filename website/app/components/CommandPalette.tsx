@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SHOWCASE_EVENT_URL } from "../lib/progress-update";
 
 export type Resource = { title: string; description: string; href: string; category: string; shortcut?: string };
 export const resources: Resource[] = [
+  {title:"Discord progress showcase — 25 November",description:"Join the stream, showcases, development and build updates. See your local time in Discord.",href:SHOWCASE_EVENT_URL,category:"EVENT"},
+  {title:"Latest reported runtime progress",description:"23 November: one Windows 11 / RX 9070 XT report, working stages and the world-rendering blocker.",href:"#progress-update",category:"UPDATE"},
+  {title:"Progress report and Marvis credit",description:"Read the maintainer-supplied stage table and ongoing collaboration note.",href:"/progress-update.md",category:"DOCUMENT"},
   {title:"Developer handoff",description:"The full brief for the next native runtime investigation.",href:"/handoff.md",category:"DOCUMENT"},
   {title:"Experiment workbench",description:"Prepare a local experiment and export a reproducible handoff.",href:"#workbench",category:"LOCAL TOOL"},
   {title:"Fork source",description:"tudorek12345/Leonida on GitHub.",href:"https://github.com/tudorek12345/Leonida",category:"REPOSITORY"},
   {title:"Upstream Leonida",description:"The original project and ongoing community work.",href:"https://github.com/ItsNotRexed/Leonida",category:"UPSTREAM"},
-  {title:"Pinned boot-chain report",description:"The documented 23 November 2026 upstream experiment.",href:"https://github.com/ItsNotRexed/Leonida/blob/8e3c7c72b79cabfbe8a2059fce56a5b99d6ddb51/docs/retail_boot_chain.md",category:"EVIDENCE"},
+  {title:"Historical upstream boot-chain report",description:"An earlier 23 November 2026 upstream experiment, retained as reference.",href:"https://github.com/ItsNotRexed/Leonida/blob/8e3c7c72b79cabfbe8a2059fce56a5b99d6ddb51/docs/retail_boot_chain.md",category:"EVIDENCE"},
   {title:"Startup tracing runbook",description:"Loader passes, startup traces, and D3D12 diagnostics.",href:"https://github.com/ItsNotRexed/Leonida/blob/main/docs/boot.md",category:"DOCUMENT"},
   {title:"Fork experiment workflow",description:"Short, reversible experiments with explicit results.",href:"https://github.com/tudorek12345/Leonida/blob/main/docs/FORK_EXPERIMENTS.md",category:"DOCUMENT"},
   {title:"Heperkoo’s Discord",description:"The existing MWCMP development community.",href:"https://discord.gg/ufXqPcVdVj",category:"COMMUNITY"},

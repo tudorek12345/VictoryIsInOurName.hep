@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   title: "Leonida / Heperkoo — Native Runtime Workbench",
   description: "Heperkoo's experimental Leonida fork. Native GTA VI PC runtime research, a local experiment workbench, source activity, and developer handoffs. Gameplay remains unverified in this fork.",
   openGraph: {
-    title: "Leonida / Heperkoo — One real frame",
-    description: "An independent native runtime lab. Open source, documented experiments, a contributor workbench, and ongoing collaboration.",
+    title: "Leonida / Heperkoo — Boot progress and world rendering",
+    description: "Boot screens, video and saves reported working on one Windows 11 / RX 9070 XT machine. Follow the progress showcase and ongoing world-rendering investigation.",
     type: "website",
     url: "https://leonida-heperkoo.meshedgoby9.chatgpt.site",
     siteName: "Leonida / Heperkoo",

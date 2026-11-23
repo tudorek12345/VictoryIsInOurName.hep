@@ -2,6 +2,26 @@
 
 The frontend and backend for the experimental [tudorek12345/Leonida](https://github.com/tudorek12345/Leonida) fork. This is the project's retro research workstation, activity feed and developer handoff. The game runtime remains in the repository's existing `runtime/` directory.
 
+## Latest update · 23 November 2026
+
+**[Join the GTA VI port progress showcase on Discord](https://discord.com/events/1459617753907331094/1574557419596677260)** — Wednesday, 25 November 2026. Discord displays the current event time in your timezone. The separate possible reproducible-build target remains 30 November.
+
+The website's top alert includes the supplied event screenshot, warning symbols, silent RGB effects, a pause control and reduced-motion support. The screenshot is framed with a CSS crop; [the original](public/images/showcase-discord.png) is preserved.
+
+**Maintainer report · one machine: Windows 11 / AMD RX 9070 XT**
+
+| Stage | Reported state |
+| --- | --- |
+| Boot and first-boot screens: accessibility, language, settings and legal | Works, 30 fps |
+| Intro video with sound | Works |
+| Start screen, profile and saves | Works |
+| Loading into the world | Works, about 50 seconds |
+| First mission's intro | Reached; the picture is black and the host GPU fails within seconds |
+
+The 30 fps figure applies to the first-boot screens. These results have not been independently reproduced; stable rendered gameplay remains unverified. See the [complete progress update](public/progress-update.md).
+
+**Huge respect to Marvis for the ongoing code research and collaboration. This research programme is committed to working under applicable law.**
+
 ## Run locally
 
 Use Node.js 24 or a compatible version satisfying `package.json`.
@@ -24,10 +44,13 @@ npm run build
 
 The responsive site uses a retro computer interface: self-hosted Pixelify Sans and IBM Plex Mono, framed windows, syntax colors, optional CRT scanlines, and phosphor/amber display modes. Appearance preferences are saved in the browser; reduced-motion settings are respected.
 
-- **Pixel sandbox:** an original interactive illustration with pause, reset and signal controls. It is separate from GTA VI gameplay or runtime verification.
+- **Showcase alert:** a prominent Discord event invitation, supplied screenshot, warning symbols and silent, pausable VFX.
+- **First Boot panel:** the original setup-screen image with an animated RGB title and full-size/source links.
+- **Runtime report:** a stage-by-stage maintainer report, single-machine scope, current blocker and collaboration credit, backed by shared status data.
 - **Quick resource search:** Ctrl/Cmd+K opens a keyboard-accessible command menu; the on-page library can also be searched.
 - **Experiment workbench:** three investigation presets, browser-local draft saving, editable evidence fields, Markdown preview, copy/download and reset with undo. Commands are text; the website does not execute them.
-- **Terminal progress bars:** the boot chain shows the cited upstream checkpoint; the workbench meter measures five local preparation steps. Neither is a percentage estimate of GTA VI compatibility.
+- **Terminal progress bars:** the historical boot chain preserves an earlier upstream checkpoint; the workbench meter measures five local preparation steps. Neither is a percentage estimate of GTA VI compatibility.
+- **Showcase countdown:** a fixed seven-day target for a possible reproducible build showcase, separate from the 25 November progress stream.
 - **Community reach:** real durable recorded views and unique-browser totals, with a visible start date and counting method.
 - **Repository and collaboration:** GitHub activity refresh, clone-command copy, Discord, project background and the full downloadable handoff.
 
@@ -36,15 +59,16 @@ The responsive site uses a retro computer interface: self-hosted Pixelify Sans a
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/project` | Public repository metadata and five recent commits, fetched server-side from the fork |
-| `GET /api/status` | Curated runtime evidence and its source, with a review date |
+| `GET /api/status` | Latest maintainer-reported stages and blocker, single-machine scope, and historical upstream evidence |
 | `GET /api/health` | Website service health |
 | `GET /api/visits` | Durable view totals, unique browsers and first recorded timestamp |
 | `POST /api/visits` | Record a validated tab-session visit idempotently and return totals |
-| `GET /handoff.md` | Complete first-native-frame developer handoff |
+| `GET /handoff.md` | Developer handoff for reproducing world entry and investigating rendering stability |
+| `GET /progress-update.md` | Published maintainer report, showcase link and collaboration credit |
 
 GitHub requests use a 3.5-second timeout and cache completed successful results for five minutes. Each request owns its pending outbound calls, abort signal and timeout; pending I/O is not shared across Worker invocations. Network failures and rate limits return a labeled snapshot. The GitHub activity feed requires no token, user account or game upload. The visitor counter uses the Site’s D1 database. Links are constructed for the fixed repository, and the service never proxies arbitrary URLs.
 
-**Repository activity is not gameplay verification.** The runtime checkpoint is curated separately in `app/lib/project-data.ts`. Update its source, review date and evidence scope when a new run is actually verified. The initial checkpoint refers to the pinned 23 November 2026 upstream retail report. It is not a claim about every later branch, or a reproduced run by this fork.
+**Repository activity is not gameplay verification.** The latest report is maintained in `app/lib/progress-update.ts` and exposed through `PROJECT_STATUS` in `app/lib/project-data.ts`. Update its date, scope and evidence when a new report is published. The Windows 11 / RX 9070 XT result is maintainer-reported, with independent reproduction pending. The pinned upstream RTX 4090 descriptor-heap run remains a separate historical reference.
 
 ## Visitor counting
 
@@ -70,11 +94,14 @@ The repository's website CI checks this subtree and retains its build artifacts.
 
 - Page and visual styles: `app/page.tsx`, `app/globals.css`.
 - Title and link-preview metadata: `app/layout.tsx`.
-- Runtime evidence, fallback snapshot and GitHub service: `app/lib/project-data.ts`.
+- Current report and showcase link: `app/lib/progress-update.ts`, `public/progress-update.md`.
+- Runtime status, fallback snapshot and GitHub service: `app/lib/project-data.ts`.
 - Downloadable handoff: `public/handoff.md`.
 - Visitor API and storage: `app/lib/visits.ts`, `app/api/visits/route.ts`, `db/schema.ts`, `drizzle/`.
 - Local experiment tools: `app/components/ExperimentWorkbench.tsx`, `app/lib/workbench.ts`.
-- Command menu and pixel scene: `app/components/CommandPalette.tsx`, `app/components/PixelSandbox.tsx`.
+- Command menu: `app/components/CommandPalette.tsx`.
+- Event alert and progress table: `app/components/ShowcaseAlert.tsx`, `app/components/ProgressUpdate.tsx`, and their CSS files.
+- First-boot image panel: `app/components/FirstBootPanel.tsx`.
 - Server and workbench tests: `tests/*.test.mjs`.
 - Font licenses: `public/fonts/*-OFL.txt`.
 

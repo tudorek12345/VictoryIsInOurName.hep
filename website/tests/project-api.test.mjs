@@ -84,11 +84,22 @@ test('redirect responses are rejected and diagnostics expose only category and s
   assert.deepEqual(logs, [['[github-activity]', '{"category":"upstream_http","statuses":[302,302]}']]);
 });
 
-test('status distinguishes upstream observations from unverified first-frame goals', () => {
+test('status distinguishes the single-machine maintainer report from independent verification and historical upstream evidence', () => {
   assert.equal(PROJECT_STATUS.renderedGameplayVerified, false);
   assert.equal(PROJECT_STATUS.forkFirstFrameVerified, false);
-  assert.equal(PROJECT_STATUS.milestones.find(m => m.id === 'frame').state, 'goal');
-  assert.match(PROJECT_STATUS.currentBlocker.sourceUrl, /8e3c7c72/);
+  assert.equal(PROJECT_STATUS.verificationScope, 'reported-single-machine');
+  assert.equal(PROJECT_STATUS.experiment.testedMachineCount, 1);
+  assert.equal(PROJECT_STATUS.experiment.independentlyReproduced, false);
+  assert.match(PROJECT_STATUS.experiment.environment, /RX 9070 XT/);
+  assert.match(PROJECT_STATUS.evidenceScope, /not independently reproduced/);
+  assert.equal(PROJECT_STATUS.currentBlocker.classification, 'maintainer-reported');
+  assert.match(PROJECT_STATUS.currentBlocker.sourceUrl, /progress-update\.md$/);
+  assert.match(PROJECT_STATUS.currentBlocker.detail, /cause has not been established/);
+  assert.equal(PROJECT_STATUS.milestones.find(m => m.id === 'world').state, 'reported-blocked');
+  assert.ok(PROJECT_STATUS.milestones.every(m => m.classification === 'maintainer-reported' && m.independentlyVerified === false));
+  assert.equal(PROJECT_STATUS.nextMilestones.find(m => m.id === 'world-frame').state, 'goal');
+  assert.match(PROJECT_STATUS.historicalReference.sourceUrl, /8e3c7c72/);
+  assert.match(PROJECT_STATUS.historicalReference.environment, /RTX 4090/);
 });
 
 test('route boundary returns a labeled snapshot when a runtime loader unexpectedly rejects', async (t) => {

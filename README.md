@@ -14,17 +14,39 @@ Fast, focused experiments. Reproducible progress. Clear developer handoffs.
 
 </div>
 
+> [!IMPORTANT]
+> ### GTA VI port progress showcase
+> **Wednesday, 25 November 2026** — join for streams, showcases, development discussion and build updates.
+>
+> **[Join the showcase on Discord](https://discord.com/events/1459617753907331094/1574557419596677260)**
+>
+> Open the event for the start time in your local timezone. The separate possible reproducible-build target remains 30 November.
+
+[<img src="website/public/images/showcase-discord.png" width="640" alt="Discord invitation to the GTA VI port progress showcase on Wednesday, 25 November 2026">](https://discord.com/events/1459617753907331094/1574557419596677260)
+
 <img width="1893" height="946" alt="image" src="https://github.com/user-attachments/assets/1453e6b2-aba0-437d-bd88-e4facee88a62" />
 
 https://leonida-heperkoo.meshedgoby9.chatgpt.site/
 
+## Latest reported progress — 23 November 2026
 
+**Maintainer report from one Windows 11 system with an AMD Radeon RX 9070 XT.** These observations have not been independently reproduced. The reported **30 FPS applies to the first-boot screens**, not gameplay.
+
+| Stage | Latest reported result |
+| --- | --- |
+| Boot and first-boot setup | **Working at 30 FPS:** accessibility, language selection, settings and legal screens |
+| Intro video and sound | **Working** |
+| Start screen, profile and saves | **Working** |
+| Loading into the world | **Working; approximately 50 seconds** |
+| World / first mission | **First mission intro reached**, but the picture remains black and the host GPU fails within seconds |
+
+The next milestone is **stable world rendering and a reproducible run beyond the GPU failure**. Playable gameplay remains unverified. See the [full progress update](website/public/progress-update.md) for the reported environment, scope and next steps.
 
 ## What I’m building
 
 I’m **Heperkoo** ([tudorek12345](https://github.com/tudorek12345)). This is my working fork of Leonida for reverse engineering, runtime integration, testing and collaboration.
 
-The goal is the **shortest practical route to a real game-generated frame on PC**, followed by input and playable progress. I want each experiment to answer a concrete question, remove the next measured blocker and leave work another developer can continue immediately.
+The current goal is the **shortest practical route to stable world rendering on PC and a reproducible path into gameplay**. I want each experiment to answer a concrete question, remove the next measured blocker and leave work another developer can continue immediately.
 
 Leonida executes the game’s existing x86-64 CPU code through reimplemented console services, with console GPU programs translated for Vulkan. Full credit for that foundation belongs to **ItsNotRexed and the upstream Leonida contributors**.
 
@@ -34,11 +56,13 @@ Leonida executes the game’s existing x86-64 CPU code through reimplemented con
 | --- | --- |
 | Fork website, frontend and backend | Published · [open the site](https://leonida-heperkoo.meshedgoby9.chatgpt.site/) |
 | Developer handoff and experiment workflow | Available · [handoff](website/public/handoff.md) · [experiment notes](docs/FORK_EXPERIMENTS.md) |
-| Runtime work in this fork | Experimental; the next pass starts by reproducing the current checkout |
-| Real game frame and gameplay in this fork | **Not yet verified** |
+| Runtime work in this fork | Experimental; reproduce the latest maintainer report on the current checkout, then investigate black world output and the GPU failure |
+| Stable world rendering and gameplay in this fork | **Not yet verified**; first-boot screens and intro playback are reported working |
 | Release date | No committed date; milestones depend on measured results |
 
-The [pinned upstream retail experiment from 23 November 2026](https://github.com/ItsNotRexed/Leonida/blob/8e3c7c72b79cabfbe8a2059fce56a5b99d6ddb51/docs/retail_boot_chain.md) reached graphics initialization and a descriptor-heap assertion, with no draw or presentation demonstrated in that run. It used locally combined changes and stand-ins. Later upstream work may be further along, so this is a reference checkpoint rather than a claim about the latest branch.
+### Historical upstream reference
+
+The [pinned upstream retail experiment from 23 November 2026](https://github.com/ItsNotRexed/Leonida/blob/8e3c7c72b79cabfbe8a2059fce56a5b99d6ddb51/docs/retail_boot_chain.md) documents an earlier, separate run that reached graphics initialization and a descriptor-heap assertion, with no draw or presentation demonstrated in that run. It used locally combined changes and stand-ins. Keep it as historical context: the latest maintainer report above has progressed to world loading and identifies black output followed by a host GPU failure as the next investigation.
 
 ## Experience I bring
 
@@ -92,6 +116,8 @@ Bring a commit, a specific question, the commands you ran, the result and the ne
 | Resource | What it contains |
 | --- | --- |
 | [Project website](https://leonida-heperkoo.meshedgoby9.chatgpt.site/) | Overview, development priorities, repository activity and collaboration |
+| [Latest progress report](website/public/progress-update.md) | Maintainer-reported first-boot, intro, menu and world-loading progress; remaining rendering failure |
+| [GTA VI port progress showcase](https://discord.com/events/1459617753907331094/1574557419596677260) | Discord event on 25 November 2026; open it for the start time in your timezone |
 | [Fork notes](FORK.md) | Scope, ongoing work and attribution |
 | [Developer handoff](website/public/handoff.md) | End-to-end brief for the next runtime investigation |
 | [Experiment workflow](docs/FORK_EXPERIMENTS.md) | Fast iteration loop and a reusable handoff record |
@@ -105,6 +131,9 @@ Bring a commit, a specific question, the commands you ran, the result and the ne
 
 **Leonida was created by [ItsNotRexed](https://github.com/ItsNotRexed/Leonida) and its contributors.** This fork builds on their work. Original attribution, the [upstream dependency and artwork credits](README.upstream.md#credits), and third-party licenses remain applicable.
 
+Huge respect to Marvis for the ongoing code research and collaboration. This research programme is committed to working under applicable law.
+
 GPLv3 or later — see [LICENSE](LICENSE). Website and documentation work is AI-assisted.
 
 Independent community research; not affiliated with Rockstar Games, Take-Two Interactive or Microsoft.
+

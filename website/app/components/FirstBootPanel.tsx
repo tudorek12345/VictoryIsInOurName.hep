@@ -25,7 +25,7 @@ export default function FirstBootPanel() {
         />
       </div>
       <figcaption className="first-boot-panel__caption">
-        <span>UI text size setup screen</span>
+        <span>Maintainer-supplied first-boot screen</span>
         <span className="first-boot-panel__links">
           <a href="/images/first-boot.png" target="_blank" rel="noopener noreferrer">View full size</a>
           <a href="https://imgur.com/a/S0evCSS" target="_blank" rel="noopener noreferrer">Source</a>
