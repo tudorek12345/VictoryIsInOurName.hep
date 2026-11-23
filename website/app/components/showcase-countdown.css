@@ -1,0 +1,127 @@
+.showcase-countdown {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px 28px;
+  margin-top: 14px;
+  padding: 19px 22px;
+  border: 1px solid #50656a;
+  border-left: 3px solid var(--accent, #c8ef8f);
+  background: var(--panel, #1c2a32);
+  box-shadow: 2px 3px 0 #0c151a;
+  color: var(--text, #eeeade);
+  font-family: var(--font-mono, monospace);
+}
+
+.showcase-countdown__copy { min-width: 0; }
+
+.showcase-countdown__copy h2 {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.65;
+}
+
+.showcase-countdown__copy h2 > span {
+  margin-right: 8px;
+  color: var(--accent, #c8ef8f);
+}
+
+.showcase-countdown__target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 7px;
+  margin: 7px 0 0;
+  color: var(--muted, #a5b4b5);
+  font-size: 12px;
+  line-height: 1.85;
+}
+
+.showcase-countdown__target time { color: #d8ded0; }
+.showcase-countdown__target > span { color: #a9c0bf; }
+
+.showcase-countdown__timer {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 300px;
+  text-align: center;
+}
+
+.showcase-countdown__unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.showcase-countdown__digits {
+  display: block;
+  min-width: 2ch;
+  color: var(--accent, #c8ef8f);
+  font-family: var(--font-mono, monospace);
+  font-size: 28px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: .035em;
+  line-height: 1.2;
+}
+
+.showcase-countdown__label {
+  color: var(--muted, #a5b4b5);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.showcase-countdown__status {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text, #eeeade);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.showcase-countdown__status:empty { display: none; }
+.showcase-countdown__status a {
+  color: var(--accent, #c8ef8f);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.showcase-countdown--complete .showcase-countdown__digits {
+  color: var(--muted, #a5b4b5);
+}
+
+@media (max-width: 960px) {
+  .showcase-countdown { gap: 15px 20px; padding: 17px 18px; }
+  .showcase-countdown__timer { min-width: 270px; gap: 12px; }
+  .showcase-countdown__digits { font-size: 26px; }
+}
+
+@media (max-width: 700px) {
+  .showcase-countdown {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 17px;
+    padding: 16px;
+  }
+  .showcase-countdown__copy h2 { font-size: 15px; line-height: 1.7; }
+  .showcase-countdown__target { font-size: 12px; margin-top: 8px; }
+  .showcase-countdown__timer {
+    min-width: 0;
+    width: 100%;
+    gap: 9px;
+    padding-top: 14px;
+    border-top: 1px dashed #425b60;
+  }
+  .showcase-countdown__digits { font-size: 26px; }
+  .showcase-countdown__label { font-size: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-countdown,
+  .showcase-countdown * { animation: none !important; transition: none !important; }
+}
