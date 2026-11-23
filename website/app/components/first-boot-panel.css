@@ -1,0 +1,98 @@
+.first-boot-panel {
+  width: 100%;
+  min-width: 0;
+  max-width: 640px;
+  margin: 0;
+  align-self: center;
+  background: var(--panel, #1c2a32);
+}
+
+.first-boot-panel__bar { min-height: 36px; }
+
+.first-boot-panel__title {
+  margin: 0;
+  color: var(--cyan, #94cbd0);
+  font-family: var(--font-pixel, monospace);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: .025em;
+  line-height: 1.2;
+}
+
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .first-boot-panel__title {
+    background-image: linear-gradient(90deg, #f2a3ae, #d2ec9d, #9ad6e9, #bcb9f2, #f2a3ae);
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: first-boot-title-rgb 12s linear infinite;
+  }
+}
+
+.first-boot-panel__image-wrap {
+  min-width: 0;
+  margin: 9px 9px 0;
+  border: 1px solid #465b64;
+  background: #142028;
+}
+
+.first-boot-panel__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.first-boot-panel__caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 15px;
+  padding: 12px 13px;
+  color: var(--muted, #a5b4b5);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.first-boot-panel__links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.first-boot-panel__links a {
+  font-size: 14px;
+  color: var(--accent, #c8ef8f);
+  text-decoration: underline;
+  text-decoration-color: #5b7765;
+  text-underline-offset: 3px;
+}
+
+.first-boot-panel__links a:hover { text-decoration-color: currentColor; }
+
+.first-boot-panel__links a:focus-visible {
+  outline: 2px solid var(--amber, #ffd08a);
+  outline-offset: 4px;
+}
+
+@keyframes first-boot-title-rgb {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+@media (max-width: 960px) {
+  .first-boot-panel { justify-self: center; }
+}
+
+@media (max-width: 700px) {
+  .first-boot-panel__image-wrap { margin: 8px 8px 0; }
+  .first-boot-panel__caption { padding: 11px 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-boot-panel__title { animation: none !important; }
+}

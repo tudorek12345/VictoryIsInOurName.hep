@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PROJECT_SNAPSHOT, type ProjectData } from "./lib/project-data";
-import PixelSandbox from "./components/PixelSandbox";
+import FirstBootPanel from "./components/FirstBootPanel";
 import CommandPalette, { resources } from "./components/CommandPalette";
 import VisitorCounter from "./components/VisitorCounter";
 import ExperimentWorkbench from "./components/ExperimentWorkbench";
@@ -84,7 +84,7 @@ export default function Home(){
         </div>
         <div className="hero-grid">
           <div className="hero-copy"><div className="overline"><span className="bracket">[</span> NATIVE PC RUNTIME RESEARCH <span className="bracket">]</span></div><h1>A native future.<br/>One <span>real frame.</span><span className="text-cursor" aria-hidden="true">_</span></h1><p>Working toward <strong>GTA VI running natively on PC</strong> through Leonida. Real experiments, clear evidence, and a handoff the next developer can actually use.</p><div className="hero-actions"><a className="button button-primary" href={REPO} target="_blank" rel="noopener noreferrer"><span aria-hidden="true">&lt;/&gt;</span> Open the fork</a><a className="button button-secondary" href={DISCORD} target="_blank" rel="noopener noreferrer">Join my Discord</a></div><p className="honest-status"><span className="warning-square" aria-hidden="true">!</span> Experimental. No verified rendered gameplay in this fork.</p><div className="hero-credit">Built on <a href={UPSTREAM} target="_blank" rel="noopener noreferrer">ItsNotRexed / Leonida</a> and its contributors.</div></div>
-          <PixelSandbox palette={palette}/>
+          <FirstBootPanel/>
         </div>
         <div className="hero-bottom"><div className="desktop-note"><span className="note-label">THE OBJECTIVE</span><p>Get the real game to generate a frame.<br/><span>Then prove that someone else can reproduce it.</span></p></div><VisitorCounter className="terminal-counter"/></div>
       </section>
