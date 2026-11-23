@@ -120,12 +120,19 @@ export const PROJECT_STATUS = {
   milestones: PROGRESS_UPDATE.stages.map((stage) => ({
     id: stage.id,
     title: stage.stage,
-    state: stage.id === "world" ? "reported-blocked" : "reported-working",
+    state: stage.status === "blocked" ? "reported-blocked" : "reported-working",
     reportedState: stage.state,
     detail: stage.detail,
     classification: "maintainer-reported",
     independentlyVerified: false,
   })),
+  progress: {
+    workingStages: PROGRESS_UPDATE.stages.filter((stage) => stage.status === "working").length,
+    totalStages: PROGRESS_UPDATE.stages.length,
+    currentStage: "world",
+    meaning: "Count of reported working stages, not a completion or compatibility percentage.",
+  },
+  nextSteps: PROGRESS_UPDATE.nextSteps,
   nextMilestones: [
     { id: "world-frame", title: "Correctly rendered first world frame", state: "goal" },
     { id: "stable-world-entry", title: "Repeatable world entry without the reported GPU failure", state: "goal" },

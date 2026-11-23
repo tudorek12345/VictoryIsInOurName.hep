@@ -97,6 +97,9 @@ test('status distinguishes the single-machine maintainer report from independent
   assert.match(PROJECT_STATUS.currentBlocker.detail, /cause has not been established/);
   assert.equal(PROJECT_STATUS.milestones.find(m => m.id === 'world').state, 'reported-blocked');
   assert.ok(PROJECT_STATUS.milestones.every(m => m.classification === 'maintainer-reported' && m.independentlyVerified === false));
+  assert.deepEqual([PROJECT_STATUS.progress.workingStages, PROJECT_STATUS.progress.totalStages], [4, 5]);
+  assert.equal(PROJECT_STATUS.progress.currentStage, 'world');
+  assert.ok(PROJECT_STATUS.nextSteps.every(step => step.status === 'next'));
   assert.equal(PROJECT_STATUS.nextMilestones.find(m => m.id === 'world-frame').state, 'goal');
   assert.match(PROJECT_STATUS.historicalReference.sourceUrl, /8e3c7c72/);
   assert.match(PROJECT_STATUS.historicalReference.environment, /RTX 4090/);

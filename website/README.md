@@ -42,16 +42,17 @@ npm run build
 
 ## Frontend
 
-The responsive site uses a retro computer interface: self-hosted Pixelify Sans and IBM Plex Mono, framed windows, syntax colors, optional CRT scanlines, and phosphor/amber display modes. Appearance preferences are saved in the browser; reduced-motion settings are respected.
+The responsive site uses a retro computer interface: self-hosted Bowlby One SC display headings with a GTA-inspired outline, Pixelify Sans details and IBM Plex Mono body text, framed windows, syntax colors, optional CRT scanlines, and phosphor/amber display modes. Appearance preferences are saved in the browser; reduced-motion settings are respected.
 
 - **Showcase alert:** a prominent Discord event invitation, supplied screenshot, warning symbols and silent, pausable VFX.
 - **First Boot panel:** the original setup-screen image with an animated RGB title and full-size/source links.
 - **Runtime report:** a stage-by-stage maintainer report, single-machine scope, current blocker and collaboration credit, backed by shared status data.
 - **Quick resource search:** Ctrl/Cmd+K opens a keyboard-accessible command menu; the on-page library can also be searched.
 - **Experiment workbench:** three investigation presets, browser-local draft saving, editable evidence fields, Markdown preview, copy/download and reset with undo. Commands are text; the website does not execute them.
-- **Terminal progress bars:** the historical boot chain preserves an earlier upstream checkpoint; the workbench meter measures five local preparation steps. Neither is a percentage estimate of GTA VI compatibility.
+- **Runtime progress bar:** four of five reported stages are working; world entry is reached but rendering is blocked. The five static segments and next-step checklist share structured report data with the status API. This is a count of reported stages, not a compatibility percentage.
+- **Historical checkpoint:** the earlier upstream boot chain is kept in a closed disclosure. The workbench meter measures preparation of a local handoff, separately from runtime progress.
 - **Showcase countdown:** a fixed seven-day target for a possible reproducible build showcase, separate from the 25 November progress stream.
-- **Community reach:** real durable recorded views and unique-browser totals, with a visible start date and counting method.
+- **Community reach:** a prominent counter above the hero displays durable recorded visits and unique browsers, refreshes automatically while visible, and retains the original ledger.
 - **Repository and collaboration:** GitHub activity refresh, clone-command copy, Discord, project background and the full downloadable handoff.
 
 ## Backend
@@ -74,7 +75,9 @@ GitHub requests use a 3.5-second timeout and cache completed successful results 
 
 The `DB` binding stores a `site_visits` ledger. A random tab-session ID is the primary key, so reloads and request retries do not add duplicate views. A separate random browser ID counts unique browsers where local storage is available. These are browser estimates, not a count of human people. The database stores neither IP addresses nor user-agent strings or fingerprints.
 
-Totals start with the first actual recorded visit after this feature is deployed; earlier traffic is not reconstructed. Requests that cannot reach the database show an unavailable state instead of fabricated numbers. Read requests never add visits. Local preview and production totals are separate.
+The client reads existing totals first, then registers its tab session idempotently. Manual and visible-tab automatic refreshes use read-only GET requests every 30 seconds, with an additional refresh when the tab becomes visible. The counter shows the last successful update time and preserves the last loaded count on a temporary outage.
+
+Totals start with the first actual recorded visit after this feature was deployed; earlier traffic is not reconstructed. Requests that cannot reach the database show an unavailable state instead of fabricated numbers. Read requests never add visits. Local preview and production totals are separate.
 
 The schema-only migration and generated Drizzle metadata live in `drizzle/`. After building, initialize the local preview database with the generated configuration:
 
@@ -92,7 +95,7 @@ The repository's website CI checks this subtree and retains its build artifacts.
 
 ## Editing
 
-- Page and visual styles: `app/page.tsx`, `app/globals.css`.
+- Page and visual styles: `app/page.tsx`, `app/globals.css`, `app/gta-display.css`.
 - Title and link-preview metadata: `app/layout.tsx`.
 - Current report and showcase link: `app/lib/progress-update.ts`, `public/progress-update.md`.
 - Runtime status, fallback snapshot and GitHub service: `app/lib/project-data.ts`.
@@ -103,7 +106,7 @@ The repository's website CI checks this subtree and retains its build artifacts.
 - Event alert and progress table: `app/components/ShowcaseAlert.tsx`, `app/components/ProgressUpdate.tsx`, and their CSS files.
 - First-boot image panel: `app/components/FirstBootPanel.tsx`.
 - Server and workbench tests: `tests/*.test.mjs`.
-- Font licenses: `public/fonts/*-OFL.txt`.
+- Font licenses: `public/fonts/*-OFL.txt`. The unmodified Bowlby One SC font and its SIL OFL 1.1 license come from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/bowlbyonesc).
 
 Keep claims tied to evidence. Full upstream credit belongs to ItsNotRexed and Leonida contributors. This independent fork does not distribute GTA VI or claim an official Rockstar affiliation. The repository's GPL-3.0 license and contribution rules apply.
 
