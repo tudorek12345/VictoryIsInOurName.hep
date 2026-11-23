@@ -33,7 +33,7 @@ The responsive landing page explains the fork's goal, a dated upstream checkpoin
 | `GET /api/health` | Website service health |
 | `GET /handoff.md` | Complete first-native-frame developer handoff |
 
-GitHub requests use a 3.5-second timeout, deduplicate concurrent requests and cache successful results for five minutes. Network failures and rate limits return a labeled snapshot. No GitHub token, user account, game upload or database is required. Links are constructed for the fixed repository, and the service never proxies arbitrary URLs.
+GitHub requests use a 3.5-second timeout and cache completed successful results for five minutes. Each request owns its pending outbound calls, abort signal and timeout; pending I/O is not shared across Worker invocations. Network failures and rate limits return a labeled snapshot. No GitHub token, user account, game upload or database is required. Links are constructed for the fixed repository, and the service never proxies arbitrary URLs.
 
 **Repository activity is not gameplay verification.** The runtime checkpoint is curated separately in `app/lib/project-data.ts`. Update its source, review date and evidence scope when a new run is actually verified. The initial checkpoint refers to the pinned 23 November 2026 upstream retail report. It is not a claim about every later branch, or a reproduced run by this fork.
 
@@ -52,3 +52,11 @@ The repository's website CI checks this subtree and retains its build artifacts.
 - Server behavior tests: `tests/project-api.test.mjs`.
 
 Keep claims tied to evidence. Full upstream credit belongs to ItsNotRexed and Leonida contributors. This independent fork does not distribute GTA VI or claim an official Rockstar affiliation. The repository's GPL-3.0 license and contribution rules apply.
+
+## Announcements
+
+- [Discord announcement](DISCORD_ANNOUNCEMENT.md)
+- [Reddit announcement](REDDIT_ANNOUNCEMENT.md)
+- [Fork README](../README.md) and [experiment workflow](../docs/FORK_EXPERIMENTS.md)
+
+These are editable drafts for Heperkoo's community. Saving them in GitHub does not post them to either service.

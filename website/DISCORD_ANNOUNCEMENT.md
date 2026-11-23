@@ -1,18 +1,19 @@
-**Leonida — my experimental fork and next steps**
+**Leonida — my experimental fork, ongoing work and collaboration**
 
-I’ve set up my own experimental Leonida fork for focused development, testing and handoffs toward getting GTA VI running natively on PC.
+I’m working on my own Leonida fork toward getting GTA VI running natively on PC. The immediate target is the first real game-generated frame, then input and playable progress.
 
-Fork: https://github.com/tudorek12345/Leonida
-Project site: https://leonida-heperkoo.meshedgoby9.chatgpt.site
+I’m bringing experience from **MWCMP, my Batman Telltale port, CoD2 co-op and TWD source recovery**: multiplayer synchronization, native engine integration, calling conventions, Godot porting, C++ reconstruction and differential testing. I work in VS Code with Codex and want to turn that experience into focused, testable progress here.
 
-The site is live, with the frontend and backend source in the fork, development priorities and a downloadable handoff.
+The approach is to move quickly through experimentation: compare current upstream work, reproduce the first failure, test one hypothesis with a small reversible change, run the relevant checks and leave a clear handoff. Independent loader/memory, graphics/ABI and testing work can happen in parallel.
 
-Full credit to ItsNotRexed and the Leonida contributors for the upstream project. I’m building on their work, bringing the RE and modding experience from MWCMP, my Batman Telltale port and CoD2 experiments into a focused effort.
+**The website is live**, with frontend and backend source in the fork, development priorities and a downloadable handoff. The README now explains the fork, my background and the experiment workflow.
 
-This is ongoing experimental work. The plan is to compare the latest upstream changes, reproduce the real startup failures and fix the next blocker with usable logs and a clear handoff. I want developers to be able to see what was tested, what remains unverified and where they can contribute.
+This is ongoing experimental work. A real GTA VI frame and playable gameplay remain unverified in this fork. There is no committed release date.
 
-The immediate goal is the first real game frame, followed by input and further gameplay progress. The cited upstream retail experiment reached graphics initialization but did not demonstrate a draw or presentation. I’m not announcing a playable build or a release date.
+Full credit to **ItsNotRexed and the upstream Leonida contributors** for the foundation. If you know C++, Windows internals, Vulkan, memory management or runtime debugging, or can help with reproducible testing, get involved.
 
-If you know Windows internals, C++, Vulkan, console APIs or runtime debugging and want to collaborate, this is the work I’m opening up. Progress will be judged by reproducible results, with proper credit for everyone’s contributions.
+**Fork:** https://github.com/tudorek12345/Leonida
+**Website:** https://leonida-heperkoo.meshedgoby9.chatgpt.site/
+**Discord:** https://discord.gg/ufXqPcVdVj
 
 — Heperkoo
