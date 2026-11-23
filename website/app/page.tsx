@@ -11,6 +11,7 @@ const REPO="https://github.com/tudorek12345/Leonida";
 const UPSTREAM="https://github.com/ItsNotRexed/Leonida";
 const REPORT="https://github.com/ItsNotRexed/Leonida/blob/8e3c7c72b79cabfbe8a2059fce56a5b99d6ddb51/docs/retail_boot_chain.md";
 const DISCORD="https://discord.gg/ufXqPcVdVj";
+const TORRENT_LINKS="https://justpaste.it/ik5xi";
 const CLONE="git clone --recursive https://github.com/tudorek12345/Leonida.git";
 type Palette="phosphor"|"amber";
 
@@ -74,6 +75,9 @@ export default function Home(){
     <main id="main">
       <section className="hero page-width">
         <div className="desktop-path"><span>~/projects/leonida</span><span className="display-controls"><button onClick={()=>setPalette(value=>value==="phosphor"?"amber":"phosphor")} aria-label={`Color palette: ${palette}. Switch palette.`}><span className="palette-swatch" aria-hidden="true"/>{palette==="phosphor"?"Phosphor":"Amber"}</button><button className={crt?"selected":""} aria-pressed={crt} onClick={()=>setCrt(value=>!value)}>CRT {crt?"ON":"OFF"}</button></span></div>
+        <div className="hero-actions">
+          <a className="button button-primary" href={TORRENT_LINKS} target="_blank" rel="noopener noreferrer" title="Open GTA torrent links on JustPaste.it in a new tab">GTA torrent links</a>
+        </div>
         <div className="hero-grid">
           <div className="hero-copy"><div className="overline"><span className="bracket">[</span> NATIVE PC RUNTIME RESEARCH <span className="bracket">]</span></div><h1>A native future.<br/>One <span>real frame.</span><span className="text-cursor" aria-hidden="true">_</span></h1><p>Working toward <strong>GTA VI running natively on PC</strong> through Leonida. Real experiments, clear evidence, and a handoff the next developer can actually use.</p><div className="hero-actions"><a className="button button-primary" href={REPO} target="_blank" rel="noopener noreferrer"><span aria-hidden="true">&lt;/&gt;</span> Open the fork</a><a className="button button-secondary" href={DISCORD} target="_blank" rel="noopener noreferrer">Join my Discord</a></div><p className="honest-status"><span className="warning-square" aria-hidden="true">!</span> Experimental. No verified rendered gameplay in this fork.</p><div className="hero-credit">Built on <a href={UPSTREAM} target="_blank" rel="noopener noreferrer">ItsNotRexed / Leonida</a> and its contributors.</div></div>
           <PixelSandbox palette={palette}/>
