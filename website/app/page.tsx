@@ -6,6 +6,7 @@ import PixelSandbox from "./components/PixelSandbox";
 import CommandPalette, { resources } from "./components/CommandPalette";
 import VisitorCounter from "./components/VisitorCounter";
 import ExperimentWorkbench from "./components/ExperimentWorkbench";
+import ChristmasBanner from "./components/ChristmasBanner";
 
 const REPO="https://github.com/tudorek12345/Leonida";
 const UPSTREAM="https://github.com/ItsNotRexed/Leonida";
@@ -72,6 +73,7 @@ export default function Home(){
       </nav>
       <button className="mobile-menu" aria-expanded={menuOpen} aria-label={menuOpen?"Close navigation":"Open navigation"} onClick={()=>setMenuOpen(value=>!value)}>{menuOpen?"CLOSE":"MENU"}</button>
     </header>
+    <ChristmasBanner/>
     <main id="main">
       <section className="hero page-width">
         <div className="desktop-path"><span>~/projects/leonida</span><span className="display-controls"><button onClick={()=>setPalette(value=>value==="phosphor"?"amber":"phosphor")} aria-label={`Color palette: ${palette}. Switch palette.`}><span className="palette-swatch" aria-hidden="true"/>{palette==="phosphor"?"Phosphor":"Amber"}</button><button className={crt?"selected":""} aria-pressed={crt} onClick={()=>setCrt(value=>!value)}>CRT {crt?"ON":"OFF"}</button></span></div>

@@ -1,0 +1,191 @@
+.christmas-banner {
+  --xmas-motion: running;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 48px;
+  margin-top: 18px;
+  padding-right: 10px;
+  overflow: hidden;
+  border: 1px solid #42565d;
+  background: #17272d;
+  box-shadow: 2px 3px 0 #0c151a;
+  color: #eeedde;
+  font-family: var(--font-mono, monospace);
+}
+
+/* Only the fine edges and motifs change color. The message stays steady. */
+.christmas-banner::before,
+.christmas-banner::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, #cf8fa5, #a7ce8b, #84b9d6, #cf8fa5);
+  background-size: 200% 100%;
+  animation: christmas-edge-drift 12s linear infinite;
+  animation-play-state: var(--xmas-motion);
+}
+
+.christmas-banner::before { top: 0; }
+.christmas-banner::after { bottom: 0; opacity: .6; }
+
+.christmas-banner__viewport {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  padding-block: 10px;
+  mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+
+.christmas-banner__track {
+  display: flex;
+  width: max-content;
+  animation: christmas-travel-right 40s linear infinite;
+  animation-play-state: var(--xmas-motion);
+  will-change: transform;
+}
+
+.christmas-banner__group {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-around;
+  gap: 42px;
+  min-width: min(1340px, 100vw);
+  padding-inline: 21px;
+}
+
+.christmas-banner__item {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: .045em;
+}
+
+.christmas-banner__gift {
+  flex-shrink: 0;
+  color: #b9d291;
+  animation: christmas-motif-rgb 12s linear infinite;
+  animation-play-state: var(--xmas-motion);
+}
+
+.christmas-banner__star {
+  margin-left: 3px;
+  color: #92c3cf;
+  font-size: 14px;
+  animation: christmas-motif-rgb 12s linear infinite;
+  animation-play-state: var(--xmas-motion);
+}
+
+.christmas-banner__toggle {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 82px;
+  min-height: 30px;
+  margin-left: 3px;
+  padding: 5px 9px;
+  border: 1px solid #5b7178;
+  background: #243a42;
+  color: #e1e7db;
+  font-size: 14px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.christmas-banner__toggle:hover { border-color: #b7d59a; }
+.christmas-banner__toggle:focus-visible {
+  outline: 2px solid var(--amber, #ffd08a);
+  outline-offset: 2px;
+}
+
+.christmas-banner__pause-icon {
+  width: 7px;
+  height: 9px;
+  border-inline: 2px solid currentColor;
+}
+
+.christmas-banner__play-icon {
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid currentColor;
+}
+
+.christmas-banner--paused,
+.christmas-banner:hover,
+.christmas-banner:has(:focus-visible) { --xmas-motion: paused; }
+
+.christmas-banner__static { display: none; }
+.christmas-banner__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Two identical groups: -50% to 0 produces a seamless LEFT-TO-RIGHT loop. */
+@keyframes christmas-travel-right {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes christmas-edge-drift {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+@keyframes christmas-motif-rgb {
+  0%, 100% { color: #b9d291; }
+  33% { color: #8fbfd1; }
+  66% { color: #cf9dad; }
+}
+
+@media (max-width: 700px) {
+  .christmas-banner { margin-top: 14px; padding-right: 8px; }
+  .christmas-banner__item { font-size: 14px; letter-spacing: .025em; gap: 10px; }
+  .christmas-banner__toggle { min-width: 79px; min-height: 32px; padding-inline: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .christmas-banner { grid-template-columns: minmax(0, 1fr); padding: 0; }
+  .christmas-banner__viewport,
+  .christmas-banner__toggle { display: none; }
+  .christmas-banner__static {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    min-width: 0;
+  }
+  .christmas-banner__static p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.8;
+    letter-spacing: .025em;
+    overflow-wrap: anywhere;
+  }
+  .christmas-banner *,
+  .christmas-banner::before,
+  .christmas-banner::after { animation: none !important; transition: none !important; }
+}
