@@ -15,7 +15,9 @@ Fast, focused experiments. Reproducible progress. Clear developer handoffs.
 </div>
 
 ---
-<img width="2501" height="1835" alt="image" src="https://github.com/user-attachments/assets/1520235c-d0d6-42ca-a0b3-d813be20361c" />
+<img width="2501" height="1835" alt="image" src="https://github.com/user-attachments/assets/7886d7d7-e8dd-4235-9a60-bfca74d67ddf" />
+https://leonida-heperkoo.meshedgoby9.chatgpt.site/
+
 
 
 ## What I’m building
