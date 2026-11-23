@@ -99,6 +99,20 @@ export const PROJECT_STATUS = {
 type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 type ServiceOptions = { fetcher?: Fetcher; now?: () => number; timeoutMs?: number; cacheMs?: number; fallbackCacheMs?: number };
 
+type FailureCategory = "upstream_http" | "timeout" | "invalid_json" | "invalid_response";
+
+class ProjectRequestError extends Error {
+  category: FailureCategory;
+  statuses?: number[];
+
+  constructor(category: FailureCategory, statuses?: number[]) {
+    super(category);
+    this.name = "ProjectRequestError";
+    this.category = category;
+    this.statuses = statuses;
+  }
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
 }
@@ -133,19 +147,21 @@ export function createProjectService(options: ServiceOptions = {}) {
     try {
       const data = await Promise.race([
         Promise.all([
-          fetcher(`https://api.github.com/repos/${REPOSITORY}`, { headers, signal: controller.signal, redirect: "error" }),
-          fetcher(`https://api.github.com/repos/${REPOSITORY}/commits?per_page=5`, { headers, signal: controller.signal, redirect: "error" }),
+          // Workers supports manual/follow. Manual preserves the no-redirect policy:
+          // every 3xx response is rejected by the !ok check below.
+          fetcher(`https://api.github.com/repos/${REPOSITORY}`, { headers, signal: controller.signal, redirect: "manual" }),
+          fetcher(`https://api.github.com/repos/${REPOSITORY}/commits?per_page=5`, { headers, signal: controller.signal, redirect: "manual" }),
         ]).then(async ([repoResponse, commitsResponse]) => {
-          if (!repoResponse.ok || !commitsResponse.ok) throw new Error("GitHub response unavailable");
-          const [repository, commits] = await Promise.all([repoResponse.json(), commitsResponse.json()]);
+          if (!repoResponse.ok || !commitsResponse.ok) throw new ProjectRequestError("upstream_http", [repoResponse.status, commitsResponse.status]);
+          const [repository, commits] = await Promise.all([repoResponse.json(), commitsResponse.json()]).catch(() => { throw new ProjectRequestError("invalid_json"); });
           return { repository, commits };
         }),
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => { controller.abort(); reject(new Error("GitHub request timed out")); }, timeoutMs);
+          timer = setTimeout(() => { reject(new ProjectRequestError("timeout")); controller.abort(); }, timeoutMs);
         }),
       ]);
       const repository = record(data.repository);
-      if (repository.full_name !== REPOSITORY || !Array.isArray(data.commits)) throw new Error("Unexpected GitHub response");
+      if (repository.full_name !== REPOSITORY || !Array.isArray(data.commits)) throw new ProjectRequestError("invalid_response");
       const commits = data.commits.slice(0, 5).flatMap((value: unknown): ProjectCommit[] => {
         const item = record(value);
         if (typeof item.sha !== "string" || !/^[a-f0-9]{40}$/i.test(item.sha)) return [];
@@ -162,7 +178,7 @@ export function createProjectService(options: ServiceOptions = {}) {
           url: `${REPOSITORY_URL}/commit/${item.sha}`,
         }];
       });
-      if (commits.length === 0) throw new Error("No valid activity returned");
+      if (commits.length === 0) throw new ProjectRequestError("invalid_response");
       return {
         repo: {
           name: "Leonida",
@@ -193,7 +209,13 @@ export function createProjectService(options: ServiceOptions = {}) {
         lastGood = value;
         cache = { value, expiresAt: now() + cacheMs };
         return value;
-      } catch {
+      } catch (error) {
+        // Deliberately log only our fixed category and numeric HTTP statuses.
+        // Upstream bodies, exception messages, headers and credentials stay out.
+        console.warn("[github-activity]", JSON.stringify({
+          category: error instanceof ProjectRequestError ? error.category : "network",
+          ...(error instanceof ProjectRequestError && error.statuses ? { statuses: error.statuses } : {}),
+        }));
         const value: ProjectData = lastGood ? {
           ...lastGood,
           source: "snapshot",

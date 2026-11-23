@@ -14,7 +14,7 @@ function responseFor(url) {
 
 test('live data uses only fixed GitHub endpoints and constructs canonical links', async () => {
   const calls = [];
-  const get = createProjectService({ fetcher: async (url) => { calls.push(url); return responseFor(url); } });
+  const get = createProjectService({ fetcher: async (url, init) => { calls.push(url); assert.equal(init.redirect, 'manual'); return responseFor(url); } });
   const data = await get();
   assert.equal(data.source, 'github');
   assert.equal(data.commits[0].url, `${REPOSITORY_URL}/commit/${sha}`);
@@ -64,6 +64,20 @@ test('an outage after cache expiry retains and labels the last verified server d
 test('mismatched repository data is rejected instead of displayed', async () => {
   const get = createProjectService({ fetcher: async (url) => url.includes('/commits?') ? responseFor(url) : Response.json({ full_name: 'someone/else' }) });
   assert.equal((await get()).source, 'snapshot');
+});
+
+test('redirect responses are rejected and diagnostics expose only category and status', async (t) => {
+  const logs = [];
+  t.mock.method(console, 'warn', (...args) => logs.push(args));
+  const calls = [];
+  const get = createProjectService({ fetcher: async (url, init) => {
+    calls.push(url);
+    assert.equal(init.redirect, 'manual');
+    return new Response('private upstream payload', { status: 302, headers: { location: 'https://untrusted.example/private' } });
+  } });
+  assert.equal((await get()).source, 'snapshot');
+  assert.equal(calls.length, 2);
+  assert.deepEqual(logs, [['[github-activity]', '{"category":"upstream_http","statuses":[302,302]}']]);
 });
 
 test('status distinguishes upstream observations from unverified first-frame goals', () => {
