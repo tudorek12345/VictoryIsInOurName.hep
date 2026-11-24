@@ -1,21 +1,22 @@
 {
   "repo": "tudorek12345/Leonida",
   "name": "Leonida",
-  "description": "Experimental Xbox Series compatibility work for native Windows execution, integrating VIctory alongside Leonida with separate runtime state and source-only validation. Integrated GTA VI behavior remains unverified.",
+  "description": "Experimental Xbox Series compatibility work for native Windows execution, integrating VIctory alongside Leonida with separate runtime state, native Windows builds and synthetic-test validation. Integrated GTA VI behavior remains unverified.",
   "language": "Python",
-  "stars": 13,
+  "stars": 17,
   "createdAt": "2026-11-23T13:54:04Z",
-  "pushedAt": "2026-11-24T00:33:39Z",
+  "pushedAt": "2026-11-24T01:23:10Z",
   "defaultBranch": "main",
   "sources": [
     "Maintainer registration request: https://github.com/4lwayz/portwatch-vi/issues/17"
   ],
   "links": [
-    "https://github.com/tudorek12345/Leonida/commit/367002ac15bf6efe6af0355afc3da4d257ce712c",
-    "https://github.com/tudorek12345/Leonida/blob/367002ac15bf6efe6af0355afc3da4d257ce712c/runtimes/victory/SOURCE.json",
-    "https://github.com/tudorek12345/Leonida/commit/97bb13714b2c6f1988578b0827fc19ebc3808847",
-    "https://github.com/tudorek12345/Leonida/commit/bd812d9f1fd779dc1c23d6e6fc7eea2606b40cce",
-    "https://github.com/tudorek12345/Leonida/actions/runs/45299795364",
+    "https://github.com/tudorek12345/Leonida/commit/2b643c705ab3bd8e48560e5bab0f991274a32113",
+    "https://github.com/tudorek12345/Leonida/blob/2b643c705ab3bd8e48560e5bab0f991274a32113/runtimes/victory/SOURCE.json",
+    "https://github.com/tudorek12345/Leonida/blob/2b643c705ab3bd8e48560e5bab0f991274a32113/.github/workflows/victory-runtime.yml",
+    "https://github.com/tudorek12345/Leonida/actions/runs/45304650680",
+    "https://github.com/tudorek12345/Leonida/actions/runs/45304650622",
+    "https://github.com/tudorek12345/Leonida/actions/runs/45304650601",
     "https://github.com/4lwayz/portwatch-vi/issues/17"
   ],
   "foundAt": "2026-11-24T00:33:49Z",
