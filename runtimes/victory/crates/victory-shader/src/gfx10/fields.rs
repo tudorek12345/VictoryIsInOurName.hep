@@ -805,9 +805,16 @@ fn image_addr_dwords(name: &str, dim: u8, a16: bool) -> u8 {
     } else if name.contains("_mip") {
         packed += 1;
     }
-    if a16 {
-        whole + 2 * derivs.div_ceil(2) + packed.div_ceil(2)
+    // GFX10.3 sizes derivatives by the opcode (`_g16`: two per dword, each
+    // direction its own) and coordinates and levels by a16, apart (LLVM
+    // `SITargetLowering::lowerImage` where `hasG16`; its MC test
+    // gfx10_asm_mimg.s has `image_sample_d ... 2D a16` with five address
+    // dwords: four derivatives and the packed coordinates).
+    let derivs = if name.ends_with("_g16") {
+        2 * derivs.div_ceil(2)
     } else {
-        whole + 2 * derivs + packed
-    }
+        2 * derivs
+    };
+    let packed = if a16 { packed.div_ceil(2) } else { packed };
+    whole + derivs + packed
 }

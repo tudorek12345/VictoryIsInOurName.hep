@@ -346,6 +346,19 @@ impl Module {
         self.blocks.len() - 1
     }
 
+    /// The bits of an integer or float constant (integers as stored,
+    /// sign-extended).
+    pub fn known(&self, v: V) -> Option<i64> {
+        match v {
+            V::Const(i) => match self.consts[i as usize].1 {
+                Const::Int(x) => Some(x),
+                Const::Float(bits) => Some(i64::from(bits)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn type_of(&self, v: V) -> Ty {
         match v {
             V::Global(i) => self.globals[i as usize].ptr,

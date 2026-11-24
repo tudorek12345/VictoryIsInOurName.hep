@@ -409,6 +409,30 @@ mod tests {
     }
 
     #[test]
+    fn image_address_dwords_by_form() {
+        // 2D: offset, bias and reference a dword each; 16-bit derivatives
+        // (g16 opcodes) two per dword, each direction its own; a16 packs
+        // the coordinates and the level, not the derivatives (the counts
+        // with a16 are those of LLVM's gfx10_asm_mimg.s).
+        for (op, a16, n) in [
+            (0x22u32, false, 6), // image_sample_d
+            (0x22, true, 5),     // image_sample_d, a16
+            (0x23, true, 6),     // image_sample_d_cl, a16
+            (0xA2, false, 4),    // image_sample_d_g16
+            (0xA2, true, 3),     // image_sample_d_g16, a16
+            (0xBB, false, 7),    // image_sample_c_d_cl_o_g16
+            (0x33, true, 7),     // image_sample_d_cl_o, a16
+        ] {
+            let w0 = 0xF000_0000 | (op & 0x7F) << 18 | op >> 7 | 1 << 3 | 1 << 8;
+            let d = decode(&bytes(&[w0, u32::from(a16) << 30, S_ENDPGM])).unwrap();
+            let Fields::Image { addr, .. } = d[0].fields(false) else {
+                panic!("{:?}", d[0].name())
+            };
+            assert_eq!(addr, [Operand::Vector { reg: 0, dwords: n }], "{:?}", d[0].name());
+        }
+    }
+
+    #[test]
     fn follows_branches_and_skips_data() {
         let code = [
             sopp(0x04, 1), // s_cbranch_scc0 -> 8
