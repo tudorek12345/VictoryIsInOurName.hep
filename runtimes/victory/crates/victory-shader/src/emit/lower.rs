@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use super::{IntegerImageUav, UserData};
+use super::{IntegerView, IntegerViewKind, UserData};
 use super::bitcode::{Attr, Bin, Cast, Term, V, pred};
 use super::container::SigElement;
 use super::shader::{Shader, flags};
@@ -65,11 +65,11 @@ pub(crate) fn lower(parts: &Parts) -> Result<Lowered, ShaderError> {
 
 pub(crate) fn lower_for_views(
     parts: &Parts,
-    integer_image_uavs: &[IntegerImageUav],
+    integer_views: &[IntegerView],
 ) -> Result<Lowered, ShaderError> {
     let mut bad = HashMap::new();
     loop {
-        match Lower::new(parts, &bad, integer_image_uavs).run() {
+        match Lower::new(parts, &bad, integer_views).run() {
             Ok(l) => return Ok(l),
             Err(Stop::Retry(v, why)) => {
                 if bad.insert(v, why).is_some() {
@@ -140,7 +140,7 @@ struct Lower<'a> {
     s: Shader,
     x: &'a Parts<'a>,
     bad: &'a HashMap<Value, Why>,
-    integer_image_uavs: &'a [IntegerImageUav],
+    integer_views: &'a [IntegerView],
     lane_fail: HashMap<Value, Why>,
     vals: HashMap<Value, Val>,
     floats: HashMap<Value, V>,
@@ -163,7 +163,7 @@ struct Lower<'a> {
     scalar: HashMap<Site, Address>,
     exports: HashMap<Site, &'a Export>,
     interps: HashMap<Site, &'a Interp>,
-    handles: HashMap<(usize, Site, u8, bool, u32), V>,
+    handles: HashMap<(usize, Site, u8, bool, (u32, u32)), V>,
     /// Blocks splitting the edge from one IR block to another.
     edges: HashMap<(usize, usize), usize>,
     /// Per IR block: a `done` export is behind every lane entering it.
@@ -383,7 +383,7 @@ impl<'a> Lower<'a> {
     fn new(
         x: &'a Parts<'a>,
         bad: &'a HashMap<Value, Why>,
-        integer_image_uavs: &'a [IntegerImageUav],
+        integer_views: &'a [IntegerView],
     ) -> Self {
         let p = x.p;
         let mut phi_at = HashMap::new();
@@ -494,7 +494,7 @@ impl<'a> Lower<'a> {
             s,
             x,
             bad,
-            integer_image_uavs,
+            integer_views,
             lane_fail: HashMap::new(),
             vals: HashMap::new(),
             floats: HashMap::new(),
@@ -2975,7 +2975,8 @@ impl<'a> Lower<'a> {
                 let props = if un.starts_with("buffer_load_format")
                     || un.starts_with("buffer_store_format")
                 {
-                    (10 | u, 0x409)
+                    let component = self.typed_buffer_component(un, &src, used);
+                    (10 | u, component.unwrap_or(0x409))
                 } else if *idxen && format.is_none() && stride >= 4 && stride.is_multiple_of(4) {
                     (12 | u, stride)
                 } else {
@@ -3278,6 +3279,48 @@ impl<'a> Lower<'a> {
             .max_by_key(|u| u.table_offset_dwords)
     }
 
+    fn integer_component(
+        &self,
+        used: Option<&UsedResource>,
+        kind: IntegerViewKind,
+    ) -> Option<u32> {
+        let used = used.filter(|u| u.root == RootType::Table)?;
+        let expected = match kind {
+            IntegerViewKind::ImageUav => ResourceType::Uav,
+            IntegerViewKind::BufferSrv => ResourceType::Srv,
+        };
+        if used.kind != expected {
+            return None;
+        }
+        self.integer_views
+            .iter()
+            .find(|view| {
+                view.kind == kind
+                    && view.slot == used.slot
+                    && view.table_offset_dwords == used.table_offset_dwords
+            })
+            .map(|view| if view.signed { 0x104 } else { 0x105 })
+    }
+
+    /// The typed component at a fixed table entry read by a scalar format load.
+    fn typed_buffer_component(
+        &self,
+        name: &str,
+        src: &Source,
+        used: Option<&UsedResource>,
+    ) -> Option<u32> {
+        let Source::Loaded { load, first } = src else {
+            return None;
+        };
+        let addr = self.scalar.get(load)?;
+        let used = used.filter(|u| {
+            name == "buffer_load_format_x"
+                && addr.dynamic.is_none()
+                && addr.offset / 4 + u32::from(*first) == u.table_offset_dwords
+        });
+        self.integer_component(used, IntegerViewKind::BufferSrv)
+    }
+
     /// A handle for the descriptor `src` read at `site`.
     fn handle(
         &mut self,
@@ -3288,7 +3331,7 @@ impl<'a> Lower<'a> {
     ) -> Result<V, Why> {
         match src {
             Source::Loaded { load, first } => {
-                let key = (self.cur, *load, *first, sampler, props.0);
+                let key = (self.cur, *load, *first, sampler, props);
                 if let Some(&h) = self.handles.get(&key) {
                     return Ok(h);
                 }
@@ -5367,16 +5410,9 @@ impl<'a> Lower<'a> {
         let store = name.starts_with("image_store");
         let used = self.used_kind(src);
         let uav = store || used.is_some_and(|u| u.kind == ResourceType::Uav);
-        let integer = used
-            .filter(|u| u.kind == ResourceType::Uav && u.root == RootType::Table)
-            .and_then(|u| {
-                self.integer_image_uavs.iter().find(|view| {
-                    view.slot == u.slot && view.table_offset_dwords == u.table_offset_dwords
-                })
-            });
-        let component = integer.map_or(0x409, |view| if view.signed { 0x104 } else { 0x105 });
-        let integer = integer.is_some();
-        let props = (kind | if uav { 0x1000 } else { 0 }, component);
+        let component = self.integer_component(used, IntegerViewKind::ImageUav);
+        let integer = component.is_some();
+        let props = (kind | if uav { 0x1000 } else { 0 }, component.unwrap_or(0x409));
         if integer && *d16 {
             return Err("a 16-bit read or write of a 32-bit integer image");
         }
@@ -5430,7 +5466,7 @@ impl<'a> Lower<'a> {
                 site,
                 src,
                 false,
-                (kind | 0x1000, if integer { component } else { 0x105 }),
+                (kind | 0x1000, component.unwrap_or(0x105)),
             )?;
             let at = self.begin_guarded(guard);
             let i32t = self.s.t.i32;
@@ -6418,6 +6454,7 @@ impl<'a> Lower<'a> {
             }
             return Ok(());
         }
+        let component = self.typed_buffer_component(name, src, used);
         let r = if typed {
             if *offen || matches!(off, V::Inst(_)) || *offset != 0 {
                 return Err("a typed buffer load at an offset");
@@ -6425,13 +6462,19 @@ impl<'a> Lower<'a> {
             if uav {
                 self.s.flags |= flags::TYPED_UAV_LOADS;
             }
-            let h = self.handle(site, src, false, (10 | u, 0x409))?;
+            let h = self.handle(site, src, false, (10 | u, component.unwrap_or(0x409)))?;
             let index = index.unwrap_or(self.s.m.i32(0));
+            let (operation, result) = if component.is_some() {
+                let ret = self.s.m.named_struct("dx.types.ResRet.i32", vec![self.s.t.i32; 5]);
+                ("bufferLoad.i32", ret)
+            } else {
+                ("bufferLoad.f32", self.s.t.res_ret)
+            };
             self.s.op(
                 c,
-                "bufferLoad.f32",
+                operation,
                 Attr::ReadOnly,
-                self.s.t.res_ret,
+                result,
                 68,
                 &[h, index, iu],
             )
@@ -6495,7 +6538,7 @@ impl<'a> Lower<'a> {
         }
         for k in 0..count {
             let x = self.s.m.extract(c, r, k);
-            let x = self.as_int(x);
+            let x = if component.is_some() { x } else { self.as_int(x) };
             self.write(inst, Reg::V(reg + k as u8), x, guard);
         }
         Ok(())

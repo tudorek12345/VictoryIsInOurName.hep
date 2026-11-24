@@ -639,6 +639,24 @@ fn fits(texture: &ID3D12Resource, mut format: Option<&mut DXGI_FORMAT>, unordere
     true
 }
 
+/// The descriptor of a typed 16-bit unsigned buffer SRV, if present.
+pub(crate) fn uint16_buffer_srv(view: &View) -> Option<&[u32; 10]> {
+    let words = match view {
+        View::Shader(_, Some(words)) => words,
+        View::Placed(false, resource, words) if resource[0] == 1 => {
+            words[..10].try_into().ok()?
+        }
+        _ => return None,
+    };
+    let desc = srv_desc(words);
+    if desc.ViewDimension != D3D12_SRV_DIMENSION_BUFFER || desc.Format != DXGI_FORMAT_R16_UINT {
+        return None;
+    }
+    // SAFETY: the descriptor's dimension selects the buffer member.
+    let buffer = unsafe { desc.Anonymous.Buffer };
+    (buffer.StructureByteStride == 0 && buffer.Flags == D3D12_BUFFER_SRV_FLAG_NONE).then_some(words)
+}
+
 /// The format actually bound when this view is a one-channel integer image UAV.
 pub(crate) fn integer_image_uav(view: &View) -> Option<bool> {
     let placed = placed_texture(view);
@@ -826,6 +844,13 @@ pub(crate) fn placed_texture(view: &View) -> Option<View> {
 /// view. Writes to it are dropped, reads give zeros.
 fn null_for(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) {
     let Some(host) = host() else { return };
+    if let Some(desc) = uint16_buffer_srv(view).and_then(null_srv_desc) {
+        // SAFETY: the slot takes a null SRV with the shader's typed format.
+        unsafe {
+            host.device.CreateShaderResourceView(None::<&ID3D12Resource>, Some(&desc), at)
+        };
+        return;
+    }
     let is_buffer = |r: &usize| crate::resource::buffer_bytes(*r as crate::object::This).is_some();
     let buffer = match view {
         View::Unordered(r, _, desc) => is_buffer(r) || desc.is_some_and(|d| d[1] == 1),

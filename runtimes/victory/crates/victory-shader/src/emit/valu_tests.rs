@@ -6,7 +6,7 @@
 //! near `1.0`, and turn-range reduction for `v_sin_*`/`v_cos_*`.
 
 use super::host::{Dispatch, Host, Root, Stride, View};
-use super::{HostShader, IntegerImageUav, lower, validator};
+use super::{HostShader, IntegerView, IntegerViewKind, lower, validator};
 use crate::native::{
     ComputeIo, HwStage, NativeProgram, ResourceType, RootParam, RootType, StageIo, UsedResource,
 };
@@ -79,7 +79,7 @@ fn build_cs_with_inputs(body: &[u32], inputs: &[UsedResource]) -> HostShader {
 fn build_cs_for_views(
     body: &[u32],
     inputs: &[UsedResource],
-    integer_image_uavs: &[IntegerImageUav],
+    integer_views: &[IntegerView],
 ) -> HostShader {
     let mut words = Vec::new();
     // s[4:5] = descriptor table address (heap index 0 -> byte offset 0).
@@ -153,7 +153,7 @@ fn build_cs_for_views(
             prims: Vec::new(),
             mesh_stride: 0,
         },
-        integer_image_uavs,
+        integer_views,
     )
     .expect("lower");
 
@@ -250,7 +250,12 @@ fn integer_image_store_preserves_the_dword() {
             user_data: 4,
             slot: 1,
         }],
-        &[IntegerImageUav { slot: 1, table_offset_dwords: 8, signed: false }],
+        &[IntegerView {
+            kind: IntegerViewKind::ImageUav,
+            slot: 1,
+            table_offset_dwords: 8,
+            signed: false,
+        }],
     );
     let Ok(host) = Host::new(true) else {
         eprintln!("no SM 6.6 WARP device; skipped");
@@ -274,6 +279,66 @@ fn integer_image_store_preserves_the_dword() {
         .unwrap();
     assert_eq!(result[0][0], value);
     assert_eq!(result[1][0], value);
+}
+
+#[test]
+fn uint16_buffer_load_preserves_unsigned_indices() {
+    use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R16_UINT;
+
+    let _native_test_guard = super::native_test_guard();
+    let mut body = s_load_dwordx4(16, 4, 32).to_vec();
+    // buffer_load_format_x v0, v1, s[16:19], 0 idxen
+    body.extend([0xE000_2000, 0x8004_0001]);
+    // Store the descriptor's element count alongside the loaded element.
+    body.push(vop1(1, 2, sgpr(18)));
+    body.extend(buffer_store_dword(2, 8, 4));
+    let shader = build_cs_for_views(
+        &body,
+        &[UsedResource {
+            kind: ResourceType::Srv,
+            root: RootType::Table,
+            table_offset_dwords: 8,
+            lower_bound: 1,
+            stride: 2,
+            dwords: 4,
+            user_data: 4,
+            slot: 1,
+        }],
+        &[IntegerView {
+            kind: IntegerViewKind::BufferSrv,
+            slot: 1,
+            table_offset_dwords: 8,
+            signed: false,
+        }],
+    );
+    let Ok(host) = Host::new(true) else {
+        eprintln!("no SM 6.6 WARP device; skipped");
+        return;
+    };
+    let (root, pipeline) = host.compute_pipeline(&shader).unwrap();
+    let packed = [0xFFFF_002A];
+    let views = [
+        View::RawUav(2),
+        View::Buffer {
+            data: &packed,
+            stride: Stride::Format(DXGI_FORMAT_R16_UINT, 2),
+        },
+    ];
+    for (index, expected) in [(0, 42), (1, u16::MAX as u32)] {
+        let mut user_data = vec![0; shader.user_data_dwords() as usize];
+        user_data[0] = index;
+        let result = host.dispatch(
+            &root,
+            &pipeline,
+            &Dispatch {
+                roots: vec![(0, Root::Constants(user_data))],
+                views: &views,
+                samplers: &[],
+                groups: [1, 1, 1],
+            },
+        ).unwrap();
+        assert_eq!(&result[0][..2], &[expected, 2]);
+    }
 }
 
 /// Runs `shader` on every available SM 6.6 host (hardware GPU and WARP) for

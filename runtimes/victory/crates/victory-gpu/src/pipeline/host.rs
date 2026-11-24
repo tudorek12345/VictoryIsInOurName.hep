@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use victory_shader::emit::{
-    IntegerImageUav, ROOT_CBV_SPACE, SAMPLER_SPACE, USER_DATA_SPACE,
-    translate_with_integer_image_uavs,
+    IntegerView, ROOT_CBV_SPACE, SAMPLER_SPACE, USER_DATA_SPACE,
+    translate_with_integer_views,
 };
 use windows::Win32::Graphics::Direct3D::ID3DBlob;
 use windows::Win32::Graphics::Direct3D12::*;
@@ -271,7 +271,7 @@ pub(crate) struct HostPipeline {
     /// A mesh pipeline (graphics without vertex input).
     pub(crate) mesh: bool,
     pub(crate) pso: ID3D12PipelineState,
-    integer_image_variants: Mutex<HashMap<Vec<IntegerImageUav>, Option<ID3D12PipelineState>>>,
+    integer_view_variants: Mutex<HashMap<Vec<IntegerView>, Option<ID3D12PipelineState>>>,
     pub(crate) root: ID3D12RootSignature,
     /// Vertex, then pixel stage, or the compute stage.
     pub(crate) stages: Vec<Stage>,
@@ -295,20 +295,20 @@ fn refuse(reason: &'static str, shaders: &[Arc<Shader>]) -> Option<HostPipeline>
 
 impl HostPipeline {
     /// The compute shader is specialized to the formats bound for this dispatch.
-    pub(crate) fn for_integer_image_uavs(
+    pub(crate) fn for_integer_views(
         &self,
-        views: Vec<IntegerImageUav>,
+        views: Vec<IntegerView>,
     ) -> Option<ID3D12PipelineState> {
         let stage = self.stages.first()?;
         let mut variants = self
-            .integer_image_variants
+            .integer_view_variants
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         if let Some(pso) = variants.get(&views) {
             return pso.clone();
         }
         let made = (|| {
-            let shader = translate_with_integer_image_uavs(&stage.shader.container, &views)
+            let shader = translate_with_integer_views(&stage.shader.container, &views)
                 .map_err(|error| error.to_string())?;
             let original = &stage.translated().host;
             if shader.user_data != original.user_data
@@ -317,7 +317,7 @@ impl HostPipeline {
                 || shader.samplers != original.samplers
                 || shader.static_samplers != original.static_samplers
             {
-                return Err("integer image specialization changed the root bindings".to_owned());
+                return Err("integer view specialization changed the root bindings".to_owned());
             }
             let host = host().ok_or_else(|| "no host device".to_owned())?;
             let desc = compute_desc(
@@ -332,12 +332,12 @@ impl HostPipeline {
         })();
         let pso = match made {
             Ok(pso) => {
-                tracing::info!(shader = %stage.shader.hash, ?views, "integer image compute pipeline");
-                crate::host::name(&pso, || format!("{} integer image UAVs", self.name));
+                tracing::info!(shader = %stage.shader.hash, ?views, "integer view compute pipeline");
+                crate::host::name(&pso, || format!("{} integer views", self.name));
                 Some(pso)
             }
             Err(error) => {
-                tracing::warn!(shader = %stage.shader.hash, %error, ?views, "integer image compute pipeline refused");
+                tracing::warn!(shader = %stage.shader.hash, %error, ?views, "integer view compute pipeline refused");
                 None
             }
         };
@@ -515,7 +515,7 @@ impl HostPipeline {
                 compute: true,
                 mesh: false,
                 pso,
-                integer_image_variants: Mutex::default(),
+                integer_view_variants: Mutex::default(),
                 root,
                 stages: bound,
                 name: format!("{shaders:?}"),
@@ -548,7 +548,7 @@ impl HostPipeline {
                 compute: false,
                 mesh: true,
                 pso,
-                integer_image_variants: Mutex::default(),
+                integer_view_variants: Mutex::default(),
                 root,
                 stages: bound,
                 name: format!("{shaders:?}"),
@@ -619,7 +619,7 @@ impl HostPipeline {
             compute: false,
             mesh: false,
             pso,
-            integer_image_variants: Mutex::default(),
+            integer_view_variants: Mutex::default(),
             root,
             stages: bound,
             name: format!("{shaders:?}"),

@@ -10,6 +10,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use victory_shader::emit::{IntegerView, IntegerViewKind};
 use victory_shader::{ResourceType, RootType, UsedResource};
 
 use crate::descriptor::View;
@@ -406,11 +407,11 @@ impl State {
     /// descriptors its tables hold.
     fn bind(&mut self, list: &HostList, p: &HostPipeline, compute: bool) -> bool {
         let typed = if compute {
-            let views = self.integer_image_uavs(p);
+            let views = self.integer_views(p);
             if views.is_empty() {
                 None
             } else {
-                let Some(pso) = p.for_integer_image_uavs(views) else {
+                let Some(pso) = p.for_integer_views(views) else {
                     return false;
                 };
                 Some(pso)
@@ -562,7 +563,7 @@ impl State {
         Some(table)
     }
 
-    fn integer_image_uavs(&self, p: &HostPipeline) -> Vec<victory_shader::emit::IntegerImageUav> {
+    fn integer_views(&self, p: &HostPipeline) -> Vec<IntegerView> {
         let [stage] = p.stages.as_slice() else {
             return Vec::new();
         };
@@ -570,7 +571,10 @@ impl State {
             .translated()
             .used
             .iter()
-            .filter(|u| u.kind == ResourceType::Uav && u.root == RootType::Table && u.dwords == 8)
+            .filter(|u| {
+                u.root == RootType::Table
+                    && matches!((u.kind, u.dwords), (ResourceType::Srv, 4) | (ResourceType::Uav, 8))
+            })
             .filter_map(|u| {
                 let Root::Table(table) = self.compute.get(usize::from(u.slot))? else {
                     return None;
@@ -578,8 +582,17 @@ impl State {
                 let handle = table.checked_add(u64::from(u.table_offset_dwords) * 4)?;
                 self.heap_of(handle)?;
                 let view = crate::descriptor::view(handle)?;
-                let signed = crate::descriptor::host::integer_image_uav(&view)?;
-                Some(victory_shader::emit::IntegerImageUav {
+                let (kind, signed) = if u.kind == ResourceType::Uav {
+                    (
+                        IntegerViewKind::ImageUav,
+                        crate::descriptor::host::integer_image_uav(&view)?,
+                    )
+                } else {
+                    crate::descriptor::host::uint16_buffer_srv(&view)?;
+                    (IntegerViewKind::BufferSrv, false)
+                };
+                Some(IntegerView {
+                    kind,
                     slot: u.slot,
                     table_offset_dwords: u.table_offset_dwords,
                     signed,

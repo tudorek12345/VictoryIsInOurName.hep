@@ -203,21 +203,28 @@ pub struct UserData {
 /// Translates the vertex, pixel, compute or mesh program of a console
 /// shader container.
 pub fn translate(container: &[u8]) -> Result<HostShader, ShaderError> {
-    translate_with_integer_image_uavs(container, &[])
+    translate_with_integer_views(container, &[])
 }
 
-/// A one-channel 32-bit integer image UAV identified by its table position.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IntegerImageUav {
+pub enum IntegerViewKind {
+    ImageUav,
+    BufferSrv,
+}
+
+/// A one-channel integer view identified by its table position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct IntegerView {
+    pub kind: IntegerViewKind,
     pub slot: u8,
     pub table_offset_dwords: u32,
     pub signed: bool,
 }
 
-/// Specializes image UAV operations to the formats of the bound views.
-pub fn translate_with_integer_image_uavs(
+/// Specializes typed operations to the formats of the bound integer views.
+pub fn translate_with_integer_views(
     container: &[u8],
-    integer_image_uavs: &[IntegerImageUav],
+    integer_views: &[IntegerView],
 ) -> Result<HostShader, ShaderError> {
     let c = Container::parse(container)?;
     let dxil = c
@@ -239,7 +246,7 @@ pub fn translate_with_integer_image_uavs(
     let res = resource::track(&p, &native.layout, native.stage)?;
     let io = io::raise(&p, &native)?;
     let st = structure::structure(&p)?;
-    emit_for_views(&c, &native, &p, &st, &io, &res, integer_image_uavs)
+    emit_for_views(&c, &native, &p, &st, &io, &res, integer_views)
 }
 
 /// Emits a program whose earlier stages already ran.
@@ -261,7 +268,7 @@ fn emit_for_views(
     st: &structure::Structured,
     io: &io::Io,
     res: &resource::Resources,
-    integer_image_uavs: &[IntegerImageUav],
+    integer_views: &[IntegerView],
 ) -> Result<HostShader, ShaderError> {
     let sig = |fourcc| -> Result<Vec<container::SigElement>, ShaderError> {
         match c.part(fourcc) {
@@ -323,7 +330,7 @@ fn emit_for_views(
             prims,
             mesh_stride,
         },
-        integer_image_uavs,
+        integer_views,
     )?;
     Ok(HostShader {
         stage: native.stage,
