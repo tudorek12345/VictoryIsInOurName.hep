@@ -106,6 +106,17 @@ class RuntimeBackendTests(unittest.TestCase):
         self.assertEqual(plan.overrides["VICTORY_D3D12_WARP"], "1")
         self.assertIn("diag", str(plan.argv[0]))
 
+    def test_series_s_menu_picture_is_explicit_and_selects_the_series_s_profile(self):
+        self.env["VICTORY_SERIES_S_MENU_PICTURE"] = "1"
+        self.assertNotIn("VICTORY_SERIES_S_MENU_PICTURE", self.runtime_plan("run", "--diagnostics").environment)
+        plan = self.runtime_plan("run", "--diagnostics", "--series-s-menu-picture")
+        self.assertEqual(plan.overrides["VICTORY_SERIES_S_MENU_PICTURE"], "1")
+        self.assertEqual(plan.argv[plan.argv.index("--console") + 1], "series-s")
+        for words in (("run",), ("test", "--diagnostics"),
+                      ("run", "--diagnostics", "--console", "series-x")):
+            with self.subTest(words=words), self.assertRaises(bridge.BridgeError):
+                self.args(*words, "--series-s-menu-picture")
+
     def test_leonida_retains_explicit_vulkan_and_cli_can_override_it(self):
         initial = self.runtime_plan("run", "--backend", "leonida")
         self.assertNotIn("LEONIDA_D3D12", initial.environment)

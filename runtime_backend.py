@@ -53,6 +53,7 @@ def parser() -> argparse.ArgumentParser:
   py -3 -I runtime_backend.py inspect --game "D:\Games\GTA VI" --imports --diagnostics
   py -3 -I runtime_backend.py run --game "D:\Games\GTA VI" --diagnostics --warp --dry-run
   py -3 -I runtime_backend.py run --game "D:\Games\GTA VI" --diagnostics --warp
+  py -3 -I runtime_backend.py run --game "D:\Games\GTA VI" --diagnostics --series-s-menu-picture
   py -3 -I runtime_backend.py run --game "D:\Games\GTA VI" --bcpack-tables "D:\Private\tables.bin"
   py -3 -I runtime_backend.py build --backend leonida
   py -3 -I runtime_backend.py run --backend leonida --vulkan --runtime-build "D:\Leonida" --game "D:\Games\GTA VI"
@@ -86,6 +87,8 @@ Other backend variables and unvalidated path overrides remain isolated.
     result.add_argument("--dry-run", action="store_true", help="print a plan without executing or writing")
     result.add_argument("--diagnostics", action="store_true", help="VIctory: use the diag profile and diagnostics feature")
     result.add_argument("--warp", action="store_true", help="VIctory diagnostics: explicitly use the software D3D12 adapter")
+    result.add_argument("--series-s-menu-picture", action="store_true",
+                        help="VIctory diagnostics: use the Series S menu presentation workaround")
     result.add_argument("--vulkan", action=argparse.BooleanOptionalAction, default=None,
                         help="Leonida: select Vulkan, or --no-vulkan for host D3D12; otherwise retain LEONIDA_D3D12=vulkan")
     result.add_argument("--jobs", type=positive_int, default=max(1, (os.cpu_count() or 2) // 2))
@@ -125,6 +128,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         raise BridgeError("title arguments after -- are supported only by run")
     if args.warp and (args.backend != "victory" or not args.diagnostics):
         raise BridgeError("--warp requires --backend victory --diagnostics")
+    if args.series_s_menu_picture:
+        if args.backend != "victory" or args.command != "run" or not args.diagnostics or args.console == "series-x":
+            raise BridgeError("--series-s-menu-picture requires a diagnostic VIctory Series S run")
+        args.console = "series-s"
     if args.backend == "leonida" and (args.diagnostics or args.bcpack_tables or args.strict or args.console):
         raise BridgeError("--diagnostics, --bcpack-tables, --strict and --console are VIctory options")
     if args.shader_dir and args.backend != "leonida":
@@ -309,6 +316,8 @@ def make_plan(args: argparse.Namespace, *, root: Path = ROOT, windows: bool | No
             overrides["VICTORY_BCPACK_TABLES"] = str(tables)
         if args.warp:
             overrides["VICTORY_D3D12_WARP"] = "1"
+        if args.series_s_menu_picture:
+            overrides["VICTORY_SERIES_S_MENU_PICTURE"] = "1"
         argv = [str(binary), args.command, str(image)]
         if args.command == "inspect":
             argv += (["--imports"] if args.imports else []) + (["--exports"] if args.exports else [])

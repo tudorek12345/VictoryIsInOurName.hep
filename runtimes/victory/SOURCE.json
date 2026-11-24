@@ -56,6 +56,14 @@
       ]
     },
     {
+      "purpose": "Keep D3D12 presentation transitions valid when the source is already in COPY_SOURCE. Add an opt-in Series S diagnostics workaround that presents the sole 4K color target for two-plane menu frames when 1080p has no color draws.",
+      "paths": [
+        "crates/victory-gpu/src/draw.rs",
+        "crates/victory-gpu/src/host.rs",
+        "crates/victory-gpu/src/queue.rs"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",
@@ -73,6 +81,9 @@
     "crates/victory-formats/Cargo.toml",
     "crates/victory-formats/src/bcpack.rs",
     "crates/victory-formats/src/xma/tables.rs",
+    "crates/victory-gpu/src/draw.rs",
+    "crates/victory-gpu/src/host.rs",
+    "crates/victory-gpu/src/queue.rs",
     "crates/victory-hle/src/modules/dstorage.rs",
     "crates/victory-pe/src/image.rs",
     "crates/victory-shader/src/emit/diff_tests.rs",
