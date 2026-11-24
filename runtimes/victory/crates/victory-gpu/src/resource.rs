@@ -558,6 +558,8 @@ fn place<'a>(
 pub(crate) struct Memory {
     ptr: NonNull<u8>,
     layout: Layout,
+    #[cfg(all(windows, feature = "diagnostics"))]
+    _allocation: crate::memstat::Allocation,
     /// Set when the memory came from the title's allocator, with these
     /// allocation attributes (it goes back there).
     attributes: Option<u64>,
@@ -623,6 +625,11 @@ impl Memory {
         Ok(Memory {
             ptr,
             layout,
+            #[cfg(all(windows, feature = "diagnostics"))]
+            _allocation: crate::memstat::Allocation::track(
+                crate::memstat::Kind::GuestResource,
+                layout.size() as u64,
+            ),
             attributes: Some(attributes),
         })
     }
@@ -648,6 +655,11 @@ impl Memory {
         Ok(Memory {
             ptr,
             layout,
+            #[cfg(all(windows, feature = "diagnostics"))]
+            _allocation: crate::memstat::Allocation::track(
+                crate::memstat::Kind::GuestResource,
+                layout.size() as u64,
+            ),
             attributes: None,
         })
     }
@@ -761,6 +773,8 @@ struct Resource {
 pub(crate) struct HostTexture {
     pub(crate) texture: windows::Win32::Graphics::Direct3D12::ID3D12Resource,
     pub(crate) state: std::sync::atomic::AtomicU32,
+    #[cfg(feature = "diagnostics")]
+    _allocation: crate::memstat::Allocation,
 }
 
 /// Moves the host texture to `wanted` (a host texture state); the host
@@ -802,7 +816,8 @@ fn host_texture(
     desc: &ResourceDesc,
     state: u32,
     clear: *const c_void,
-) -> Option<windows::Win32::Graphics::Direct3D12::ID3D12Resource> {
+    #[cfg(feature = "diagnostics")] address_backed: bool,
+) -> Option<HostTexture> {
     use windows::Win32::Graphics::Direct3D12::*;
     const PC_FLAGS: u32 = 0xf; // render target, depth, UAV, no shader access
     if desc.dimension == BUFFER {
@@ -864,13 +879,46 @@ fn host_texture(
     };
     if let Err(e) = made {
         tracing::warn!(error = %e, desc = ?d, "no host texture");
+        #[cfg(feature = "diagnostics")]
+        if e.code().0 == E_OUTOFMEMORY {
+            static FIRST_OOM: std::sync::Once = std::sync::Once::new();
+            FIRST_OOM.call_once(|| {
+                crate::memstat::report(host.video_memory.as_ref(), "host texture allocation failed");
+            });
+        }
     }
-    if let Some(t) = &texture {
-        crate::host::name(t, || {
-            format!("texture {}x{} f{} flags {:#x}", d.width, d.height, d.format, d.flags)
-        });
-    }
-    texture
+    let texture = texture?;
+    crate::host::name(&texture, || {
+        format!("texture {}x{} f{} flags {:#x}", d.width, d.height, d.format, d.flags)
+    });
+    #[cfg(feature = "diagnostics")]
+    let allocation = {
+        use crate::memstat::{Allocation, Kind};
+        let kind = if address_backed {
+            Kind::AddressTexture
+        } else {
+            Kind::HostTexture
+        };
+        let bytes = if crate::memstat::enabled() {
+            // SAFETY: query the allocation for the live host texture's description.
+            let info = unsafe { host.device.GetResourceAllocationInfo(0, &[texture.GetDesc()]) };
+            if info.SizeInBytes == u64::MAX {
+                0
+            } else {
+                info.SizeInBytes
+            }
+        } else {
+            0
+        };
+        Allocation::track(kind, bytes)
+    };
+    let state = crate::host::legal_state(&texture, crate::host::texture_state(state));
+    Some(HostTexture {
+        texture,
+        state: state.into(),
+        #[cfg(feature = "diagnostics")]
+        _allocation: allocation,
+    })
 }
 
 /// A texture's console memory and description; `None` for buffers.
@@ -928,7 +976,13 @@ fn hand_out_resource(
     #[cfg(not(windows))]
     let _ = (state, clear);
     #[cfg(windows)]
-    let host = host_texture(&desc, state, clear);
+    let host = host_texture(
+        &desc,
+        state,
+        clear,
+        #[cfg(feature = "diagnostics")]
+        matches!(backing, Backing::Address(_)),
+    );
     let resource = Box::new(Resource {
         object: Object::new(&RESOURCE_FUNCTIONS),
         desc,
@@ -936,13 +990,7 @@ fn hand_out_resource(
         heap_flags,
         backing,
         #[cfg(windows)]
-        host: host.map(|texture| {
-            let state = crate::host::legal_state(&texture, crate::host::texture_state(state));
-            std::sync::Arc::new(HostTexture {
-                texture,
-                state: state.into(),
-            })
-        }),
+        host: host.map(std::sync::Arc::new),
     });
     #[cfg(windows)]
     if desc.dimension == BUFFER {

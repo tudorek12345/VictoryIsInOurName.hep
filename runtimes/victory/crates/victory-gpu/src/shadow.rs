@@ -32,6 +32,8 @@ pub(crate) struct Shadow {
     /// Where the title buffer starts and how long it is.
     start: u64,
     len: u64,
+    #[cfg(feature = "diagnostics")]
+    _allocation: crate::memstat::Allocation,
     /// Per page of title memory from `start`'s on: the write-watch asking
     /// after which it was last copied (0: never).
     copied: Mutex<Vec<u64>>,
@@ -114,6 +116,11 @@ impl Shadow {
             gpu,
             start,
             len,
+            #[cfg(feature = "diagnostics")]
+            _allocation: crate::memstat::Allocation::track(
+                crate::memstat::Kind::BufferShadow,
+                len,
+            ),
             copied: Mutex::new(vec![0; pages as usize]),
             watched: AtomicU8::new(0),
             pending: Mutex::default(),

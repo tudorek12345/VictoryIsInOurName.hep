@@ -37,6 +37,8 @@ const RTV_RING: u32 = 1024;
 
 pub(crate) struct Host {
     pub(crate) device: ID3D12Device,
+    #[cfg(feature = "diagnostics")]
+    pub(crate) video_memory: Option<IDXGIAdapter3>,
     queue: ID3D12CommandQueue,
     fence: ID3D12Fence,
     /// The last value signalled on `fence`, behind the submission lock.
@@ -191,11 +193,10 @@ fn create() -> windows::core::Result<Host> {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_12_0, &mut device)?;
         }
         let device = device.ok_or_else(windows::core::Error::empty)?;
-        if let Ok(factory) =
-            CreateDXGIFactory2::<IDXGIFactory4>(DXGI_CREATE_FACTORY_FLAGS(0))
-            && let Ok(adapter) = factory.EnumAdapterByLuid::<IDXGIAdapter1>(device.GetAdapterLuid())
-            && let Ok(desc) = adapter.GetDesc1()
-        {
+        let adapter = CreateDXGIFactory2::<IDXGIFactory4>(DXGI_CREATE_FACTORY_FLAGS(0))
+            .and_then(|factory| factory.EnumAdapterByLuid::<IDXGIAdapter1>(device.GetAdapterLuid()))
+            .ok();
+        if let Some(desc) = adapter.as_ref().and_then(|adapter| adapter.GetDesc1().ok()) {
             let len = desc.Description.iter().position(|&c| c == 0).unwrap_or(desc.Description.len());
             let adapter = String::from_utf16_lossy(&desc.Description[..len]);
             tracing::info!(
@@ -231,6 +232,8 @@ fn create() -> windows::core::Result<Host> {
         tracing::info!("host D3D12 device ready");
         Ok(Host {
             device,
+            #[cfg(feature = "diagnostics")]
+            video_memory: adapter.and_then(|adapter| adapter.cast().ok()),
             queue,
             fence,
             submitted: Mutex::default(),
@@ -1508,7 +1511,11 @@ impl Meter {
     }
 
     /// Counts a presented frame.
-    fn frame(&mut self, hwnd: HWND) {
+    fn frame(
+        &mut self,
+        hwnd: HWND,
+        #[cfg(feature = "diagnostics")] adapter: Option<&IDXGIAdapter3>,
+    ) {
         #[cfg(feature = "diagnostics")]
         tracing::debug!(target: "victory_gpu::frame", token = crate::frame::current(), "present");
         self.frames += 1;
@@ -1550,6 +1557,7 @@ impl Meter {
             );
             #[cfg(feature = "diagnostics")]
             {
+                crate::memstat::report(adapter, "present");
                 crate::copystat::log(frames);
                 for (why, n) in drops.iter().take(40) {
                     tracing::info!(
@@ -1684,7 +1692,11 @@ impl Host {
                 return None;
             }
             p.last_present_error = None;
-            p.meter.frame(p.hwnd);
+            p.meter.frame(
+                p.hwnd,
+                #[cfg(feature = "diagnostics")]
+                self.video_memory.as_ref(),
+            );
             #[cfg(feature = "diagnostics")]
             return Some(probe.is_some_and(|b| crate::capture::black(&b)));
             #[cfg(not(feature = "diagnostics"))]

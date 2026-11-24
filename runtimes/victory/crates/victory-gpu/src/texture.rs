@@ -37,6 +37,8 @@ pub(crate) struct Staging {
     /// Its bytes.
     #[cfg(feature = "diagnostics")]
     size: u64,
+    #[cfg(feature = "diagnostics")]
+    _allocation: crate::memstat::Allocation,
     data: *mut u8,
     footprints: Vec<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>,
     rows: Vec<u32>,
@@ -344,6 +346,11 @@ fn staging(resource: This, texture: &ID3D12Resource) -> Option<Arc<Staging>> {
         buffer,
         #[cfg(feature = "diagnostics")]
         size: total,
+        #[cfg(feature = "diagnostics")]
+        _allocation: crate::memstat::Allocation::track(
+            crate::memstat::Kind::TextureUpload,
+            total,
+        ),
         data,
         footprints,
         rows,
