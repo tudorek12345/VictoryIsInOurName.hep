@@ -1,6 +1,6 @@
 # PortWatch registration packet
 
-**Status: prepared, not submitted or registered.** This document requests review of [tudorek12345/Leonida](https://github.com/tudorek12345/Leonida) as a distinct contributor fork and runtime integration effort. It does not establish a PortWatch listing, score, endorsement or partnership.
+**Status: submitted as [PortWatch issue #17](https://github.com/4lwayz/portwatch-vi/issues/17); awaiting maintainer review.** This document requests review of [tudorek12345/Leonida](https://github.com/tudorek12345/Leonida) as a distinct contributor fork and runtime integration effort. It does not establish a PortWatch listing, score, endorsement or partnership.
 
 PortWatch's current scout does **not** ingest JSON from this repository. The adjacent [customized candidate proposal](../tracking/portwatch-candidate.json) follows its real `candidates[]` record shape so a reviewer can inspect or reuse it. Its factual description is proposed review wording, rather than a verbatim copy of the repository description. Registration requires a human-reviewed change to [PortWatch's registry](https://github.com/4lwayz/portwatch-vi/blob/main/data/tracker.json), normally requested through an issue or pull request.
 
@@ -38,17 +38,17 @@ Snapshot: **24 November 2026, 01:33:49 CET (00:33:49 UTC)**. Repository metadata
 
 The last result is a **local evaluation of the public scout code**, not a claim that the live tracker has already flagged this fork. It means automatic discovery cannot be relied upon. Ask for manual review of the actual source changes. PortWatch's [editorial instructions](https://github.com/4lwayz/portwatch-vi/blob/main/EDITOR.md) explicitly treat surviving Leonida contributor forks as separate candidate efforts.
 
-The JSON is a customized proposal: repository facts come from the snapshot, while the description summarizes the source integration and explicitly leaves GTA VI behavior unverified. It contains no `gta`, `groundwork`, `tier`, `verification` or leaderboard score fields. Its `status: "new"` is the candidate schema's review state; this file has not been submitted to PortWatch. Refresh metadata after later commits; the current default branch is `main`.
+The JSON is a customized proposal: repository facts come from the snapshot, while the description summarizes the source integration and explicitly leaves GTA VI behavior unverified. It contains no `gta`, `groundwork`, `tier`, `verification` or leaderboard score fields. Its `status: "new"` is the candidate schema's proposed review state. The proposal was linked in [registration issue #17](https://github.com/4lwayz/portwatch-vi/issues/17); it has not been added to PortWatch's registry. Refresh metadata after later commits; the current default branch is `main`.
 
 ## Registration and subsequent updates
 
-Open a review request in [4lwayz/portwatch-vi](https://github.com/4lwayz/portwatch-vi/issues), or prepare a narrowly scoped registry pull request. A maintainer can add a reviewed `efforts[]` record with a unique ID, repository, branch, approach, target, tier and evidence-based assessment. **`leonida-heperkoo` is a proposed ID only.** The owner chooses whether to register it and how to assess it.
+The review request was submitted to [4lwayz/portwatch-vi as issue #17](https://github.com/4lwayz/portwatch-vi/issues/17) on 24 November 2026 at 01:58 CET. A maintainer can add a reviewed `efforts[]` record with a unique ID, repository, branch, approach, target, tier and evidence-based assessment. **`leonida-heperkoo` is a proposed ID only.** The owner chooses whether to register it and how to assess it.
 
 A direct insertion into the candidate queue may encounter the same copy predicate on its next scout run. Ask the reviewer to resolve that classification explicitly. Do not rename the project or disguise inherited source to evade screening.
 
 After acceptance, retain the assigned ID and update evidence through the registry's review process. The scout refreshes repository metadata and README claims; it does not synchronize this local JSON or automatically verify a milestone. Use `self-reported` until credible independent reproduction supports another verification state.
 
-## Ready-to-post registration issue
+## Submitted registration issue
 
 **Title:** Review Hep's Leonida as a distinct Leonida/VIctory runtime integration effort
 
@@ -72,4 +72,4 @@ Credit remains with the original Leonida contributors and Marvisak/VIctory. I ma
 
 ---
 
-Posting this draft is a separate action. No issue, pull request or tracker edit has been made as part of preparing this packet.
+Submitted with maintainer authorization as [issue #17](https://github.com/4lwayz/portwatch-vi/issues/17). At submission, the issue was open with no maintainer reply. No PortWatch registry entry or approval is implied by the submission.
