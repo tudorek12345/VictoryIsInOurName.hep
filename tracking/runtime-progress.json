@@ -39,5 +39,26 @@
   ],
   "nextExperiment": "Check debug-layer availability, reproduce bounded world entry with caller/fence diagnostics, isolate guest execution versus presentation/capture, then fix a demonstrated defect with a synthetic regression before hardware gameplay verification.",
   "rawGameEvidenceIncluded": false,
-  "portwatch": {"reviewIssue": "https://github.com/4lwayz/portwatch-vi/issues/17", "listingOrDeploymentClaimed": false}
+  "portwatch": {
+    "reviewIssue": "https://github.com/4lwayz/portwatch-vi/issues/17",
+    "reviewComment": "https://github.com/4lwayz/portwatch-vi/issues/17#issuecomment-7125717267",
+    "submittedAt": "2026-11-24T08:05:39Z",
+    "listingOrDeploymentClaimed": false
+  },
+  "publication": {
+    "checkedAt": "2026-11-24T03:17:00-05:00",
+    "implementationCommit": "298042a3388e400464824d246ed3ec265c238345",
+    "implementationTree": "ceeb6214819fb2b035a9bf7dc08b264bc421bcd2",
+    "implementationReadmeBlob": "e449cdfab3dbd4de749f37cb5077938e45b9a0ce",
+    "bothMainRefsAndTreesVerifiedEqual": true,
+    "websiteSourceBuildVerified": true,
+    "hostedWebsiteDeploymentVerified": false,
+    "ciForImplementationCommit": [
+      {"workflow": "Project website", "url": "https://github.com/tudorek12345/Leonida/actions/runs/45352873274", "result": "passed tests, typecheck and production build"},
+      {"workflow": "No Game Data", "url": "https://github.com/tudorek12345/Leonida/actions/runs/45352873203", "result": "passed"},
+      {"workflow": "VIctory runtime integration", "url": "https://github.com/tudorek12345/Leonida/actions/runs/45352873288", "result": "release and diagnostics builds passed; shader tests failed with 0xC0000005 under parallel configuration", "sameFailureSignatureOnBaseline": "https://github.com/tudorek12345/Leonida/actions/runs/45337573770"}
+    ],
+    "allCiGreen": false,
+    "additionalFollowUp": "Investigate native shader-test CI access violation and legacy CI failures; preserve tests and assertions."
+  }
 }

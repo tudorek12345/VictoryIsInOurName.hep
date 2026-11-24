@@ -15,6 +15,8 @@ On RX 9060 XT 16 GB / Ryzen 7 5700X / 32 GB DDR4, a short hardware **intro-only*
 
 ## Historical registration record
 
+Publication receipt: the recent checklist was [submitted as a follow-up comment](https://github.com/4lwayz/portwatch-vi/issues/17#issuecomment-7125717267) at **24 November 2026, 03:05:39 EST**. The implementation commit is `298042a3388e400464824d246ed3ec265c238345` in both repositories. Current CI limits and source-build results are recorded in the root README and `tracking/runtime-progress.json`; this receipt does not establish a live PortWatch listing or deployment.
+
 **Status: submitted as [PortWatch issue #17](https://github.com/4lwayz/portwatch-vi/issues/17); awaiting maintainer review.** This document requests review of [tudorek12345/Leonida](https://github.com/tudorek12345/Leonida) as a distinct contributor fork and runtime integration effort. It does not establish a PortWatch listing, score, endorsement or partnership.
 
 PortWatch's current scout does **not** ingest JSON from this repository. The adjacent [customized candidate proposal](../tracking/portwatch-candidate.json) follows its real `candidates[]` record shape so a reviewer can inspect or reuse it. Its factual description is proposed review wording, rather than a verbatim copy of the repository description. Registration requires a human-reviewed change to [PortWatch's registry](https://github.com/4lwayz/portwatch-vi/blob/main/data/tracker.json), normally requested through an issue or pull request.

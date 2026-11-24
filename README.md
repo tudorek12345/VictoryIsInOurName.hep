@@ -72,6 +72,18 @@ The [public handoff](website/public/handoff.md), [brief progress report](website
 
 **PortWatch VI:** [issue #17](https://github.com/4lwayz/portwatch-vi/issues/17) is the maintainer-review channel. This fork and its identical source mirror are **one effort, not two independent projects**. A repository push or submitted update is not a live-site listing, score, approval or deployment.
 
+### Publication verification — 24 November 2026, 03:17 EST
+
+The implementation commit **[`298042a3`](https://github.com/tudorek12345/Leonida/commit/298042a3388e400464824d246ed3ec265c238345)** was pushed to `main` in both repositories, with identical Git tree and README blob hashes. The brief EST-dated update and checked/unchecked tasks were [submitted to PortWatch](https://github.com/4lwayz/portwatch-vi/issues/17#issuecomment-7125717267); its maintainer still controls acceptance and deployment. The project website's updated **source** passed CI; the existing hosted Sites deployment was not updated by that build.
+
+- [Website CI](https://github.com/tudorek12345/Leonida/actions/runs/45352873274): **tests, typecheck and production build passed**.
+- [No Game Data CI](https://github.com/tudorek12345/Leonida/actions/runs/45352873203): **passed** for the implementation commit.
+- [Native CI](https://github.com/tudorek12345/Leonida/actions/runs/45352873288): **release and diagnostics builds passed**, but the shader-test process failed with **0xC0000005 / STATUS_ACCESS_VIOLATION** under the workflow's parallel test configuration. The [preceding baseline run](https://github.com/tudorek12345/Leonida/actions/runs/45337573770) shows the same failure signature; its exact cause is not established. This is distinct from the passing local serial diagnostics suite.
+- The broader legacy CI is **not fully green**. Do not treat the local passing tests or successful website build as an all-CI pass.
+- [ ] Investigate the native CI access violation and remaining legacy CI failures without dropping tests or assertions.
+
+Publication receipts and CI limits are recorded in [the sanitized results](tracking/runtime-progress.json). No new game captures or raw game evidence were included in these changes.
+
 <details>
 <summary>Historical maintainer report — 23 November 2026 (different RX 9070 XT machine)</summary>
 
