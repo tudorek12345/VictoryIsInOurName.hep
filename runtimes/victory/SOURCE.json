@@ -144,12 +144,16 @@
       "paths": ["crates/victory-hle/src/modules/audio/capture.rs"]
     },
     {
-      "purpose": "Keep device-removal diagnostics from allocating buffer shadows and avoid direct reads of guest constant memory that can be unmapped concurrently.",
+      "purpose": "Keep device-removal diagnostics from allocating buffer shadows, report placed and unordered descriptor layouts, and avoid direct reads of guest constant memory that can be unmapped concurrently.",
       "paths": [
         "crates/victory-gpu/src/descriptor/host.rs",
         "crates/victory-gpu/src/draw.rs",
         "crates/victory-gpu/src/shadow.rs"
       ]
+    },
+    {
+      "purpose": "Bind unordered views of address-backed textures to the same host image used by shader reads and select integer compute variants for these views.",
+      "paths": ["crates/victory-gpu/src/descriptor/host.rs"]
     },
     {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",

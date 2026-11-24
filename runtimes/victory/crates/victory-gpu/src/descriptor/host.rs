@@ -629,6 +629,8 @@ fn fits(texture: &ID3D12Resource, mut format: Option<&mut DXGI_FORMAT>, unordere
 
 /// The format actually bound when this view is a one-channel integer image UAV.
 pub(crate) fn integer_image_uav(view: &View) -> Option<bool> {
+    let placed = placed_texture(view);
+    let view = placed.as_ref().unwrap_or(view);
     let View::Unordered(resource, _, words) = view else {
         return None;
     };
@@ -771,10 +773,7 @@ fn make(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<Kept> {
             }
             const BUFFER: u32 = 1;
             if resource[0] != BUFFER {
-                // shortcut: unordered access to a texture the title placed
-                // itself is not mirrored; give it a resource as shader
-                // views of such textures get when a dispatch writes one.
-                once!(dimension = resource[0], "placed unordered texture view not mirrored");
+                once!(dimension = resource[0], "placed texture view has no host texture");
                 return None;
             }
             // The resource description's width, after the alignment.
@@ -790,11 +789,11 @@ fn make(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<Kept> {
     }
 }
 
-/// A shader view of a texture the title placed in memory itself, as a view
-/// of the resource made for that memory (on first use).
+/// Shader reads and unordered writes to the same placed texture share a
+/// host resource. Each descriptor retains its own format and dimension.
 pub(crate) fn placed_texture(view: &View) -> Option<View> {
     const BUFFER: u32 = 1;
-    let View::Placed(false, resource, desc) = view else {
+    let View::Placed(unordered, resource, desc) = view else {
         return None;
     };
     if resource[0] == BUFFER {
@@ -802,7 +801,12 @@ pub(crate) fn placed_texture(view: &View) -> Option<View> {
     }
     let address = u64::from(desc[10]) | u64::from(desc[11]) << 32;
     let texture = crate::resource::texture_at(address, resource)?;
-    Some(View::Shader(texture as usize, desc[..10].try_into().ok()))
+    let words = Some(desc[..10].try_into().ok()?);
+    Some(if *unordered {
+        View::Unordered(texture as usize, 0, words)
+    } else {
+        View::Shader(texture as usize, words)
+    })
 }
 
 /// A null view of the kind `view` is, for a slot whose view the host
@@ -965,6 +969,32 @@ fn null_view(at: D3D12_CPU_DESCRIPTOR_HANDLE) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placed_integer_texture_reads_and_writes_use_the_same_resource() {
+        let Some(heap) = HostHeap::new(false, 2) else {
+            return;
+        };
+        let resource = [3, 0, 0, 0, 32, 0, 16, 0x10001, 42, 1, 0, 0, 4, 0];
+        let mut srv = [0; 16];
+        srv[0] = DXGI_FORMAT_R32_UINT.0 as u32;
+        srv[1] = D3D12_SRV_DIMENSION_TEXTURE2D.0 as u32;
+        srv[2] = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv[5] = 1;
+        // Only GPU descriptors are created. No guest memory is accessed.
+        srv[10] = 0x2600_0000;
+        srv[11] = 2;
+        let mut uav = [0; 16];
+        uav[0] = srv[0];
+        uav[1] = D3D12_UAV_DIMENSION_TEXTURE2D.0 as u32;
+        uav[10..12].copy_from_slice(&srv[10..12]);
+        let read = View::Placed(false, resource, srv);
+        let write = View::Placed(true, resource, uav);
+        let read_resource = make(&read, heap.cpu(0)).unwrap().unwrap();
+        let write_resource = make(&write, heap.cpu(1)).unwrap().unwrap();
+        assert_eq!(read_resource, write_resource);
+        assert_eq!(integer_image_uav(&write), Some(false));
+    }
 
     #[test]
     fn explicit_null_views_keep_their_descriptor_class() {

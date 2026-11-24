@@ -1234,15 +1234,19 @@ fn describe(view: Option<&View>) -> String {
         None => "no view".into(),
         Some(v @ View::Shader(r, _)) => texture(*r as This)
             .unwrap_or_else(|| format!("buffer {:?}", crate::descriptor::host::buffer_range(v))),
-        Some(View::Unordered(r, ..)) => format!("uav {:?}", texture(*r as This)),
+        Some(v @ View::Unordered(r, _, desc)) => match texture(*r as This) {
+            Some(t) => format!("uav {t}"),
+            None => format!("uav resource={r:#x} range={:#x?} desc={desc:?}", crate::descriptor::host::buffer_range(v)),
+        },
         Some(View::Placed(u, r, d)) => format!(
-            "placed uav={u} dim {} {}x{} f{} layout {:#x} at {:#x}",
+            "placed uav={u} dim {} {}x{} f{} layout {:#x} at {:#x} view {:?}",
             r[0],
             u64::from(r[4]) | u64::from(r[5]) << 32,
             r[6],
             r[8],
             r[11],
-            u64::from(d[10]) | u64::from(d[11]) << 32
+            u64::from(d[10]) | u64::from(d[11]) << 32,
+            &d[..10],
         ),
         // The first four values, as a colour rectangle's constants are.
         Some(View::Constant(address, size)) => {
