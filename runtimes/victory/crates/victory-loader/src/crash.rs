@@ -1,0 +1,491 @@
+//! Names the faulting code when title code crashes.
+//!
+//! A vectored handler sees every exception first, so it only prints the
+//! kinds that end a process (access violations and the like, and
+//! breakpoints: titles assert with `int3`, fatal without a debugger) as
+//! first-chance, since a handler may still take them (ntdll's loader does
+//! with its own probes). What nobody handles, of any kind (an uncaught C++
+//! exception too), is reported from the unhandled-exception filter
+//! (`report_unhandled`, which the runtime calls ahead of the title's own)
+//! and appended to the crash log, with the title's last debug output, which
+//! often states the reason. Panics of ours go to the crash log too.
+
+use std::ptr::null_mut;
+use windows_sys::Win32::Foundation::{
+    EXCEPTION_ACCESS_VIOLATION, EXCEPTION_BREAKPOINT, EXCEPTION_ILLEGAL_INSTRUCTION,
+    EXCEPTION_INT_DIVIDE_BY_ZERO, EXCEPTION_PRIV_INSTRUCTION, EXCEPTION_STACK_OVERFLOW, HMODULE,
+};
+
+use windows_sys::Win32::System::Diagnostics::Debug::{
+    AddVectoredExceptionHandler, CONTEXT, EXCEPTION_POINTERS, M128A, RtlLookupFunctionEntry,
+    RtlVirtualUnwind, SetUnhandledExceptionFilter, UNW_FLAG_NHANDLER,
+};
+use windows_sys::Win32::System::LibraryLoader::{
+    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+    GetModuleFileNameW, GetModuleHandleExW,
+};
+use windows_sys::Win32::System::Threading::GetCurrentThreadStackLimits;
+
+const EXCEPTION_CONTINUE_SEARCH: i32 = 0;
+/// Frames listed per report.
+pub(crate) const MAX_FRAMES: usize = 40;
+
+/// Memory saved to files when a crash is reported: (address, length, file).
+#[cfg(feature = "diagnostics")]
+static SAVE: std::sync::OnceLock<Vec<(usize, usize, std::path::PathBuf)>> =
+    std::sync::OnceLock::new();
+
+/// Debugging aid: on a reported crash, also write each `[address, address
+/// + len)` (readable title memory, e.g. an engine table) to its file.
+#[cfg(feature = "diagnostics")]
+pub fn save_on_crash(ranges: Vec<(usize, usize, std::path::PathBuf)>) {
+    let _ = SAVE.set(ranges);
+}
+
+/// The file crash reports are appended to, besides being printed.
+static LOG: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Also appends every unhandled-exception report and panic to `file`, so a
+/// crash can be read after the console is gone.
+pub fn log_crashes_to(file: std::path::PathBuf) {
+    if LOG.set(file).is_ok() {
+        let print = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            print(info);
+            append_to_log(&format!(
+                "VIctory: panic on thread {:?}: {info}\n{}",
+                std::thread::current().name().unwrap_or("?"),
+                title_output()
+            ));
+        }));
+    }
+}
+
+/// Appends a failure that is not an exception (the host GPU's) to the crash
+/// log, with the title's last debug output, and prints it.
+pub fn log_crash(text: &str) {
+    let text = format!("{text}
+{}", title_output());
+    eprint!("{text}");
+    append_to_log(&text);
+}
+
+fn append_to_log(text: &str) {
+    use std::io::Write;
+    let Some(file) = LOG.get() else { return };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let opened = std::fs::OpenOptions::new().create(true).append(true).open(file);
+    if let Ok(mut f) = opened {
+        let _ = write!(f, "unix time {now}, process {}\n{text}\n", std::process::id());
+    }
+}
+
+/// The title's last lines of debug output, kept for crash reports.
+static SAID: std::sync::Mutex<std::collections::VecDeque<String>> =
+    std::sync::Mutex::new(std::collections::VecDeque::new());
+const SAID_LINES: usize = 8;
+
+/// Keeps a line of the title's debug output for the next crash report.
+pub fn note_title_output(line: &str) {
+    if line.is_empty() {
+        return;
+    }
+    let mut said = SAID.lock().unwrap_or_else(|e| e.into_inner());
+    if said.len() == SAID_LINES {
+        said.pop_front();
+    }
+    said.push_back(line.to_owned());
+}
+
+/// The kept lines, one per report line; nothing if another thread holds
+/// them (it may be the one that faulted).
+fn title_output() -> String {
+    let Ok(said) = SAID.try_lock() else {
+        return String::new();
+    };
+    said.iter().map(|l| format!("  title said: {l}\n")).collect()
+}
+
+/// Installs the handlers; call once before running title code.
+pub fn report_crashes() {
+    unsafe extern "system" fn filter(info: *const EXCEPTION_POINTERS) -> i32 {
+        // SAFETY: the system passes the exception being dispatched.
+        unsafe { report_unhandled(info) };
+        EXCEPTION_CONTINUE_SEARCH
+    }
+    // SAFETY: registers handlers that only read the exception they are
+    // given; the title's own filter, once it sets one, takes the place of
+    // ours and calls `report_unhandled` first.
+    unsafe {
+        AddVectoredExceptionHandler(0, Some(handler));
+        SetUnhandledExceptionFilter(Some(filter));
+    }
+}
+
+/// What the vectored handler reports as it happens.
+const FATAL: [i32; 6] = [
+    EXCEPTION_ACCESS_VIOLATION,
+    EXCEPTION_ILLEGAL_INSTRUCTION,
+    EXCEPTION_PRIV_INSTRUCTION,
+    EXCEPTION_INT_DIVIDE_BY_ZERO,
+    EXCEPTION_STACK_OVERFLOW,
+    EXCEPTION_BREAKPOINT,
+];
+
+/// Console CPUs are Zen 2: titles use AMD-only instructions Intel CPUs
+/// lack. Does their job instead: `clzero` (`0f 01 fc`) zeroes the 64-byte
+/// line at `rax`; `monitorx`/`mwaitx` (`0f 01 fa`/`fb`) are wait hints, so
+/// a spin loop around them works with mwaitx as a yield.
+unsafe fn emulate_amd_only(info: *mut EXCEPTION_POINTERS) -> bool {
+    // SAFETY: the system passes valid exception pointers; the faulting
+    // instruction's bytes are readable, as the CPU just fetched them.
+    unsafe {
+        let record = &*(*info).ExceptionRecord;
+        let context = &mut *(*info).ContextRecord;
+        if record.ExceptionCode != EXCEPTION_ILLEGAL_INSTRUCTION {
+            return false;
+        }
+        let code = context.Rip as *const u8;
+        match code.cast::<[u8; 3]>().read_unaligned() {
+            [0x0f, 0x01, 0xfc] => ((context.Rax & !63) as *mut u8).write_bytes(0, 64),
+            [0x0f, 0x01, 0xfa] => {}
+            [0x0f, 0x01, 0xfb] => std::thread::yield_now(),
+            _ => {
+                let Some(len) = sse4a(code, &mut context.Anonymous.FltSave.XmmRegisters) else {
+                    return false;
+                };
+                context.Rip += len as u64;
+                return true;
+            }
+        }
+        context.Rip += 3;
+    }
+    true
+}
+
+/// SSE4a's `extrq`/`insertq` (register forms, the only ones there are) on
+/// the saved XMM registers; returns the instruction's length.
+unsafe fn sse4a(code: *const u8, xmm: &mut [M128A; 16]) -> Option<usize> {
+    // SAFETY: the caller's code bytes are readable up to the instruction's end.
+    let b = |i: usize| unsafe { code.add(i).read() };
+    let prefix = b(0);
+    let (rex, at) = if b(1) & 0xf0 == 0x40 { (b(1), 2) } else { (0, 1) };
+    if !matches!(prefix, 0x66 | 0xf2) || b(at) != 0x0f || !matches!(b(at + 1), 0x78 | 0x79) {
+        return None;
+    }
+    let modrm = b(at + 2);
+    if modrm >> 6 != 3 {
+        return None;
+    }
+    let dst = usize::from((modrm >> 3) & 7 | (rex & 4) << 1);
+    let src = usize::from(modrm & 7 | (rex & 1) << 3);
+    let immediate = b(at + 1) == 0x78;
+    let (fields, len) = if immediate {
+        ((b(at + 3), b(at + 4)), at + 5)
+    } else {
+        // extrq reads its fields from src's low half, insertq from its high.
+        let f = if prefix == 0x66 { xmm[src].Low } else { xmm[src].High as u64 };
+        ((f as u8, (f >> 8) as u8), at + 3)
+    };
+    let (n, at_bit) = (u32::from(fields.0 & 63), u32::from(fields.1 & 63));
+    let bits = if n == 0 { 64 } else { n };
+    let mask = if bits == 64 { u64::MAX } else { (1u64 << bits) - 1 };
+    if prefix == 0x66 {
+        // extrq: register form takes its fields from src, works on dst.
+        if immediate && (modrm >> 3) & 7 != 0 {
+            return None;
+        }
+        let target = if immediate { src } else { dst };
+        xmm[target].Low = (xmm[target].Low >> at_bit) & mask;
+    } else {
+        let value = (xmm[src].Low & mask) << at_bit;
+        xmm[dst].Low = xmm[dst].Low & !(mask << at_bit) | value;
+    }
+    Some(len)
+}
+
+unsafe extern "system" fn handler(info: *mut EXCEPTION_POINTERS) -> i32 {
+    // SAFETY: the system passes valid exception pointers.
+    if unsafe { emulate_amd_only(info) } {
+        return -1; // EXCEPTION_CONTINUE_EXECUTION
+    }
+    // SAFETY: as above.
+    if FATAL.contains(&unsafe { (*(*info).ExceptionRecord).ExceptionCode }) {
+        // SAFETY: as above.
+        unsafe { report("first-chance exception", info, false) };
+    }
+    EXCEPTION_CONTINUE_SEARCH
+}
+
+/// For an unhandled-exception filter: reports the exception that is about
+/// to end the process, and appends it to the crash log.
+///
+/// # Safety
+/// `info` comes from the system, for an exception being dispatched.
+pub unsafe fn report_unhandled(info: *const EXCEPTION_POINTERS) {
+    // SAFETY: forwarded from the caller.
+    unsafe { report("unhandled exception", info, true) };
+}
+
+/// MSVC's code for a C++ `throw`, and its magic first parameter.
+const CPP_EXCEPTION: i32 = 0xE06D_7363_u32 as i32;
+const CPP_MAGIC: usize = 0x1993_0520;
+
+/// What a C++ throw threw: the decorated name of its type, then its value
+/// where that names the cause (an integer, e.g. an HRESULT; a standard
+/// exception's message).
+///
+/// # Safety
+/// `p` are the parameters of a live MSVC throw (`p[0]` the magic).
+unsafe fn thrown(p: &[usize]) -> String {
+    // SAFETY: the throw's ThrowInfo, its RVAs relative to `p[3]`: catchable
+    // type array at +12 (count, then type RVAs), each type's descriptor at
+    // +4, whose decorated name starts at +16; the object is at `p[1]`.
+    unsafe {
+        let rva = |at: usize| (at as *const u32).read_unaligned() as usize;
+        let types = p[3] + rva(p[2] + 12);
+        let name = |i: usize| {
+            let descriptor = p[3] + rva(p[3] + rva(types + 4 + 4 * i) + 4);
+            std::ffi::CStr::from_ptr((descriptor + 16) as *const std::ffi::c_char)
+                .to_string_lossy()
+        };
+        let first = name(0);
+        let value = match &*first {
+            // int, unsigned, long (HRESULT), unsigned long
+            ".H" | ".I" | ".J" | ".K" if p[1] != 0 => {
+                format!(" = {:#010x}", (p[1] as *const u32).read_unaligned())
+            }
+            // std::exception keeps its message after the table pointer.
+            _ if (0..rva(types)).any(|i| name(i) == ".?AVexception@std@@") => {
+                let message = (p[1] as *const *const std::ffi::c_char).add(1).read();
+                if message.is_null() {
+                    String::new()
+                } else {
+                    format!(": {}", std::ffi::CStr::from_ptr(message).to_string_lossy())
+                }
+            }
+            _ => String::new(),
+        };
+        format!("{first}{value}")
+    }
+}
+
+/// # Safety
+/// See [`report_unhandled`].
+unsafe fn report(what: &str, info: *const EXCEPTION_POINTERS, to_file: bool) {
+    // SAFETY: the system passes valid exception pointers.
+    let (record, context) = unsafe { (&*(*info).ExceptionRecord, &*(*info).ContextRecord) };
+    let code = record.ExceptionCode;
+    let at = record.ExceptionAddress as usize;
+    let p = record.ExceptionInformation;
+    let detail = if code == EXCEPTION_ACCESS_VIOLATION {
+        let kind = match p[0] {
+            0 => "read",
+            1 => "write",
+            _ => "execute",
+        };
+        format!(" ({kind} {:#x})", p[1])
+    } else if code == CPP_EXCEPTION && record.NumberParameters >= 4 && p[0] == CPP_MAGIC {
+        // SAFETY: a live MSVC throw.
+        format!(" (C++ {} thrown)", unsafe { thrown(&p) })
+    } else {
+        String::new()
+    };
+    // Printed line by line (a fault while unwinding must not lose the
+    // lines before it), and kept for the file.
+    let mut text = String::new();
+    let mut line = |l: String| {
+        eprintln!("{l}");
+        text.push_str(&l);
+        text.push('\n');
+    };
+    line(format!(
+        "VIctory: {what} {:#010x} at {}{detail}",
+        code as u32,
+        locate(at)
+    ));
+    line(format!(
+        "  rax {:#x} rbx {:#x} rcx {:#x} rdx {:#x} rsi {:#x} rdi {:#x} rsp {:#x} rbp {:#x}",
+        context.Rax,
+        context.Rbx,
+        context.Rcx,
+        context.Rdx,
+        context.Rsi,
+        context.Rdi,
+        context.Rsp,
+        context.Rbp
+    ));
+    line(format!(
+        "  r8 {:#x} r9 {:#x} r10 {:#x} r11 {:#x} r12 {:#x} r13 {:#x} r14 {:#x} r15 {:#x}",
+        context.R8,
+        context.R9,
+        context.R10,
+        context.R11,
+        context.R12,
+        context.R13,
+        context.R14,
+        context.R15
+    ));
+    for (i, pc) in unwind(*context).into_iter().enumerate() {
+        line(format!("  #{i:<2} {}", locate(pc as usize)));
+    }
+    if to_file {
+        let said = title_output();
+        eprint!("{said}");
+        text.push_str(&said);
+        append_to_log(&text);
+    }
+    #[cfg(feature = "diagnostics")]
+    for (address, len, file) in SAVE.get().into_iter().flatten() {
+        // SAFETY: the caller of `save_on_crash` named readable memory.
+        let bytes = unsafe { std::slice::from_raw_parts(*address as *const u8, *len) };
+        let saved = std::fs::write(file, bytes);
+        eprintln!(
+            "  saved {address:#x}+{len:#x} to {} ({saved:?})",
+            file.display()
+        );
+    }
+}
+
+/// Return addresses of the faulting thread's frames, from the faulting
+/// instruction up, by the unwind data of each image (the Windows loader
+/// registered it for title images too). Code without unwind data (our
+/// thunks, leaf functions) is taken to have its return address at `rsp`.
+fn unwind(context: CONTEXT) -> Vec<u64> {
+    let (mut low, mut high) = (0, 0);
+    // SAFETY: writes the current thread's stack bounds.
+    unsafe { GetCurrentThreadStackLimits(&mut low, &mut high) };
+    let mut frames = Vec::with_capacity(MAX_FRAMES);
+    unwind_into(context, low, high, &mut frames);
+    frames
+}
+
+/// [`unwind`] for any thread of the process, its stack being `low..high`;
+/// pushes no more than `MAX_FRAMES`, so it does not allocate when `frames`
+/// has that capacity (another thread may be suspended holding the heap).
+pub(crate) fn unwind_into(mut context: CONTEXT, low: usize, high: usize, frames: &mut Vec<u64>) {
+    frames.push(context.Rip);
+    while frames.len() < MAX_FRAMES {
+        // Stop where reading the stack would fault inside this handler.
+        let rsp = context.Rsp as usize;
+        if rsp < low || rsp + 8 > high {
+            break;
+        }
+        let mut image = 0;
+        // SAFETY: looks up the function table entry covering `Rip`, if any.
+        let entry = unsafe { RtlLookupFunctionEntry(context.Rip, &mut image, null_mut()) };
+        if entry.is_null() {
+            // SAFETY: `rsp` is inside this thread's stack.
+            context.Rip = unsafe { (rsp as *const u64).read() };
+            context.Rsp += 8;
+        } else {
+            let (mut data, mut frame) = (null_mut(), 0);
+            // SAFETY: `entry` belongs to `image`; the context is our copy.
+            unsafe {
+                RtlVirtualUnwind(
+                    UNW_FLAG_NHANDLER,
+                    image,
+                    context.Rip,
+                    entry,
+                    &mut context,
+                    &mut data,
+                    &mut frame,
+                    null_mut(),
+                )
+            };
+        }
+        if context.Rip == 0 {
+            break;
+        }
+        frames.push(context.Rip);
+    }
+}
+
+/// `module+rva`, or the bare address.
+pub fn locate(address: usize) -> String {
+    module_of(address).unwrap_or_else(|| format!("{address:#x}"))
+}
+
+fn module_of(address: usize) -> Option<String> {
+    let mut module: HMODULE = std::ptr::null_mut();
+    // SAFETY: looks up the module containing `address`; no reference taken.
+    let found = unsafe {
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            address as *const u16,
+            &mut module,
+        )
+    };
+    if found == 0 {
+        return None;
+    }
+    let mut path = [0u16; 260];
+    // SAFETY: `module` is a loaded module; the buffer length is passed.
+    let len = unsafe { GetModuleFileNameW(module, path.as_mut_ptr(), path.len() as u32) };
+    let path = String::from_utf16_lossy(&path[..len as usize]);
+    let name = path.rsplit('\\').next().unwrap_or(&path);
+    Some(format!("{name}+{:#x}", address - module as usize))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows_sys::Win32::System::Diagnostics::Debug::{
+        RtlCaptureContext, RtlCaptureStackBackTrace,
+    };
+
+    #[test]
+    #[inline(never)]
+    fn unwinds_like_the_system_walk() {
+        // SAFETY: zeroed CONTEXT is valid; both calls write our buffers.
+        let (frames, walked) = unsafe {
+            let mut context: CONTEXT = std::mem::zeroed();
+            RtlCaptureContext(&mut context);
+            let mut walked = [null_mut(); 8];
+            let n = RtlCaptureStackBackTrace(0, 8, walked.as_mut_ptr(), null_mut());
+            (unwind(context), walked[..usize::from(n)].to_vec())
+        };
+        // Frame 0 differs (two call sites in this function); callers agree.
+        assert!(walked.len() >= 4, "{walked:?}");
+        let ours: Vec<_> = frames[1..walked.len()]
+            .iter()
+            .map(|&f| f as usize)
+            .collect();
+        let system: Vec<_> = walked[1..].iter().map(|&f| f as usize).collect();
+        assert_eq!(ours, system);
+    }
+
+    #[test]
+    fn clzero_zeroes_its_line_on_any_cpu() {
+        report_crashes();
+        #[repr(align(64))]
+        struct Line([u8; 128]);
+        let mut line = Line([0xff; 128]);
+        let at = line.0.as_mut_ptr().wrapping_add(5); // inside the first line
+        // SAFETY: clzero writes only the 64-byte line holding `at`, ours.
+        unsafe { std::arch::asm!(".byte 0x0f, 0x01, 0xfc", in("rax") at) };
+        assert!(line.0[..64].iter().all(|&b| b == 0));
+        assert!(line.0[64..].iter().all(|&b| b == 0xff));
+        // insertq xmm0, xmm1, len 16, at 16; then extrq xmm0, len 8, at 20.
+        let out: u64;
+        // SAFETY: touches only the named registers.
+        unsafe {
+            std::arch::asm!(
+                "movq xmm0, {a}", "movq xmm1, {b}",
+                ".byte 0xf2, 0x0f, 0x78, 0xc1, 0x10, 0x10",
+                "movq {a}, xmm0",
+                ".byte 0x66, 0x0f, 0x78, 0xc0, 0x08, 0x14",
+                "movq {b}, xmm0",
+                a = inout(reg) 0x1111_2222_3333_4444u64 => _, b = inout(reg) 0xabcdu64 => out,
+                out("xmm0") _, out("xmm1") _)
+        };
+        assert_eq!(out, 0xbc); // 0x1111_2222_abcd_4444 >> 20, 8 bits
+        // SAFETY: monitorx/mwaitx are wait hints that write no memory.
+        unsafe {
+            std::arch::asm!(".byte 0x0f, 0x01, 0xfa", ".byte 0x0f, 0x01, 0xfb",
+                in("rax") at, in("ecx") 0, in("edx") 0)
+        };
+    }
+}

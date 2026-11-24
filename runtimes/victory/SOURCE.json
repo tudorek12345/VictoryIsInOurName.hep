@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/Marvisak/VIctory",
+  "commit": "35b054ec038c11bc8a0de66b1eee764b1ad4f101",
+  "obtainedAt": "2026-11-24T00:21:49.794937Z",
+  "originalAuthor": "Marvisak and VIctory contributors",
+  "license": "GPL-3.0-or-later",
+  "licenseFile": "LICENSE",
+  "omittedReadmePaths": [
+    "README.md"
+  ],
+  "omittedAssetPaths": [
+    {
+      "path": "crates/victory-formats/src/bcpack-tables.bin",
+      "reason": "Upstream docs/asset-policy.md states this format table is not covered by the repository licence. Leonida integration requires user-supplied external tables."
+    }
+  ],
+  "integrationStatement": "Vendored and integrated locally into tudorek12345/Leonida. This is not an upstream endorsement.",
+  "localChanges": [
+    {
+      "purpose": "Load user-supplied BCPack format tables without redistributing the upstream non-licensed blob. Preserve the builtin() call API, validate the external source boundary and bound file reads; test missing, malformed and synthetic valid files.",
+      "paths": [
+        "crates/victory-formats/src/bcpack.rs",
+        "crates/victory-formats/Cargo.toml",
+        "crates/victory-hle/src/modules/dstorage.rs",
+        "Cargo.lock"
+      ]
+    },
+    {
+      "purpose": "Remove the omitted table exception from tracking and asset checks; document the external-file requirement.",
+      "paths": [
+        ".gitignore",
+        "xtask/src/policy.rs",
+        "docs/asset-policy.md"
+      ]
+    },
+    {
+      "purpose": "Refuse hook installation into the parent Git repository and scope both working-tree and staged policy checks to the vendored subtree, with temporary-repository tests.",
+      "paths": [
+        "xtask/src/main.rs",
+        "xtask/src/policy.rs",
+        "xtask/Cargo.toml",
+        "Cargo.lock"
+      ]
+    },
+    {
+      "purpose": "Keep current-executable PE probes on Windows and add hand-written synthetic PE parser/import coverage for other hosts.",
+      "paths": [
+        "crates/victory-pe/src/image.rs"
+      ]
+    },
+    {
+      "purpose": "Remove the upstream trailing blank line so the imported patch passes git diff --check; table content is unchanged.",
+      "paths": [
+        "crates/victory-formats/src/xma/tables.rs"
+      ]
+    }
+  ],
+  "modifiedFiles": [
+    ".gitignore",
+    "Cargo.lock",
+    "crates/victory-formats/Cargo.toml",
+    "crates/victory-formats/src/bcpack.rs",
+    "crates/victory-formats/src/xma/tables.rs",
+    "crates/victory-hle/src/modules/dstorage.rs",
+    "crates/victory-pe/src/image.rs",
+    "docs/asset-policy.md",
+    "xtask/Cargo.toml",
+    "xtask/src/main.rs",
+    "xtask/src/policy.rs"
+  ],
+  "parentSourceMarker": "../../.victory-root"
+}

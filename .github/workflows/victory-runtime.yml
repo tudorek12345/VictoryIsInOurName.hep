@@ -1,0 +1,69 @@
+name: VIctory runtime integration
+
+on:
+  push:
+    branches: [main, codex/integrate-victory]
+    paths:
+      - 'runtimes/victory/**'
+      - 'runtime_backend.py'
+      - 'run_runtime.cmd'
+      - 'tests/test_runtime_backend.py'
+      - '.victory-root'
+      - '.github/workflows/victory-runtime.yml'
+  pull_request:
+    paths:
+      - 'runtimes/victory/**'
+      - 'runtime_backend.py'
+      - 'run_runtime.cmd'
+      - 'tests/test_runtime_backend.py'
+      - '.victory-root'
+      - '.github/workflows/victory-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: victory-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Test backend selection and external data paths
+        run: python -I tests/test_runtime_backend.py
+      - name: Select pinned Rust toolchain
+        working-directory: runtimes/victory
+        run: rustup show active-toolchain
+      - name: Test the runtime without game files
+        working-directory: runtimes/victory
+        run: cargo test --locked --workspace --target x86_64-pc-windows-msvc
+      - name: Build native Windows runtime
+        working-directory: runtimes/victory
+        run: cargo build --locked --release -p victory --target x86_64-pc-windows-msvc
+      - name: Build diagnostics runtime
+        working-directory: runtimes/victory
+        run: cargo build --locked --profile diag -p victory --features diagnostics --target x86_64-pc-windows-msvc
+      - name: Smoke-test the built CLI
+        shell: pwsh
+        run: |
+          & ./runtimes/victory/target/x86_64-pc-windows-msvc/release/victory.exe --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./runtimes/victory/target/x86_64-pc-windows-msvc/diag/victory.exe --help
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: victory-windows-runtime
+          path: |
+            runtimes/victory/target/x86_64-pc-windows-msvc/release/victory.exe
+            runtimes/victory/target/x86_64-pc-windows-msvc/diag/victory.exe
+          if-no-files-found: error
+          retention-days: 14

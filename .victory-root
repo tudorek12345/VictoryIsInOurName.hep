@@ -1,0 +1,6 @@
+Leonida runtime integration source boundary.
+
+VIctory checks this marker before writing game-derived output. It protects
+the entire Leonida checkout, including paths outside runtimes/victory.
+Keep game files, BCPack tables, caches, saves and diagnostic output outside
+this source tree.
