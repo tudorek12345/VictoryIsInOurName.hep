@@ -70,6 +70,25 @@ unsafe impl Send for Host {}
 // SAFETY: as above.
 unsafe impl Sync for Host {}
 
+struct InFlight {
+    running: bool,
+    resources: Vec<Box<dyn Send>>,
+}
+
+static IN_FLIGHT: Mutex<InFlight> = Mutex::new(InFlight {
+    running: false,
+    resources: Vec::new(),
+});
+
+/// Keeps a replaced descriptor's resource or a released texture alive
+/// until the active submission has completed.
+pub(crate) fn retire(resource: impl Send + 'static) {
+    let mut flight = IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner());
+    if flight.running {
+        flight.resources.push(Box::new(resource));
+    }
+}
+
 /// Time spent in submissions since the last frame-rate line, in
 /// microseconds: preparing them on the CPU (title memory copies, texture
 /// detiling), then waiting for the GPU.
@@ -516,6 +535,7 @@ impl Host {
         // One submission at a time from preparation to copy-back: snapshots
         // and the ranges shaders write are per host copy, not per submission.
         let mut submitted = self.submitted.lock().unwrap_or_else(|e| e.into_inner());
+        IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner()).running = true;
         let started = std::time::Instant::now();
         #[cfg(feature = "diagnostics")]
         crate::copystat::add(crate::copystat::C::Submissions, 1);
@@ -558,10 +578,11 @@ impl Host {
                     .Signal(&self.fence, fence_value)
                     .and_then(|()| self.fence.SetEventOnCompletion(fence_value, self.event));
                 match waited {
-                    Ok(()) => {
-                        WaitForSingleObject(self.event, INFINITE);
-                    }
-                    Err(e) => tracing::warn!(error = %e, "host submission not waited for"),
+                    Ok(())
+                        if WaitForSingleObject(self.event, INFINITE)
+                            == windows::Win32::Foundation::WAIT_OBJECT_0 => {}
+                    Ok(()) => fail(format_args!("host submission fence wait failed")),
+                    Err(e) => fail(format_args!("host submission fence failed: {e}")),
                 }
             }
             #[cfg(feature = "diagnostics")]
@@ -597,6 +618,12 @@ impl Host {
                 last_notes(runs)
             ));
         }
+        let retired = {
+            let mut flight = IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner());
+            flight.running = false;
+            std::mem::take(&mut flight.resources)
+        };
+        drop(retired);
         // What shaders wrote goes back before the bottom-of-pipe writes,
         // which tell the title the GPU is done; each range once per
         // submission, however many dispatches declared it (the world's

@@ -156,6 +156,16 @@
       "paths": ["crates/victory-gpu/src/descriptor/host.rs"]
     },
     {
+      "purpose": "Adapt upstream texture lifetime fixes to allocate on use, defer retirement until the host fence completes, and keep diagnostic inspection allocation-free.",
+      "paths": [
+        "crates/victory-gpu/src/descriptor/host.rs",
+        "crates/victory-gpu/src/draw.rs",
+        "crates/victory-gpu/src/host.rs",
+        "crates/victory-gpu/src/resource.rs"
+      ],
+      "references": ["https://github.com/Marvisak/VIctory/pull/431"]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",

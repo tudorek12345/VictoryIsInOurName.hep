@@ -284,8 +284,15 @@ impl HostHeap {
     /// Slot `index` now views `resource` (or nothing of the host's).
     fn keep(&self, index: u32, resource: Option<ID3D12Resource>) {
         let mut kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(slot) = kept.get_mut(index as usize) {
-            *slot = resource;
+        let Some(slot) = kept.get_mut(index as usize) else {
+            return;
+        };
+        if *slot != resource {
+            let old = std::mem::replace(slot, resource);
+            drop(kept);
+            if let Some(old) = old {
+                crate::host::retire(old);
+            }
         }
     }
 

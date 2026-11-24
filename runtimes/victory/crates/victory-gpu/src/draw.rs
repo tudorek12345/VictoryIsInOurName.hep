@@ -845,7 +845,7 @@ impl State {
         let targets: Vec<String> = self
             .targets
             .iter()
-            .filter_map(|&t| crate::resource::host_resource(t as This))
+            .filter_map(|&t| crate::resource::existing_host_texture(t as This))
             .map(|t| {
                 // SAFETY: a live resource.
                 let d = unsafe { t.GetDesc() };
@@ -1224,7 +1224,7 @@ fn readable(list: &HostList, u: &UsedResource, view: &View) {
 #[cfg(feature = "diagnostics")]
 fn describe(view: Option<&View>) -> String {
     let texture = |r: This| {
-        crate::resource::host_resource(r).map(|t| {
+        crate::resource::existing_host_texture(r).map(|t| {
             // SAFETY: a live resource.
             let d = unsafe { t.GetDesc() };
             format!("{}x{} f{} flags {:#x}", d.Width, d.Height, d.Format.0, d.Flags.0)

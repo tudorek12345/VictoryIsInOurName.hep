@@ -757,10 +757,35 @@ struct Resource {
     heap: HeapProperties,
     heap_flags: u32,
     backing: Backing,
-    /// Textures also live on the host GPU (decision 0007); buffers do not
-    /// yet.
+    /// Host texture created when a view, barrier, or copy first needs it.
     #[cfg(windows)]
-    host: Option<std::sync::Arc<HostTexture>>,
+    host: std::sync::OnceLock<Option<std::sync::Arc<HostTexture>>>,
+    #[cfg(windows)]
+    initial_state: u32,
+    #[cfg(windows)]
+    clear_value: Option<[u32; 5]>,
+}
+
+#[cfg(windows)]
+impl Resource {
+    fn host(&self) -> Option<&std::sync::Arc<HostTexture>> {
+        self.host
+            .get_or_init(|| {
+                let clear = self
+                    .clear_value
+                    .as_ref()
+                    .map_or(std::ptr::null(), |value| std::ptr::from_ref(value).cast());
+                host_texture(
+                    &self.desc,
+                    self.initial_state,
+                    clear,
+                    #[cfg(feature = "diagnostics")]
+                    matches!(self.backing, Backing::Address(_)),
+                )
+                .map(std::sync::Arc::new)
+            })
+            .as_ref()
+    }
 }
 
 /// A title texture's host copy and the state it is in. The title's barriers
@@ -782,7 +807,7 @@ pub(crate) struct HostTexture {
 #[cfg(windows)]
 pub(crate) fn host_transition(this: This, wanted: u32) -> Option<(*mut c_void, u32)> {
     use windows::core::Interface;
-    let host = resource(this).host.as_ref()?;
+    let host = resource(this).host()?;
     let before = host
         .state
         .swap(wanted, std::sync::atomic::Ordering::Relaxed);
@@ -797,7 +822,19 @@ pub(crate) fn host_resource<'a>(
     if this.is_null() {
         return None;
     }
-    resource(this).host.as_deref().map(|h| &h.texture)
+    resource(this).host().map(|h| &h.texture)
+}
+
+/// The already allocated host texture, for diagnostics that must not
+/// cause an allocation.
+#[cfg(all(windows, feature = "diagnostics"))]
+pub(crate) fn existing_host_texture<'a>(
+    this: This,
+) -> Option<&'a windows::Win32::Graphics::Direct3D12::ID3D12Resource> {
+    if this.is_null() {
+        return None;
+    }
+    resource(this).host.get()?.as_ref().map(|h| &h.texture)
 }
 
 /// A title texture's host copy, shared, for a list to hold.
@@ -806,7 +843,7 @@ pub(crate) fn host_copy(this: This) -> Option<std::sync::Arc<HostTexture>> {
     if this.is_null() {
         return None;
     }
-    resource(this).host.clone()
+    resource(this).host().cloned()
 }
 
 /// A host texture like the title's: same description, in GPU memory,
@@ -976,13 +1013,9 @@ fn hand_out_resource(
     #[cfg(not(windows))]
     let _ = (state, clear);
     #[cfg(windows)]
-    let host = host_texture(
-        &desc,
-        state,
-        clear,
-        #[cfg(feature = "diagnostics")]
-        matches!(backing, Backing::Address(_)),
-    );
+    // SAFETY: the clear value is supplied only for the duration of initial creation.
+    let clear_value =
+        (!clear.is_null()).then(|| unsafe { clear.cast::<[u32; 5]>().read_unaligned() });
     let resource = Box::new(Resource {
         object: Object::new(&RESOURCE_FUNCTIONS),
         desc,
@@ -990,7 +1023,11 @@ fn hand_out_resource(
         heap_flags,
         backing,
         #[cfg(windows)]
-        host: host.map(std::sync::Arc::new),
+        host: std::sync::OnceLock::new(),
+        #[cfg(windows)]
+        initial_state: state,
+        #[cfg(windows)]
+        clear_value,
     });
     #[cfg(windows)]
     if desc.dimension == BUFFER {
@@ -1006,7 +1043,8 @@ impl Drop for Resource {
         #[cfg(feature = "diagnostics")]
         if self
             .host
-            .as_ref()
+            .get()
+            .and_then(Option::as_ref)
             .is_some_and(|h| std::sync::Arc::strong_count(h) > 1)
         {
             // Before lists held their textures, this freed a texture that
@@ -1020,6 +1058,9 @@ impl Drop for Resource {
                     "a title texture was released while a list not yet reset names its host copy"
                 );
             }
+        }
+        if let Some(host) = self.host.take().flatten() {
+            crate::host::retire(host);
         }
         crate::texture::forget(std::ptr::from_ref::<Resource>(self) as usize);
         crate::descriptor::forget(std::ptr::from_ref::<Resource>(self) as usize);
@@ -1222,7 +1263,7 @@ pub(crate) fn texture_at(address: u64, desc: &[u32; 14]) -> Option<This> {
     if made != S_OK {
         return None;
     }
-    if resource(out).host.is_none() {
+    if resource(out).host().is_none() {
         drop(map);
         resource_release(out);
         return None;
@@ -1463,6 +1504,27 @@ mod tests {
         assert_eq!(texture_at(address, &words), Some(first));
         words[4] = 64;
         assert_ne!(texture_at(address, &words).unwrap(), first);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn texture_creation_defers_its_host_allocation_until_use() {
+        if crate::host::host().is_none() {
+            return;
+        }
+        let desc = texture(32, 16, 28, 1);
+        let mut first = std::ptr::null();
+        assert_eq!(
+            create_at_address(
+                std::ptr::null(), 0x1_1235_0000, &desc, 0, std::ptr::null(),
+                &RESOURCE_IIDS[0], &mut first,
+            ),
+            S_OK
+        );
+        assert!(resource(first).host.get().is_none());
+        assert!(host_resource(first).is_some());
+        assert!(resource(first).host.get().is_some());
+        assert_eq!(resource_release(first), 0);
     }
 
     fn heap(size: u64) -> This {
