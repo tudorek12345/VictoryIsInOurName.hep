@@ -414,6 +414,16 @@ pub(crate) fn unregister(resource: usize, start: u64) {
 /// The copy of the innermost title buffer holding `[address, address +
 /// len)`, made on first use.
 pub(crate) fn find(address: u64, len: u64) -> Option<Arc<Shadow>> {
+    find_copy(address, len, true)
+}
+
+/// Looks up an already allocated copy for a diagnostic report.
+#[cfg(feature = "diagnostics")]
+pub(crate) fn existing(address: u64, len: u64) -> Option<Arc<Shadow>> {
+    find_copy(address, len, false)
+}
+
+fn find_copy(address: u64, len: u64, allocate: bool) -> Option<Arc<Shadow>> {
     let end = address.checked_add(len.max(1))?;
     let mut map = buffers();
     let key = map
@@ -424,10 +434,13 @@ pub(crate) fn find(address: u64, len: u64) -> Option<Arc<Shadow>> {
         .map(|(k, _)| *k);
     let Some(key) = key else {
         drop(map);
-        return loose(address, end);
+        return loose(address, end, allocate);
     };
     let entry = map.get_mut(&key)?;
     if entry.shadow.is_none() {
+        if !allocate {
+            return None;
+        }
         let len = entry.end - key.0;
         // Rounded up so that views ending in the buffer's last 256 bytes fit.
         // Shaders write some buffers (unordered access), so not upload memory.
@@ -463,7 +476,7 @@ const WINDOW: u64 = 4 << 20;
 /// Copies of title memory outside buffers, by (start, length).
 static LOOSE: Mutex<BTreeMap<(u64, u64), Arc<Shadow>>> = Mutex::new(BTreeMap::new());
 
-fn loose(address: u64, end: u64) -> Option<Arc<Shadow>> {
+fn loose(address: u64, end: u64, allocate: bool) -> Option<Arc<Shadow>> {
     let start = address & !(WINDOW - 1);
     let len = end.checked_next_multiple_of(WINDOW)? - start;
     let mut map = LOOSE.lock().unwrap_or_else(|e| e.into_inner());
@@ -474,8 +487,13 @@ fn loose(address: u64, end: u64) -> Option<Arc<Shadow>> {
     // stable choice for views already bound to this exact range.
     if let Some((_, shadow)) = map.range((start, len)..=(start, u64::MAX)).next() {
         let shadow = shadow.clone();
-        map.insert((start, len), shadow.clone());
+        if allocate {
+            map.insert((start, len), shadow.clone());
+        }
         return Some(shadow);
+    }
+    if !allocate {
+        return None;
     }
     let (buffer, data) = host()?.shared_buffer(len)?;
     crate::host::name(&buffer, || format!("title memory {start:#x}+{len:#x}"));
@@ -502,12 +520,32 @@ mod tests {
         }
         // Only creating shadows; the guest addresses are never read.
         let start = 0x2_1000_0000;
-        let large = loose(start + 48, start + WINDOW + 1).unwrap();
-        let small = loose(start + 48, start + 256).unwrap();
+        let large = loose(start + 48, start + WINDOW + 1, true).unwrap();
+        let small = loose(start + 48, start + 256, true).unwrap();
         assert!(Arc::ptr_eq(&large, &small));
-        let larger = loose(start + 48, start + 2 * WINDOW + 1).unwrap();
+        let larger = loose(start + 48, start + 2 * WINDOW + 1, true).unwrap();
         assert!(!Arc::ptr_eq(&large, &larger));
-        assert!(Arc::ptr_eq(&small, &loose(start + 64, start + 512).unwrap()));
+        assert!(Arc::ptr_eq(
+            &small,
+            &loose(start + 64, start + 512, true).unwrap()
+        ));
+    }
+
+    #[cfg(feature = "diagnostics")]
+    #[test]
+    fn diagnostic_lookup_uses_only_existing_shadows() {
+        if host().is_none() {
+            return;
+        }
+        let start = 0x2_2000_0000;
+        assert!(existing(start, 16).is_none());
+        let created = find(start, 16).unwrap();
+        assert!(Arc::ptr_eq(&created, &existing(start, 16).unwrap()));
+        register(1, start + 16, 16);
+        assert!(existing(start + 16, 16).is_none());
+        let registered = find(start + 16, 16).unwrap();
+        assert!(Arc::ptr_eq(&registered, &existing(start + 16, 16).unwrap()));
+        unregister(1, start + 16);
     }
 }
 

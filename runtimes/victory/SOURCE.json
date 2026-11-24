@@ -144,6 +144,14 @@
       "paths": ["crates/victory-hle/src/modules/audio/capture.rs"]
     },
     {
+      "purpose": "Keep device-removal diagnostics from allocating buffer shadows and avoid direct reads of guest constant memory that can be unmapped concurrently.",
+      "paths": [
+        "crates/victory-gpu/src/descriptor/host.rs",
+        "crates/victory-gpu/src/draw.rs",
+        "crates/victory-gpu/src/shadow.rs"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",

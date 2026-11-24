@@ -646,7 +646,7 @@ impl State {
             }
             for &(slot, _) in stage.root_cbvs.iter().chain(&stage.root_srvs) {
                 if let Some(Root::View(address)) = self.roots_ref(compute).get(usize::from(slot)) {
-                    let host = crate::shadow::find(*address, 1)
+                    let host = crate::shadow::existing(*address, 1)
                         .map(|s| (s.gpu(*address), s.left(*address)));
                     let _ = write!(text, " root{slot}={address:#x} host {host:#x?}");
                 }
@@ -1245,12 +1245,17 @@ fn describe(view: Option<&View>) -> String {
             u64::from(d[10]) | u64::from(d[11]) << 32
         ),
         // The first four values, as a colour rectangle's constants are.
-        Some(View::Constant(address, size))
-            if *size >= 16 && crate::texture::committed(*address as *const u8, 16) =>
-        {
-            // SAFETY: 16 committed bytes of title memory.
-            let v = unsafe { (*address as *const [f32; 4]).read_unaligned() };
-            format!("Constant({address:#x}, {size}) {v:?}")
+        Some(View::Constant(address, size)) => {
+            let mut bytes = [0; 16];
+            if *size >= 16 && crate::host::read_into(*address as *const u8, &mut bytes) {
+                let v: [f32; 4] = std::array::from_fn(|i| {
+                    let at = i * 4;
+                    f32::from_le_bytes(bytes[at..at + 4].try_into().unwrap())
+                });
+                format!("Constant({address:#x}, {size}) {v:?}")
+            } else {
+                format!("Constant({address:#x}, {size})")
+            }
         }
         Some(v) => format!("{v:?}").chars().take(60).collect(),
     }
