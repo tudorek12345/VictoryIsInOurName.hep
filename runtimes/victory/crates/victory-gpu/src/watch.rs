@@ -43,6 +43,17 @@ static JOURNAL: Mutex<Journal> = Mutex::new(Journal {
     found: Vec::new(),
 });
 
+/// Removes records of a synthetic allocation before its address can be reused.
+#[cfg(test)]
+pub(crate) fn forget_test_allocation(start: usize, len: usize) {
+    let pages = start / PAGE..(start + len).div_ceil(PAGE);
+    JOURNAL
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .written
+        .retain(|page, _| !pages.contains(page));
+}
+
 /// The pages of `[start, end)` (whole pages) as last written, for pages
 /// written since tracking began: `(page number, asking)` in page order, and
 /// this asking's number, which is higher than any in the list but those the

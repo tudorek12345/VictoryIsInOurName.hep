@@ -581,8 +581,19 @@ impl Host {
                     Ok(())
                         if WaitForSingleObject(self.event, INFINITE)
                             == windows::Win32::Foundation::WAIT_OBJECT_0 => {}
-                    Ok(()) => fail(format_args!("host submission fence wait failed")),
-                    Err(e) => fail(format_args!("host submission fence failed: {e}")),
+                    result => {
+                        if let Err(e) = result {
+                            tracing::error!(%e, fence = fence_value, "host submission fence failed");
+                        } else {
+                            tracing::error!(fence = fence_value, "host submission fence wait failed");
+                        }
+                        fail(format_args!(
+                            "host GPU fence failed during a submission of {} lists{}{}",
+                            runs.len(),
+                            self.removal_data(runs),
+                            last_notes(runs)
+                        ));
+                    }
                 }
             }
             #[cfg(feature = "diagnostics")]
@@ -1716,7 +1727,9 @@ impl Host {
                 target
             };
             #[cfg(feature = "diagnostics")]
-            let capture_source = if compose {
+            let probing = crate::capture::folder().is_some();
+            #[cfg(feature = "diagnostics")]
+            let capture_source = if compose && probing {
                 list.ResourceBarrier(&[transition(&back, target_state, copy_source)]);
                 &back
             } else {
@@ -1727,14 +1740,16 @@ impl Host {
                 .then(|| crate::capture::read_back(&self.device, list, capture_source))
                 .flatten();
             #[cfg(feature = "diagnostics")]
-            let probe = crate::capture::probe(&self.device, list, capture_source, &mut p.probe_buffer);
+            let probe = probing
+                .then(|| crate::capture::probe(&self.device, list, capture_source, &mut p.probe_buffer))
+                .flatten();
             #[cfg(not(feature = "diagnostics"))]
             let _ = frame;
             if !compose && state != copy_source {
                 list.ResourceBarrier(&[transition(texture, copy_source, state)]);
             }
             #[cfg(feature = "diagnostics")]
-            let target_state = if compose { copy_source } else { target_state };
+            let target_state = if compose && probing { copy_source } else { target_state };
             list.ResourceBarrier(&[transition(
                 &back,
                 target_state,
