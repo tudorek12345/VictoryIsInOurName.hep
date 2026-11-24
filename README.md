@@ -11,6 +11,7 @@ Fast, focused experiments. Reproducible progress. Clear developer handoffs.
 [**My Discord**](https://discord.gg/ufXqPcVdVj) ·
 [**Developer handoff**](website/public/handoff.md) ·
 [**Upstream Leonida**](https://github.com/ItsNotRexed/Leonida)
+<img width="2375" height="1327" alt="image" src="https://github.com/user-attachments/assets/b97e2714-9e49-445f-9bfe-1087a73cb9a5" />
 
 </div>
 
