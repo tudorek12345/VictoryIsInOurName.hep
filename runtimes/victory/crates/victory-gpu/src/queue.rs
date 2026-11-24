@@ -232,6 +232,83 @@ pub(crate) fn presented() -> u64 {
     FRAMES.load(Ordering::Relaxed)
 }
 
+// Some Series S first-boot screens draw into a 4K color target without
+// populating their 1080p destination. The opt-in diagnostic can show that
+// target when it is the only possible source submitted for this present.
+#[cfg(all(windows, feature = "diagnostics"))]
+pub(crate) mod menu_picture {
+    use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+
+    use windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    use crate::host::HostList;
+    use crate::resource::HostTexture;
+
+    #[derive(Default)]
+    struct Targets {
+        color: Option<(usize, Arc<HostTexture>)>,
+        keep_destination: bool,
+    }
+
+    static TARGETS: LazyLock<Mutex<Targets>> = LazyLock::new(Mutex::default);
+
+    fn enabled() -> bool {
+        static ENABLED: OnceLock<bool> = OnceLock::new();
+        *ENABLED.get_or_init(|| {
+            crate::console::current() == crate::console::Console::SeriesS
+                && std::env::var_os("VICTORY_SERIES_S_MENU_PICTURE").is_some_and(|v| v == "1")
+        })
+    }
+
+    pub(crate) fn note(list: &HostList, resources: &[usize]) {
+        if !enabled() {
+            return;
+        }
+        for &resource in resources {
+            let Some(copy) = crate::resource::host_copy(resource as super::This) else {
+                continue;
+            };
+            // SAFETY: the Arc owns a live host texture.
+            let desc = unsafe { copy.texture.GetDesc() };
+            if desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM
+                || desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D
+                || desc.SampleDesc.Count != 1
+                || desc.DepthOrArraySize != 1
+            {
+                continue;
+            }
+            match (desc.Width, desc.Height) {
+                (1920, 1080) => list.defer_host(|| {
+                    TARGETS.lock().unwrap_or_else(|e| e.into_inner()).keep_destination = true;
+                }),
+                (3840, 2160) => list.defer_host(move || {
+                    let mut targets = TARGETS.lock().unwrap_or_else(|e| e.into_inner());
+                    match &targets.color {
+                        None => targets.color = Some((resource, copy.clone())),
+                        Some((_, existing)) if !Arc::ptr_eq(existing, &copy) => {
+                            targets.keep_destination = true;
+                        }
+                        _ => {}
+                    }
+                }),
+                _ => {}
+            }
+        }
+    }
+
+    pub(super) fn take() -> Option<(usize, Arc<HostTexture>)> {
+        if !enabled() {
+            return None;
+        }
+        let targets = std::mem::take(&mut *TARGETS.lock().unwrap_or_else(|e| e.into_inner()));
+        if targets.keep_destination {
+            return None;
+        }
+        targets.color
+    }
+}
+
 /// Shows the first plane's first resource in our window.
 ///
 /// shortcut: one plane, no scaling or placement, the source expected in
@@ -243,6 +320,15 @@ extern "system" fn present(
     _parameters: *const u8,
 ) -> HRESULT {
     let frame = FRAMES.fetch_add(1, Ordering::Relaxed) + 1;
+    #[cfg(feature = "diagnostics")]
+    {
+        static LAST_PLANES: AtomicU64 = AtomicU64::new(u64::MAX);
+        if LAST_PLANES.swap(u64::from(planes), Ordering::Relaxed) != u64::from(planes) {
+            tracing::info!(frame, planes, "title present plane count changed");
+        }
+    }
+    #[cfg(all(windows, feature = "diagnostics"))]
+    let menu_picture = menu_picture::take();
     if frame.is_power_of_two() {
         let (draws, dispatches) = crate::list::take_counts();
         #[cfg(windows)]
@@ -286,6 +372,27 @@ extern "system" fn present(
         && let Some(texture) = crate::resource::host_resource(resource)
         && let Some(host) = crate::host::host()
     {
+        #[cfg(feature = "diagnostics")]
+        if let Some((menu_resource, menu)) = menu_picture {
+            use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
+
+            // SAFETY: a live texture for the first present plane.
+            let desc = unsafe { texture.GetDesc() };
+            if planes == 2
+                && (desc.Width, desc.Height, desc.Format)
+                    == (1920, 1080, DXGI_FORMAT_R8G8B8A8_UNORM)
+            {
+                static REPORTED: std::sync::Once = std::sync::Once::new();
+                REPORTED.call_once(|| {
+                    tracing::info!(frame, "using the Series S menu render target for presentation");
+                });
+                let state =
+                    crate::host::legal_state(&menu.texture, menu.state.load(Ordering::Relaxed));
+                let shown = host.present(&menu.texture, state, frame);
+                blinks(frame, menu_resource as This, state, shown);
+                return S_OK;
+            }
+        }
         const COPY_SOURCE: u32 = 0x800;
         let state = crate::resource::host_transition(resource, COPY_SOURCE)
             .map_or(COPY_SOURCE, |(_, before)| before);

@@ -40,7 +40,7 @@ pub(crate) struct Host {
     queue: ID3D12CommandQueue,
     fence: ID3D12Fence,
     /// The last value signalled on `fence`, behind the submission lock.
-    submitted: Mutex<u64>,
+    submitted: Mutex<Submission>,
     event: HANDLE,
     rtvs: ID3D12DescriptorHeap,
     rtv_size: u32,
@@ -53,6 +53,13 @@ pub(crate) struct Host {
     messages: Option<ID3D12InfoQueue>,
     next_rtv: AtomicU32,
     presenter: Mutex<Option<Presenter>>,
+}
+
+#[derive(Default)]
+struct Submission {
+    fence_value: u64,
+    /// Temporary title-memory read shared by all texture uploads.
+    texture_read: Vec<u8>,
 }
 
 // SAFETY: D3D12 devices, queues, fences and descriptor heaps are
@@ -184,6 +191,20 @@ fn create() -> windows::core::Result<Host> {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_12_0, &mut device)?;
         }
         let device = device.ok_or_else(windows::core::Error::empty)?;
+        if let Ok(factory) =
+            CreateDXGIFactory2::<IDXGIFactory4>(DXGI_CREATE_FACTORY_FLAGS(0))
+            && let Ok(adapter) = factory.EnumAdapterByLuid::<IDXGIAdapter1>(device.GetAdapterLuid())
+            && let Ok(desc) = adapter.GetDesc1()
+        {
+            let len = desc.Description.iter().position(|&c| c == 0).unwrap_or(desc.Description.len());
+            let adapter = String::from_utf16_lossy(&desc.Description[..len]);
+            tracing::info!(
+                adapter,
+                software = desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0,
+                vram_mib = desc.DedicatedVideoMemory >> 20,
+                "host D3D12 adapter"
+            );
+        }
         let messages = debug
             .then(|| device.cast::<ID3D12InfoQueue>().ok())
             .flatten();
@@ -212,7 +233,7 @@ fn create() -> windows::core::Result<Host> {
             device,
             queue,
             fence,
-            submitted: Mutex::new(0),
+            submitted: Mutex::default(),
             event,
             rtvs,
             rtv_size,
@@ -500,7 +521,7 @@ impl Host {
         let mut firsts = Vec::with_capacity(runs.len());
         let mut batch = Batch::default();
         for list in runs {
-            list.run_deferred(&mut batch);
+            list.run_deferred(&mut batch, &mut submitted.texture_read);
             firsts.push(lists.len());
             if let Some(prelude) = list.prelude() {
                 lists.push(Some(prelude));
@@ -523,15 +544,16 @@ impl Host {
         #[cfg(not(feature = "diagnostics"))]
         let groups = [&lists[..]];
         for (i, group) in groups.iter().enumerate() {
-            *submitted += 1;
+            submitted.fence_value += 1;
+            let fence_value = submitted.fence_value;
             let started = std::time::Instant::now();
             // SAFETY: closed lists; the fence and event are ours.
             unsafe {
                 self.queue.ExecuteCommandLists(group);
                 let waited = self
                     .queue
-                    .Signal(&self.fence, *submitted)
-                    .and_then(|()| self.fence.SetEventOnCompletion(*submitted, self.event));
+                    .Signal(&self.fence, fence_value)
+                    .and_then(|()| self.fence.SetEventOnCompletion(fence_value, self.event));
                 match waited {
                     Ok(()) => {
                         WaitForSingleObject(self.event, INFINITE);
@@ -1162,7 +1184,7 @@ impl HostList {
     /// Runs the list's submission-time steps; refreshes go into `batch`
     /// (the title's big buffers, a 174 MB one among them, are read by most
     /// lists of a submission, through many ranges).
-    fn run_deferred(&self, batch: &mut Batch) {
+    fn run_deferred(&self, batch: &mut Batch, texture_read: &mut Vec<u8>) {
         #[cfg(feature = "diagnostics")]
         use crate::copystat::{C, add};
         for step in &self.deferred().copies {
@@ -1216,7 +1238,7 @@ impl HostList {
                 }
                 Step::Texture(staging) => {
                     if batch.texture_due(staging) {
-                        staging.refresh();
+                        staging.refresh(texture_read);
                     }
                     continue;
                 }
@@ -1459,6 +1481,7 @@ struct Presenter {
     copy: HostList,
     hwnd: HWND,
     meter: Meter,
+    last_present_error: Option<i32>,
 }
 
 /// The frame rate, shown in the window's caption every second and logged
@@ -1619,14 +1642,15 @@ impl Host {
             };
             p.copy.reset();
             let list = &p.copy.list;
-            list.ResourceBarrier(&[
-                transition(texture, state, D3D12_RESOURCE_STATE_COPY_SOURCE),
-                transition(
-                    &back,
-                    D3D12_RESOURCE_STATE_PRESENT,
-                    D3D12_RESOURCE_STATE_COPY_DEST,
-                ),
-            ]);
+            let copy_source = D3D12_RESOURCE_STATE_COPY_SOURCE;
+            if state != copy_source {
+                list.ResourceBarrier(&[transition(texture, state, copy_source)]);
+            }
+            list.ResourceBarrier(&[transition(
+                &back,
+                D3D12_RESOURCE_STATE_PRESENT,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+            )]);
             list.CopyResource(&back, texture);
             #[cfg(feature = "diagnostics")]
             let capture = crate::capture::wanted(frame)
@@ -1636,21 +1660,30 @@ impl Host {
             let probe = crate::capture::probe(&self.device, list, texture);
             #[cfg(not(feature = "diagnostics"))]
             let _ = frame;
-            list.ResourceBarrier(&[
-                transition(texture, D3D12_RESOURCE_STATE_COPY_SOURCE, state),
-                transition(
-                    &back,
-                    D3D12_RESOURCE_STATE_COPY_DEST,
-                    D3D12_RESOURCE_STATE_PRESENT,
-                ),
-            ]);
+            if state != copy_source {
+                list.ResourceBarrier(&[transition(texture, copy_source, state)]);
+            }
+            list.ResourceBarrier(&[transition(
+                &back,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_PRESENT,
+            )]);
             p.copy.close();
             self.execute(&[&p.copy]);
             #[cfg(feature = "diagnostics")]
             if let Some((buffer, footprint)) = capture {
                 crate::capture::save_read_back(frame, &buffer, &footprint);
             }
-            let _ = p.swap_chain.Present(0, DXGI_PRESENT(0));
+            let status = p.swap_chain.Present(0, DXGI_PRESENT(0));
+            if status.is_err() {
+                if p.last_present_error != Some(status.0) {
+                    tracing::warn!(frame, status = format_args!("{:#010x}", status.0 as u32),
+                        width, height, format = format.0, "host swap chain present failed");
+                    p.last_present_error = Some(status.0);
+                }
+                return None;
+            }
+            p.last_present_error = None;
             p.meter.frame(p.hwnd);
             #[cfg(feature = "diagnostics")]
             return Some(probe.is_some_and(|b| crate::capture::black(&b)));
@@ -1699,6 +1732,7 @@ impl Host {
                 copy,
                 hwnd,
                 meter: Meter::new(),
+                last_present_error: None,
             })
         }
     }

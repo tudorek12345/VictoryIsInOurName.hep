@@ -48,13 +48,11 @@ pub(crate) struct Staging {
 }
 
 /// What a texture's staging buffer holds: the hash of the memory detiled
-/// (memory not watched), or the write-watch asking it was detiled after,
-/// with room to read the memory into.
+/// (memory not watched), or the write-watch asking it was detiled after.
 #[derive(Default)]
 struct Last {
     hash: Option<blake3::Hash>,
     asked: u64,
-    read: Vec<u8>,
 }
 
 // SAFETY: the staging mapping is written only at submission, under
@@ -172,17 +170,17 @@ pub(crate) fn upload(list: &HostList, resource: This, texture: &ID3D12Resource) 
 impl Staging {
     /// Detiles the texture memory into the staging buffer if it changed
     /// since the last time (and is mapped at all).
-    pub(crate) fn refresh(&self) {
+    pub(crate) fn refresh(&self, read_buffer: &mut Vec<u8>) {
         use std::sync::atomic::Ordering::Relaxed;
         let started = std::time::Instant::now();
-        let read = self.refresh_now();
+        let read = self.refresh_now(read_buffer);
         let preparing = &crate::host::PREPARING;
         preparing[2].fetch_add(started.elapsed().as_micros() as u64, Relaxed);
         preparing[3].fetch_add(read as u64, Relaxed);
     }
 
     /// Returns the bytes of title memory read.
-    fn refresh_now(&self) -> usize {
+    fn refresh_now(&self, read_buffer: &mut Vec<u8>) -> usize {
         let size = self.layout.size as usize;
         let start = self.memory as usize;
         let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
@@ -191,12 +189,27 @@ impl Staging {
             if last.asked != 0 && written.iter().all(|&(_, w)| w <= last.asked) {
                 return 0;
             }
+            #[cfg(feature = "diagnostics")]
+            if crate::copystat::mode() == 2 {
+                last.asked = now;
+                crate::copystat::add(crate::copystat::C::TexWatched, size as u64);
+                return size;
+            }
+            // The copy zero-fills unmapped pages. Querying large pools a
+            // page at a time is too slow.
+            if size > read_buffer.len() {
+                if let Err(error) = read_buffer.try_reserve_exact(size - read_buffer.len()) {
+                    once!(size, %error, "texture read buffer could not grow");
+                    return 0;
+                }
+                read_buffer.resize(size, 0);
+                #[cfg(feature = "diagnostics")]
+                tracing::info!(size, "shared texture read buffer grew");
+            }
+            let tiled = &mut read_buffer[..size];
+            crate::host::copy_mapped(tiled.as_mut_ptr(), self.memory, size, false);
+            self.detile(tiled);
             last.asked = now;
-            // Read through the copy, which stands unmapped pages: memory of
-            // big pools is too slow to ask page by page.
-            last.read.resize(size, 0);
-            crate::host::copy_mapped(last.read.as_mut_ptr(), self.memory, size, false);
-            self.detile(&last.read);
             #[cfg(feature = "diagnostics")]
             crate::copystat::add(crate::copystat::C::TexWatched, size as u64);
             return size;

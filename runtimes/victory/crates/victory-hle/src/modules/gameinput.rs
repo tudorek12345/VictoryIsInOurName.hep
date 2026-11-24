@@ -1134,6 +1134,19 @@ mod host {
 
     impl Source for Host {
         fn pad(&mut self, slot: usize) -> Option<PadState> {
+            #[cfg(feature = "diagnostics")]
+            {
+                static SCRIPT_STAND_IN: LazyLock<bool> = LazyLock::new(|| {
+                    let enabled = std::env::var("VICTORY_KEYS_STAND_IN").as_deref() == Ok("1");
+                    if enabled {
+                        tracing::info!("scripted input using the keyboard stand-in gamepad");
+                    }
+                    enabled
+                });
+                if *SCRIPT_STAND_IN {
+                    return None;
+                }
+            }
             if self.empty_until[slot].is_some_and(|until| Instant::now() < until) {
                 return None;
             }
@@ -1188,6 +1201,7 @@ mod host {
     /// 0.2 s that long after input starts, with or without focus. A key is a
     /// letter, a digit, or `Enter`, `Esc`, `Tab`, `Back`, `Up`, `Down`,
     /// `Left`, `Right` (the stand-in pad's table maps them to buttons).
+    /// `VICTORY_KEYS_STAND_IN=1` uses that pad even with an XInput pad connected.
     #[cfg(feature = "diagnostics")]
     fn scripted() -> Vec<u8> {
         static SCRIPT: LazyLock<(Instant, Vec<(Duration, u8)>)> = LazyLock::new(|| {

@@ -821,6 +821,10 @@ impl State {
             };
             #[cfg(feature = "diagnostics")]
             list.note_op(|| self.op_text(format!("draw {count}x{instances}"), false));
+            #[cfg(feature = "diagnostics")]
+            if count != 0 && instances != 0 {
+                crate::queue::menu_picture::note(list, &self.targets);
+            }
             // SAFETY: an open list with everything set.
             unsafe {
                 list.list
@@ -908,6 +912,10 @@ impl State {
         if ran {
             #[cfg(feature = "diagnostics")]
             list.note_op(|| self.op_text(format!("indexed {indices}x{instances}"), false));
+            #[cfg(feature = "diagnostics")]
+            if indices != 0 && instances != 0 {
+                crate::queue::menu_picture::note(list, &self.targets);
+            }
             // SAFETY: an open list with everything set.
             unsafe {
                 list.list
