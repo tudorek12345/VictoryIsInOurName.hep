@@ -45,7 +45,7 @@ jobs:
         run: rustup show active-toolchain
       - name: Test the runtime without game files
         working-directory: runtimes/victory
-        run: cargo test --locked --workspace --target x86_64-pc-windows-msvc
+        run: cargo test --locked --workspace --no-fail-fast --target x86_64-pc-windows-msvc
       - name: Build native Windows runtime
         working-directory: runtimes/victory
         run: cargo build --locked --release -p victory --target x86_64-pc-windows-msvc

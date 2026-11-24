@@ -54,6 +54,12 @@
       "paths": [
         "crates/victory-formats/src/xma/tables.rs"
       ]
+    },
+    {
+      "purpose": "Correct the Windows-only root-signature test fixture to use the native D3D12_ROOT_PARAMETER union layout instead of five incorrectly packed u32 fields. Preserve the host serialization and root creation assertions; production serialization is unchanged.",
+      "paths": [
+        "crates/victory-gpu/src/root.rs"
+      ]
     }
   ],
   "modifiedFiles": [
@@ -62,6 +68,7 @@
     "crates/victory-formats/Cargo.toml",
     "crates/victory-formats/src/bcpack.rs",
     "crates/victory-formats/src/xma/tables.rs",
+    "crates/victory-gpu/src/root.rs",
     "crates/victory-hle/src/modules/dstorage.rs",
     "crates/victory-pe/src/image.rs",
     "docs/asset-policy.md",
