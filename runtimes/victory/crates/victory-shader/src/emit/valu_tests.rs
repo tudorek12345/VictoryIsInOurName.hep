@@ -81,6 +81,24 @@ fn build_cs_for_views(
     inputs: &[UsedResource],
     integer_views: &[IntegerView],
 ) -> HostShader {
+    build_cs(body, inputs, integer_views, false)
+}
+
+fn build_cs(
+    body: &[u32],
+    inputs: &[UsedResource],
+    integer_views: &[IntegerView],
+    resource_heap: bool,
+) -> HostShader {
+    try_build_cs(body, inputs, integer_views, resource_heap).expect("lower")
+}
+
+fn try_build_cs(
+    body: &[u32],
+    inputs: &[UsedResource],
+    integer_views: &[IntegerView],
+    resource_heap: bool,
+) -> Result<HostShader, crate::ShaderError> {
     let mut words = Vec::new();
     // s[4:5] = descriptor table address (heap index 0 -> byte offset 0).
     words.push(s_mov_b32(5, 0x80)); // inline constant 0
@@ -95,7 +113,7 @@ fn build_cs_for_views(
     words.push(S_ENDPGM);
 
     let code: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
-    let native = NativeProgram {
+    let mut native = NativeProgram {
         stage: HwStage::Cs,
         wave64: false,
         vgprs: 8,
@@ -131,11 +149,21 @@ fn build_cs_for_views(
         .chain(inputs.iter().copied())
         .collect(),
         io: StageIo::Cs(ComputeIo {
-            rsrc2: 5 << 1, // 5 user SGPRs: s0..s4
+            rsrc2: (if resource_heap { 7 } else { 5 }) << 1,
             threads: [1, 1, 1],
         }),
         code,
     };
+    if resource_heap {
+        native.layout.push(RootParam {
+            root: RootType::ResourceHeap,
+            table_offset_dwords: 0,
+            sgprs: 1,
+            base_register: 0,
+            user_data: 6,
+            slot: 0,
+        });
+    }
 
     let p = ir::build(&native.code, native.wave64, native.vgprs).expect("ir::build");
     let res = resource::track(&p, &native.layout, native.stage).expect("resource::track");
@@ -154,8 +182,7 @@ fn build_cs_for_views(
             mesh_stride: 0,
         },
         integer_views,
-    )
-    .expect("lower");
+    )?;
 
     let shader = HostShader {
         stage: HwStage::Cs,
@@ -174,7 +201,7 @@ fn build_cs_for_views(
         assert_eq!(copy[4..20], ours[..], "container hash mismatch");
     }
 
-    shader
+    Ok(shader)
 }
 
 #[test]
@@ -222,6 +249,43 @@ fn scalar_load_crosses_a_structured_buffer_element_boundary() {
         )
         .unwrap();
     assert_eq!(result[0], [0x33, 0x44]);
+}
+
+#[test]
+fn scalar_and_vector_reads_share_the_bindless_raw_srv_type() {
+    let _native_test_guard = super::native_test_guard();
+    let mut body = vec![s_mov_b32(7, 128)];
+    body.extend(s_load_dwordx4(12, 6, 32));
+    // s_buffer_load_dword s16, s[12:15], 4
+    body.extend([0x3D << 26 | 8 << 18 | 16 << 6 | 6, 125 << 25 | 4]);
+    body.push(vop1(1, 0, sgpr(16)));
+    // buffer_load_dword v2, off, s[12:15], 0
+    body.extend([0x38 << 26 | 0x0C << 18, 0x80 << 24 | 3 << 16 | 2 << 8]);
+    body.extend(buffer_store_dword(2, 8, 4));
+    // A different descriptor on the same heap still uses the CBV path.
+    body.extend(s_load_dwordx4(20, 6, 64));
+    body.extend([0x3D << 26 | 8 << 18 | 24 << 6 | 10, 125 << 25 | 8]);
+    body.push(vop1(1, 3, sgpr(24)));
+    body.extend(buffer_store_dword(3, 8, 8));
+    let shader = build_cs(&body, &[], &[], true);
+    for warp in [true, false] {
+        let Ok(host) = Host::new(warp) else {
+            eprintln!("no SM 6.6 device (requested WARP: {warp}); skipped");
+            continue;
+        };
+        let (root, pipeline) = host.compute_pipeline(&shader).unwrap();
+        let result = host.dispatch(&root, &pipeline, &Dispatch {
+            roots: vec![(0, Root::Constants(vec![0; shader.user_data_dwords() as usize]))],
+            views: &[
+                View::RawUav(3),
+                View::Buffer { data: &[0x1122_3344, 0xAABB_CCDD], stride: Stride::Raw },
+                View::Cbv(&[0, 0, 0x5566_7788, 0]),
+            ],
+            samplers: &[],
+            groups: [1, 1, 1],
+        }).unwrap();
+        assert_eq!(result[0], [0xAABB_CCDD, 0x1122_3344, 0x5566_7788], "requested WARP: {warp}");
+    }
 }
 
 #[test]
@@ -338,6 +402,73 @@ fn uint16_buffer_load_preserves_unsigned_indices() {
             },
         ).unwrap();
         assert_eq!(&result[0][..2], &[expected, 2]);
+    }
+}
+
+fn table_buffer_uav(offset: u32) -> UsedResource {
+    UsedResource {
+        kind: ResourceType::Uav, root: RootType::Table, table_offset_dwords: offset,
+        lower_bound: 1, stride: 0, dwords: 4, user_data: 4, slot: 1,
+    }
+}
+
+fn uint16_uav(channels: u8) -> IntegerView {
+    IntegerView { kind: IntegerViewKind::BufferUav { channels }, slot: 1, table_offset_dwords: 8, signed: false }
+}
+
+/// Ordinary MUBUF format load/store with an element index, zero byte offset,
+/// descriptor s[16:19] and the first data VGPR at `data`.
+fn buffer_format(op: u32, data: u8, index: u8) -> [u32; 2] {
+    [0x38 << 26 | op << 18 | 1 << 13, 0x80 << 24 | 4 << 16 | u32::from(data) << 8 | u32::from(index)]
+}
+
+#[test]
+fn fixed_uint16_buffer_uav_readback() {
+    let _guard = super::native_test_guard();
+    let host = Host::new(true).expect("SM 6.6 WARP");
+    // The indexed load reads element 1. A full-width store writes element 2
+    // with a new X and the other loaded channels. Read the dimensions too.
+    for channels in [1u8, 4] {
+        let mut body = s_load_dwordx4(16, 4, 32).to_vec();
+        for v in 5..=7 { body.push(vop1(1, v, 128)); }
+        body.extend(buffer_format(u32::from(channels - 1), 4, 1));
+        body.push(vop1(1, 0, vgpr(4)));
+        for k in 1..channels { body.extend(buffer_store_dword(4 + k, 8, 4 * u16::from(k))); }
+        body.push(vop1(1, 4, sgpr(1)));
+        body.push(vop1(1, 1, 130)); // inline constant 2
+        body.extend(buffer_format(7, 4, 1)); // buffer_store_format_xyzw
+        body.push(vop1(1, 2, sgpr(18))); // NUM_RECORDS
+        body.extend(buffer_store_dword(2, 8, 4 * u16::from(channels)));
+        let used = [table_buffer_uav(8)];
+        let shader = build_cs_for_views(&body, &used, &[uint16_uav(channels)]);
+        let base = build_cs_for_views(&body, &used, &[]);
+        assert_ne!(shader.dxil, base.dxil);
+        assert_eq!(shader.user_data, base.user_data);
+        assert_eq!(shader.root_cbvs, base.root_cbvs);
+        assert_eq!(shader.root_srvs, base.root_srvs);
+        assert_eq!(shader.samplers, base.samplers);
+        assert_eq!(shader.static_samplers, base.static_samplers);
+        let (root, pipeline) = host.compute_pipeline(&shader).unwrap();
+        let packed: &[u32] = if channels == 1 { &[0xfedc_4321, 0xabcd_0123] }
+            else { &[1, 2, 0x8001_fedc, 0xffff_3456, 3, 4] };
+        for x in [0xbabe, 0x1_0003] {
+            let mut constants = vec![0; shader.user_data_dwords() as usize];
+            constants[0] = 1;
+            constants[1] = x;
+            let result = host.dispatch(&root, &pipeline, &Dispatch {
+                roots: vec![(0, Root::Constants(constants))],
+                views: &[View::RawUav(u32::from(channels) + 1), View::Uint16Uav { channels, data: packed }],
+                samplers: &[], groups: [1, 1, 1],
+            }).unwrap();
+            let x = x.min(0xffff);
+            if channels == 1 {
+                assert_eq!(result[0], [0xfedc, 4]);
+                assert_eq!(result[1], [packed[0], 0xabcd_0000 | x]);
+            } else {
+                assert_eq!(result[0], [0xfedc, 0x8001, 0x3456, 0xffff, 3]);
+                assert_eq!(result[1], [1, 2, packed[2], packed[3], 0x8001_0000 | x, packed[3]]);
+            }
+        }
     }
 }
 

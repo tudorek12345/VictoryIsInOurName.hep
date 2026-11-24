@@ -1,5 +1,40 @@
 # Leonida fork: stable world-entry and first world-frame handoff
 
+## Current handoff — 24 November 2026, 03:00 EST (UTC−05:00)
+
+**Continue the integrated VIctory backend under `runtimes/victory/`, not an unrelated pristine checkout.** Source is synchronized to [Leonida](https://github.com/tudorek12345/Leonida) and its [same-source mirror](https://github.com/tudorek12345/VictoryIsInOurName.hep); these are one effort. The tested working-tree changes were based on `5dd9c2c21093e17d16ec577c76a9e721e3a08c59`. Read the current root README and `tracking/runtime-progress.json` for source files, skills, commands, observations and task states.
+
+### Verified and not verified
+
+- Implemented: raw bindless scalar/vector SRV agreement, fixed typed UINT16 compute UAV specialization, exact-ratio compositor fast path, keyed cache-fill coalescing and expanded host submission/fence/Present diagnostics.
+- Optimized diagnostics build passes. Serial diagnostics workspace: **303 passed / 0 failed / 5 ignored**. Latest focused GPU crate: **62 passed / 0 failed / 2 ignored**. Static review found no actionable introduced defect; that does not establish compatibility.
+- RX 9060 XT 16 GB / Ryzen 7 5700X / 32 GB DDR4: short intro **30 FPS / 33.3 ms**, not gameplay. WARP intro approximately **10 FPS / 100 ms**, even without capture; it is software throughput, not Radeon performance.
+- Last completed world-transition repro: WARP **0x887A0005 after 184.84 s**, peak job commit **11.02 GiB**, below the 16 GiB cap. A 31-list batch finished before a one-list failure. The exact caller/command remains unestablished in that older trace. Do not attribute it to the last successful list.
+- Latest debug-requested repro: **28.42 s, exit 0**, lifecycle shutdown before world entry. The D3D12 debug layer was unavailable. No world-entry, fault-attribution or debug-validation success can be claimed from that attempt.
+- Originals/saves remain local. Isolation verified restoration on 151 package paths and the unchanged executable hash.
+
+### Latest tasks
+
+- [x] Trace the single-list device removal and inspect source/run evidence.
+- [x] Distinguish failure paths and retain the exact fence phase in diagnostics (implemented instrumentation, not a proven crash cause).
+- [ ] **In progress:** serial build/test, bounded debug reproduction and protection checks. Build/tests/protection passed; effective debug/world reproduction remains open.
+- [ ] Fix a demonstrated remaining defect and verify controllable hardware gameplay.
+
+### Exact next experiment
+
+1. Check availability of the D3D12 debug layer. Do not install Windows features or change TDR/driver settings without authorization; requesting the layer does not mean it was enabled.
+2. Reproduce a bounded isolated Series S world-entry attempt with the new `Host::execute` caller/fence reporting. Compare guest submission, compositor/capture and swap-chain Present paths; diagnostics timing changes submission behavior.
+3. Preserve a local trace of the first failed phase and its immediately preceding completed fences. Empty DRED history does not identify a shader. Earlier raw/structured SRV mismatches remain investigation leads, not an established latest cause.
+4. Fix the smallest demonstrated defect, add a hand-written synthetic regression, rerun GPU tests and title runs **serially**, then attempt hardware world rendering and input/audio verification. Measure gameplay percentiles only after controllable gameplay is demonstrated.
+
+The raw traces, captures, shaders, BCPack tables and workstation launcher remain outside Git. Local ignored `handoff.md` / `currenstatus.md` record the exact machine paths. Public evidence is summarized, not extracted game content. Skills used: `game-reverse-engineering`, `reverse-engineer-anything`, `review-agent`, `tinyfish-web`, `tinyfish-authenticated` (workflow instructions, not runtime dependencies).
+
+---
+
+## Historical handoff below — original Leonida/Vulkan investigation
+
+The following Nov 23 report and `gta6rt` commands describe the older path. Do not mistake them for current VIctory reproduction commands or current measured hardware.
+
 ## Latest reported result — 23 November 2026
 
 The maintainer reports the following on **one Windows 11 / AMD RX 9070 XT machine**. These are supplied observations, not an independently reproduced result or a compatibility claim for other hardware. The exact runtime revision, local changes, package/build identifier and GPU driver must be captured before this becomes a reproducible baseline.

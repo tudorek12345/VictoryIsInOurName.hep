@@ -657,6 +657,29 @@ pub(crate) fn uint16_buffer_srv(view: &View) -> Option<&[u32; 10]> {
     (buffer.StructureByteStride == 0 && buffer.Flags == D3D12_BUFFER_SRV_FLAG_NONE).then_some(words)
 }
 
+/// The supported typed UINT16 buffer UAVs. Keep the descriptor words as well
+/// as the channel count so a missing backing buffer gets a matching null UAV.
+pub(crate) fn uint16_buffer_uav(view: &View) -> Option<(&[u32; 10], u8)> {
+    let words = match view {
+        View::Unordered(_, 0, Some(words)) => words,
+        View::Placed(true, resource, words) if resource[0] == 1 => words[..10].try_into().ok()?,
+        _ => return None,
+    };
+    let desc = uav_desc(words);
+    if desc.ViewDimension != D3D12_UAV_DIMENSION_BUFFER {
+        return None;
+    }
+    let channels = match desc.Format {
+        DXGI_FORMAT_R16_UINT => 1,
+        DXGI_FORMAT_R16G16B16A16_UINT => 4,
+        _ => return None,
+    };
+    // SAFETY: the descriptor's dimension selects the buffer member.
+    let buffer = unsafe { desc.Anonymous.Buffer };
+    (buffer.StructureByteStride == 0 && buffer.Flags == D3D12_BUFFER_UAV_FLAG_NONE
+        && buffer.CounterOffsetInBytes == 0).then_some((words, channels))
+}
+
 /// The format actually bound when this view is a one-channel integer image UAV.
 pub(crate) fn integer_image_uav(view: &View) -> Option<bool> {
     let placed = placed_texture(view);
@@ -844,6 +867,11 @@ pub(crate) fn placed_texture(view: &View) -> Option<View> {
 /// view. Writes to it are dropped, reads give zeros.
 fn null_for(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) {
     let Some(host) = host() else { return };
+    if let Some(desc) = uint16_buffer_uav(view).and_then(|(words, _)| null_uav_desc(words)) {
+        // SAFETY: a null resource with the same typed buffer view as the shader.
+        unsafe { host.device.CreateUnorderedAccessView(None::<&ID3D12Resource>, None::<&ID3D12Resource>, Some(&desc), at) };
+        return;
+    }
     if let Some(desc) = uint16_buffer_srv(view).and_then(null_srv_desc) {
         // SAFETY: the slot takes a null SRV with the shader's typed format.
         unsafe {

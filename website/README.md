@@ -2,7 +2,18 @@
 
 The frontend and backend for the experimental [tudorek12345/Leonida](https://github.com/tudorek12345/Leonida) fork. This is the project's retro research workstation, activity feed and developer handoff. The game runtime remains in the repository's existing `runtime/` directory.
 
-## Latest update · 23 November 2026
+## Latest runtime update · 24 November 2026, 03:00 EST (UTC−05:00)
+
+The separate `RECENT_RUNTIME_UPDATE` in `app/lib/progress-update.ts` uses the fixed timestamp `2026-11-24T03:00:00-05:00`. It records raw bindless SRV consistency, typed UINT16 UAV support, compositor/cache coalescing, and caller/fence/Present diagnostics.
+
+**Recent machine: AMD Radeon RX 9060 XT 16GB / AMD Ryzen 7 5700X / 32GB RAM.** The short intro comparison is hardware **30 FPS / 33.3 ms** versus WARP **~10 FPS / ~100 ms**. These figures describe the short intro only, not gameplay.
+
+- [x] Trace single-list device removal.
+- [x] Implement instrumentation to distinguish failure paths and retain the fence phase. Defect attribution remains pending.
+- [ ] **In progress (partial):** serial build, tests and debug reproduction. Build succeeded; 62 tests passed, 2 ignored. The latest debug request could not enable the missing debug layer and exited with code 0 after 28.42 s, before reaching the world; this does not verify a successful world run.
+- [ ] Fix the demonstrated remaining defect and verify controllable hardware gameplay.
+
+## Historical stage report · 23 November 2026
 
 **[Join the GTA VI port progress showcase on Discord](https://discord.com/events/1459617753907331094/1574557419596677260)** — Wednesday, 25 November 2026. Discord displays the current event time in your timezone. The separate possible reproducible-build target remains 30 November.
 
@@ -46,10 +57,10 @@ The responsive site uses a retro computer interface: self-hosted Bowlby One SC d
 
 - **Showcase alert:** a prominent Discord event invitation, supplied screenshot, warning symbols and silent, pausable VFX.
 - **First Boot panel:** a self-hosted first-boot loading video inside the existing RGB-titled retro window. Native controls support playback, seeking, volume and fullscreen; the original setup-screen image remains the poster and a separate link. Visitors can download the MP4 or open the [original Streamable source](https://streamable.com/0dtjxh).
-- **Runtime report:** a stage-by-stage maintainer report, single-machine scope, current blocker and collaboration credit, backed by shared status data.
+- **Runtime report:** a separately timestamped recent runtime update and accessible completed/partial/pending checklist, followed by the historical 23 November stage report and its original machine, blocker and collaboration credit.
 - **Quick resource search:** Ctrl/Cmd+K opens a keyboard-accessible command menu; the on-page library can also be searched.
 - **Experiment workbench:** three investigation presets, browser-local draft saving, editable evidence fields, Markdown preview, copy/download and reset with undo. Commands are text; the website does not execute them.
-- **Runtime progress bar:** four of five reported stages are working; world entry is reached but rendering is blocked. The five static segments and next-step checklist share structured report data with the status API. This is a count of reported stages, not a compatibility percentage.
+- **Runtime progress bar:** four of five stages in the historical 23 November RX 9070 XT report are reported working; that report reached world entry with rendering blocked. Its five static segments and next-step checklist retain their original provenance in the status API. This is a count of reported stages, not a compatibility percentage.
 - **Historical checkpoint:** the earlier upstream boot chain is kept in a closed disclosure. The workbench meter measures preparation of a local handoff, separately from runtime progress.
 - **Showcase countdown:** a fixed seven-day target for a possible reproducible build showcase, separate from the 25 November progress stream.
 - **Community reach:** a prominent counter above the hero displays durable recorded visits and unique browsers, refreshes automatically while visible, and retains the original ledger.
@@ -60,7 +71,7 @@ The responsive site uses a retro computer interface: self-hosted Bowlby One SC d
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/project` | Public repository metadata and five recent commits, fetched server-side from the fork |
-| `GET /api/status` | Latest maintainer-reported stages and blocker, single-machine scope, and historical upstream evidence |
+| `GET /api/status` | Separate `recentRuntimeUpdate`, legacy 23 November stages and blocker with original date/machine provenance, and historical upstream evidence |
 | `GET /api/health` | Website service health |
 | `GET /api/visits` | Durable view totals, unique browsers and first recorded timestamp |
 | `POST /api/visits` | Record a validated tab-session visit idempotently and return totals |
@@ -69,7 +80,13 @@ The responsive site uses a retro computer interface: self-hosted Bowlby One SC d
 
 GitHub requests use a 3.5-second timeout and cache completed successful results for five minutes. Each request owns its pending outbound calls, abort signal and timeout; pending I/O is not shared across Worker invocations. Network failures and rate limits return a labeled snapshot. The GitHub activity feed requires no token, user account or game upload. The visitor counter uses the Site’s D1 database. Links are constructed for the fixed repository, and the service never proxies arbitrary URLs.
 
-**Repository activity is not gameplay verification.** The latest report is maintained in `app/lib/progress-update.ts` and exposed through `PROJECT_STATUS` in `app/lib/project-data.ts`. Update its date, scope and evidence when a new report is published. The Windows 11 / RX 9070 XT result is maintainer-reported, with independent reproduction pending. The pinned upstream RTX 4090 descriptor-heap run remains a separate historical reference.
+**Repository activity is not gameplay verification.** `RECENT_RUNTIME_UPDATE` is maintained in `app/lib/progress-update.ts` and exposed separately as `PROJECT_STATUS.recentRuntimeUpdate` in `app/lib/project-data.ts`. Its timestamp, machine and checklist describe the recent RX 9060 XT work. `PROGRESS_UPDATE` preserves the historical 23 November Windows 11 / RX 9070 XT stage data; API fields such as `lastReviewed`, `experiment`, `milestones`, `progress` and `nextSteps` retain that legacy report's provenance, with `lastReviewedScope` making the boundary explicit. Independent reproduction remains pending. The pinned upstream RTX 4090 descriptor-heap run is another separate historical reference.
+
+Run the relevant standard-library Node tests without installing packages:
+
+```sh
+node --test tests/project-api.test.mjs
+```
 
 ## Visitor counting
 
@@ -101,7 +118,7 @@ The player serves [`public/media/first-boot-loading.mp4`](public/media/first-boo
 
 - Page and visual styles: `app/page.tsx`, `app/globals.css`, `app/gta-display.css`.
 - Title and link-preview metadata: `app/layout.tsx`.
-- Current report and showcase link: `app/lib/progress-update.ts`, `public/progress-update.md`.
+- Recent runtime update and historical stage data: `app/lib/progress-update.ts`; published report and showcase link: `public/progress-update.md`.
 - Runtime status, fallback snapshot and GitHub service: `app/lib/project-data.ts`.
 - Downloadable handoff: `public/handoff.md`.
 - Visitor API and storage: `app/lib/visits.ts`, `app/api/visits/route.ts`, `db/schema.ts`, `drizzle/`.

@@ -102,3 +102,14 @@ Compute pipeline variants use the formats of the bound R32 integer image
 UAVs. The variant reuses the original root signature and emits integer
 loads and stores for those table slots. A synthetic WARP dispatch verifies
 that an unsigned texture store preserves the source dword.
+
+### Additional host translation contracts (24 November 2026)
+
+| Rule | Confirmation and boundary |
+| --- | --- |
+| Scalar byte loads and vector raw byte loads through the exact same direct-heap SSA descriptor use the same raw SRV annotation. | `scalar_and_vector_reads_share_the_bindless_raw_srv_type` validates synthetic DXIL and GPU readback. Separate CBVs and fixed structured SRVs keep their existing paths; merely sharing a heap does not unify descriptors. |
+| Fixed compute-table UINT16 buffer UAV variants preserve unsigned loads/stores for R16_UINT and R16G16B16A16_UINT, with matching null descriptors. | `fixed_uint16_buffer_uav_readback` checks synthetic R/RGBA values, dimensions and write conversion on WARP. Variant shape is part of the pipeline identity. It is not a general arbitrary-format or bindless typed-UAV rule. |
+
+These are independently testable translator contracts, not evidence that the
+remaining title world-transition device removal has been fixed. Caller/fence
+diagnostics and a new bounded title reproduction must establish that separately.

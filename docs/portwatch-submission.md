@@ -1,5 +1,20 @@
 # PortWatch registration packet
 
+## Latest follow-up packet — 24 November 2026, 03:00 EST (UTC−05:00)
+
+The [current README](../README.md), [sanitized runtime results](../tracking/runtime-progress.json) and [public handoff](../website/public/handoff.md) supersede the older validation checkpoint below. Recent work adds bindless raw SRV consistency, fixed compute UINT16 UAV variants, compositor/cache optimizations and caller/fence/Present diagnostics. Local serial diagnostics tests: **303 passed, 5 ignored**; optimized build passed. Latest website tests: **24 passed**; Python backend tests: **26 passed**. These are synthetic/source checks, not gameplay validation.
+
+On RX 9060 XT 16 GB / Ryzen 7 5700X / 32 GB DDR4, a short hardware **intro-only** run held 30 FPS / 33.3 ms. WARP software intro remained around 10 FPS without capture. The remaining WARP world-transition device removal is unresolved. The latest requested debug run lacked the debug layer and ended after 28.42 seconds before world entry; it is inconclusive.
+
+- [x] Trace the single-list device removal and inspect source/run evidence.
+- [x] Implement failure-path and exact fence-phase diagnostics (not yet attribution of the fault).
+- [ ] **In progress:** complete effective bounded debug/world reproduction; build/tests and original-file protection checks passed.
+- [ ] Fix a demonstrated remaining defect and verify controllable hardware gameplay.
+
+[tudorek12345/VictoryIsInOurName.hep](https://github.com/tudorek12345/VictoryIsInOurName.hep) is the requested **identical source mirror**, not a second effort or independent result. Keep the existing review thread for this effort. PortWatch push/admin permissions are unavailable to this account; the submission requires the site's maintainer to accept and deploy it. No score or deployed listing is asserted. Raw game captures, shaders, traces and package files are not part of the update.
+
+## Historical registration record
+
 **Status: submitted as [PortWatch issue #17](https://github.com/4lwayz/portwatch-vi/issues/17); awaiting maintainer review.** This document requests review of [tudorek12345/Leonida](https://github.com/tudorek12345/Leonida) as a distinct contributor fork and runtime integration effort. It does not establish a PortWatch listing, score, endorsement or partnership.
 
 PortWatch's current scout does **not** ingest JSON from this repository. The adjacent [customized candidate proposal](../tracking/portwatch-candidate.json) follows its real `candidates[]` record shape so a reviewer can inspect or reuse it. Its factual description is proposed review wording, rather than a verbatim copy of the repository description. Registration requires a human-reviewed change to [PortWatch's registry](https://github.com/4lwayz/portwatch-vi/blob/main/data/tracker.json), normally requested through an issue or pull request.

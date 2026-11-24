@@ -573,23 +573,33 @@ impl State {
             .iter()
             .filter(|u| {
                 u.root == RootType::Table
-                    && matches!((u.kind, u.dwords), (ResourceType::Srv, 4) | (ResourceType::Uav, 8))
+                    && u.table_offset_dwords.is_multiple_of(8)
+                    && matches!((u.kind, u.dwords), (ResourceType::Srv, 4) | (ResourceType::Uav, 4 | 8))
             })
             .filter_map(|u| {
                 let Root::Table(table) = self.compute.get(usize::from(u.slot))? else {
                     return None;
                 };
                 let handle = table.checked_add(u64::from(u.table_offset_dwords) * 4)?;
-                self.heap_of(handle)?;
+                let heap = self.heap_of(*table)?;
+                if heap.samplers() || !(table - heap.start).is_multiple_of(32) || heap.index(handle).is_none() {
+                    return None;
+                }
                 let view = crate::descriptor::view(handle)?;
-                let (kind, signed) = if u.kind == ResourceType::Uav {
-                    (
+                let (kind, signed) = match (u.kind, u.dwords) {
+                    (ResourceType::Uav, 4) => {
+                        let (_, channels) = crate::descriptor::host::uint16_buffer_uav(&view)?;
+                        (IntegerViewKind::BufferUav { channels }, false)
+                    }
+                    (ResourceType::Uav, 8) => (
                         IntegerViewKind::ImageUav,
                         crate::descriptor::host::integer_image_uav(&view)?,
-                    )
-                } else {
-                    crate::descriptor::host::uint16_buffer_srv(&view)?;
-                    (IntegerViewKind::BufferSrv, false)
+                    ),
+                    (ResourceType::Srv, 4) => {
+                        crate::descriptor::host::uint16_buffer_srv(&view)?;
+                        (IntegerViewKind::BufferSrv, false)
+                    }
+                    _ => return None,
                 };
                 Some(IntegerView {
                     kind,

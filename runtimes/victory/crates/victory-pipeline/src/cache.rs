@@ -46,7 +46,18 @@ impl Cache {
     /// Returns the cached output for `input`, converting it first if needed.
     pub fn get_or_convert(&self, converter: &dyn Converter, input: &[u8]) -> Result<PathBuf> {
         let key = CacheKey::new(converter, input);
-        let path = self.path_for(&key);
+        self.get_or_convert_keyed(&key, converter, input)
+    }
+
+    /// As [`Self::get_or_convert`], reusing `CacheKey::new(converter, input)`
+    /// when the caller already used that key for a lookup.
+    pub fn get_or_convert_keyed(
+        &self,
+        key: &CacheKey,
+        converter: &dyn Converter,
+        input: &[u8],
+    ) -> Result<PathBuf> {
+        let path = self.path_for(key);
         if path.is_file() {
             tracing::trace!(converter = converter.id(), key = %key.to_hex(), "cache hit");
             return Ok(path);

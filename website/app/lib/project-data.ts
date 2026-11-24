@@ -1,4 +1,4 @@
-import { PROGRESS_UPDATE, SHOWCASE_EVENT_URL } from "./progress-update.ts";
+import { PROGRESS_UPDATE, RECENT_RUNTIME_UPDATE, SHOWCASE_EVENT_URL } from "./progress-update.ts";
 
 /** Public project metadata only. Game files, traces and credentials never enter this API. */
 export const REPOSITORY = "tudorek12345/Leonida";
@@ -87,19 +87,22 @@ export const PROJECT_SNAPSHOT: ProjectData = {
 export const PROJECT_STATUS = {
   project: "Leonida · Heperkoo experimental fork",
   lastReviewed: PROGRESS_UPDATE.date,
+  lastReviewedScope: "Legacy stage report only; recentRuntimeUpdate has its own timestamp and machine.",
+  recentRuntimeUpdate: RECENT_RUNTIME_UPDATE,
   evidenceScope: PROGRESS_UPDATE.scope,
   headline: "Boot and menus reported working; first-mission rendering remains blocked",
   renderedGameplayVerified: false,
   forkFirstFrameVerified: false,
   verificationScope: "reported-single-machine",
   currentBlocker: {
-    label: "Maintainer-reported · one tested machine",
+    label: "23 November 2026 stage report · one tested machine",
     title: "Black first-mission image and host GPU failure",
     detail: `${PROGRESS_UPDATE.stages.find((stage) => stage.id === "world")!.detail} The cause has not been established. Stable rendered gameplay and independent reproduction are not demonstrated by this report.`,
     classification: "maintainer-reported",
     sourceUrl: "https://leonida-heperkoo.meshedgoby9.chatgpt.site/progress-update.md",
   },
   experiment: {
+    label: "Historical stage report · 23 November 2026 · RX 9070 XT",
     date: PROGRESS_UPDATE.date,
     environment: PROGRESS_UPDATE.environment,
     testedMachineCount: 1,
@@ -115,7 +118,7 @@ export const PROJECT_STATUS = {
     additionalLocalStandIns: true,
     environment: "Windows 11 · RTX 4090 · Vulkan backend",
     sourceUrl: EVIDENCE_URL,
-    note: "This earlier pinned report stopped at a descriptor-heap CPU-handle assertion without reaching a draw or present. Its locally combined fixes and stand-ins describe that experiment only; it must not replace the newer maintainer-reported status.",
+    note: "This earlier pinned report stopped at a descriptor-heap CPU-handle assertion without reaching a draw or present. Its locally combined fixes and stand-ins describe that experiment only; it must not replace the 23 November maintainer-reported stage report or the separate recent runtime update.",
   },
   milestones: PROGRESS_UPDATE.stages.map((stage) => ({
     id: stage.id,

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-11-24T03:00:00-05:00",
+  "displayTimeZone": "EST (UTC-05:00)",
+  "repositories": ["tudorek12345/Leonida", "tudorek12345/VictoryIsInOurName.hep"],
+  "mirrorIsSeparateEffort": false,
+  "runtime": "runtimes/victory (native D3D12)",
+  "testedBaseCommit": "5dd9c2c21093e17d16ec577c76a9e721e3a08c59",
+  "testedWithWorkingTreeChanges": true,
+  "environment": {
+    "os": "Windows x64",
+    "rust": "1.98.1",
+    "gpu": "AMD Radeon RX 9060 XT 16 GB",
+    "cpu": "AMD Ryzen 7 5700X",
+    "systemRamGiB": 32,
+    "consoleProfile": "series-s",
+    "requested720p": true
+  },
+  "validation": {
+    "optimizedDiagnosticsBuild": "passed",
+    "serialWorkspaceDiagnosticsTests": {"passed": 303, "failed": 0, "ignored": 5},
+    "focusedGpuTests": {"passed": 62, "failed": 0, "ignored": 2},
+    "staticReview": "No actionable introduced defects found; not runtime verification",
+    "independentlyReproduced": false,
+    "renderedGameplayVerified": false
+  },
+  "observations": [
+    {"kind": "hardware-intro", "fps": 30, "frameTimeMs": 33.3, "scope": "short intro only; not gameplay"},
+    {"kind": "software-intro", "renderer": "WARP", "approximateFps": 10, "approximateFrameTimeMs": 100, "scope": "persists without capture; not Radeon performance"},
+    {"kind": "world-transition-failure", "elapsedSeconds": 184.84, "exitHex": "0x887A0005", "peakJobCommitBytes": 11834826752, "jobCommitLimitBytes": 17179869184, "completedBatchLists": 31, "failedSubmissionLists": 1, "faultingCallerKnown": false, "causeKnown": false},
+    {"kind": "latest-requested-debug-repro", "elapsedSeconds": 28.42, "exitCode": 0, "debugLayerRequested": true, "debugLayerAvailable": false, "worldEntryReached": false, "outcome": "inconclusive; lifecycle shutdown before world entry"},
+    {"kind": "protection", "restoredPackageAclPaths": 151, "executableHashUnchanged": true, "originalsAndSavesRetained": true}
+  ],
+  "tasks": [
+    {"id": "trace-single-list", "status": "completed", "checked": true, "title": "Trace the single-list device removal and inspect the working-copy source and run evidence"},
+    {"id": "failure-diagnostics", "status": "completed", "checked": true, "title": "Distinguish guest and presenter failure paths and retain the exact fence phase in diagnostics", "limit": "instrumentation implemented; exact failing caller not yet reproduced"},
+    {"id": "bounded-debug-repro", "status": "in_progress", "checked": false, "title": "Build and test serially, then run the bounded debug repro and verify original-file protection", "limit": "build/tests and protection passed; debug layer unavailable and latest run ended early"},
+    {"id": "verify-gameplay", "status": "pending", "checked": false, "title": "Fix any demonstrated remaining defect and verify controllable hardware gameplay"}
+  ],
+  "nextExperiment": "Check debug-layer availability, reproduce bounded world entry with caller/fence diagnostics, isolate guest execution versus presentation/capture, then fix a demonstrated defect with a synthetic regression before hardware gameplay verification.",
+  "rawGameEvidenceIncluded": false,
+  "portwatch": {"reviewIssue": "https://github.com/4lwayz/portwatch-vi/issues/17", "listingOrDeploymentClaimed": false}
+}

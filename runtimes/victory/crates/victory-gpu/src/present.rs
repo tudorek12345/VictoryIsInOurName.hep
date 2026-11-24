@@ -15,6 +15,7 @@ pub(super) struct Compositor {
     root: ID3D12RootSignature,
     opaque: ID3D12PipelineState,
     overlay: ID3D12PipelineState,
+    overlay_3x: Option<ID3D12PipelineState>,
     rtv_heap: ID3D12DescriptorHeap,
     srv_heap: ID3D12DescriptorHeap,
     srv_stride: u32,
@@ -37,6 +38,10 @@ impl Compositor {
             [RootSignature(RS)]
             float4 ps(float4 pos : SV_Position, float2 uv : TEXCOORD) : SV_Target {
                 return tex.SampleLevel(smp, uv, 0);
+            }
+            [RootSignature(RS)]
+            float4 ps_3x(float4 pos : SV_Position) : SV_Target {
+                return tex.Load(int3(3 * int2(pos.xy) + 1, 0));
             }
         "#;
         let compile = |entry: PCSTR, target: PCSTR| -> windows::core::Result<ID3DBlob> {
@@ -79,10 +84,8 @@ impl Compositor {
         unsafe {
             let vs_bytes =
                 std::slice::from_raw_parts(vs.GetBufferPointer().cast::<u8>(), vs.GetBufferSize());
-            let ps_bytes =
-                std::slice::from_raw_parts(ps.GetBufferPointer().cast::<u8>(), ps.GetBufferSize());
             let root: ID3D12RootSignature = device.CreateRootSignature(0, vs_bytes)?;
-            let make_pso = |blend: bool| -> windows::core::Result<ID3D12PipelineState> {
+            let make_pso = |ps: &ID3DBlob, blend: bool| {
                 let mut rt_blend = D3D12_RENDER_TARGET_BLEND_DESC {
                     RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8,
                     ..Default::default()
@@ -107,8 +110,8 @@ impl Compositor {
                         BytecodeLength: vs_bytes.len(),
                     },
                     PS: D3D12_SHADER_BYTECODE {
-                        pShaderBytecode: ps_bytes.as_ptr().cast(),
-                        BytecodeLength: ps_bytes.len(),
+                        pShaderBytecode: ps.GetBufferPointer(),
+                        BytecodeLength: ps.GetBufferSize(),
                     },
                     BlendState: blend_desc,
                     SampleMask: u32::MAX,
@@ -131,8 +134,16 @@ impl Compositor {
                 let _ = std::mem::ManuallyDrop::into_inner(desc.pRootSignature);
                 pso
             };
-            let opaque = make_pso(false)?;
-            let overlay = make_pso(true)?;
+            let opaque = make_pso(&ps, false)?;
+            let overlay = make_pso(&ps, true)?;
+            // Optional specialization: the linear overlay PSO is always usable.
+            let overlay_3x = if format == DXGI_FORMAT_R8G8B8A8_UNORM {
+                compile(s!("ps_3x"), s!("ps_5_1"))
+                    .and_then(|ps| make_pso(&ps, true))
+                    .ok()
+            } else {
+                None
+            };
             let rtv_heap: ID3D12DescriptorHeap =
                 device.CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
                     Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
@@ -154,11 +165,35 @@ impl Compositor {
                 root,
                 opaque,
                 overlay,
+                overlay_3x,
                 rtv_heap,
                 srv_heap,
                 srv_stride,
             })
         }
+    }
+
+    fn plane_pso(
+        &self,
+        index: usize,
+        desc: &D3D12_RESOURCE_DESC,
+        width: u32,
+        height: u32,
+    ) -> &ID3D12PipelineState {
+        if index == 0 {
+            return &self.opaque;
+        }
+        // Full viewport, mip 0: on BOTH axes the destination pixel center i + 0.5
+        // maps to source texel center 3*i + 1.5. Other bilinear taps have zero
+        // weight, regardless of the contents or alpha of either plane.
+        if desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM
+            && desc.Width == 3 * u64::from(width)
+            && u64::from(desc.Height) == 3 * u64::from(height)
+            && let Some(pso) = &self.overlay_3x
+        {
+            return pso;
+        }
+        &self.overlay
     }
 
     /// Draws the scene and its premultiplied overlays. The caller has
@@ -183,26 +218,7 @@ impl Compositor {
             let gpu = self.srv_heap.GetGPUDescriptorHandleForHeapStart();
             let mut before = Vec::with_capacity(planes.len());
             let mut after = Vec::with_capacity(planes.len());
-            for (index, &(texture, state)) in planes.iter().enumerate() {
-                let desc = texture.GetDesc();
-                let srv = D3D12_SHADER_RESOURCE_VIEW_DESC {
-                    Format: sample_format(desc.Format).unwrap_or(desc.Format),
-                    ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2D,
-                    Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-                    Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
-                        Texture2D: D3D12_TEX2D_SRV {
-                            MipLevels: 1,
-                            ..Default::default()
-                        },
-                    },
-                };
-                device.CreateShaderResourceView(
-                    texture,
-                    Some(&srv),
-                    D3D12_CPU_DESCRIPTOR_HANDLE {
-                        ptr: cpu.ptr + index * self.srv_stride as usize,
-                    },
-                );
+            for &(texture, state) in planes {
                 let state = D3D12_RESOURCE_STATES(state as i32);
                 if state != readable {
                     before.push(super::host::transition(texture, state, readable));
@@ -228,12 +244,27 @@ impl Compositor {
             }]);
             list.OMSetRenderTargets(1, Some(&rtv), false, None);
             list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            for index in 0..planes.len() {
-                list.SetPipelineState(if index == 0 {
-                    &self.opaque
-                } else {
-                    &self.overlay
-                });
+            for (index, &(texture, _)) in planes.iter().enumerate() {
+                let desc = texture.GetDesc();
+                let srv = D3D12_SHADER_RESOURCE_VIEW_DESC {
+                    Format: sample_format(desc.Format).unwrap_or(desc.Format),
+                    ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2D,
+                    Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                    Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
+                        Texture2D: D3D12_TEX2D_SRV {
+                            MipLevels: 1,
+                            ..Default::default()
+                        },
+                    },
+                };
+                device.CreateShaderResourceView(
+                    texture,
+                    Some(&srv),
+                    D3D12_CPU_DESCRIPTOR_HANDLE {
+                        ptr: cpu.ptr + index * self.srv_stride as usize,
+                    },
+                );
+                list.SetPipelineState(self.plane_pso(index, &desc, width, height));
                 list.SetGraphicsRootDescriptorTable(
                     0,
                     D3D12_GPU_DESCRIPTOR_HANDLE {
@@ -288,88 +319,4 @@ pub(super) fn output_size(width: u32, height: u32) -> (u32, u32) {
 }
 
 #[cfg(all(test, feature = "diagnostics"))]
-mod tests {
-    use super::*;
-    use crate::host::{host, transition};
-
-    #[test]
-    fn scales_and_blends_two_planes() {
-        let Some(host) = host() else {
-            return;
-        };
-        let format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        let compositor = Compositor::new(&host.device, format).unwrap();
-        let make_target = |width, height| {
-            let mut target: Option<ID3D12Resource> = None;
-            // SAFETY: ordinary RGBA8 target with the output pointer owned here.
-            unsafe {
-                host.device
-                    .CreateCommittedResource(
-                        &D3D12_HEAP_PROPERTIES {
-                            Type: D3D12_HEAP_TYPE_DEFAULT,
-                            ..Default::default()
-                        },
-                        D3D12_HEAP_FLAG_NONE,
-                        &D3D12_RESOURCE_DESC {
-                            Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-                            Width: width,
-                            Height: height,
-                            DepthOrArraySize: 1,
-                            MipLevels: 1,
-                            Format: format,
-                            SampleDesc: DXGI_SAMPLE_DESC {
-                                Count: 1,
-                                Quality: 0,
-                            },
-                            Flags: D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
-                            ..Default::default()
-                        },
-                        D3D12_RESOURCE_STATE_RENDER_TARGET,
-                        None,
-                        &mut target,
-                    )
-                    .unwrap();
-            }
-            target.unwrap()
-        };
-        let base = make_target(8, 8);
-        let overlay = make_target(16, 16);
-        let out = make_target(4, 4);
-        let list = host.new_list().unwrap();
-        let state = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        // SAFETY: the open command list and both cleared render targets are live.
-        let (readback, footprint) = unsafe {
-            list.list
-                .ClearRenderTargetView(host.rtv(&base, None), &[0.0, 0.0, 1.0, 1.0], None);
-            list.list
-                .ClearRenderTargetView(host.rtv(&overlay, None), &[0.5, 0.0, 0.0, 0.5], None);
-            compositor.record(
-                &host.device,
-                &list.list,
-                &out,
-                &[(&base, state.0 as u32), (&overlay, state.0 as u32)],
-                4,
-                4,
-            );
-            list.list
-                .ResourceBarrier(&[transition(&out, state, D3D12_RESOURCE_STATE_COPY_SOURCE)]);
-            crate::capture::read_back(&host.device, &list.list, &out).unwrap()
-        };
-        list.close();
-        host.execute(&[&list]);
-        let offset = footprint.Offset as usize;
-        let mut data = std::ptr::null_mut();
-        // SAFETY: the submission has finished and at least four pixels were copied.
-        let pixel: [u8; 4] = unsafe {
-            readback.Map(0, None, Some(&mut data)).unwrap();
-            let pixel = data
-                .cast::<u8>()
-                .add(offset)
-                .cast::<[u8; 4]>()
-                .read_unaligned();
-            readback.Unmap(0, None);
-            pixel
-        };
-        assert_eq!(pixel, [128, 0, 127, 255]);
-    }
-}
+mod tests;

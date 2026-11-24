@@ -2825,22 +2825,23 @@ impl<'a> Lower<'a> {
             }
             return Ok(());
         }
-        if let Some(srv) = kind.filter(|u| u.kind == ResourceType::Srv) {
+        let srv = kind.filter(|u| u.kind == ResourceType::Srv);
+        if srv.is_some() || (kind.is_none() && self.heap_raw_srv(src)) {
             // A scalar load takes a byte offset even when the table holds a
             // structured SRV. DXIL must use that view's stride and split the
             // address into an element index and an offset within it.
-            let structured = srv.dwords == 4
-                && (8..=2048).contains(&srv.stride)
-                && srv.stride.is_multiple_of(4);
-            let props = if structured { (12, srv.stride) } else { (11, 0) };
+            let stride = srv
+                .filter(|u| u.dwords == 4 && (8..=2048).contains(&u.stride) && u.stride.is_multiple_of(4))
+                .map(|u| u.stride);
+            let props = stride.map_or((11, 0), |stride| (12, stride));
             let h = self.handle(site, src, false, props)?;
             for k in 0..count {
                 let off = self.s.m.i32(4 * k);
                 let a = self.s.m.bin(c, Bin::Add, addr, off);
                 let mask = self.s.m.i8(1);
                 let (u, al) = (self.s.m.undef(self.s.t.i32), self.s.m.i32(4));
-                let (index, within) = if structured {
-                    let stride = self.s.m.i32(srv.stride);
+                let (index, within) = if let Some(stride) = stride {
+                    let stride = self.s.m.i32(stride);
                     (
                         self.s.m.bin(c, Bin::UDiv, a, stride),
                         self.s.m.bin(c, Bin::URem, a, stride),
@@ -2903,6 +2904,28 @@ impl<'a> Lower<'a> {
             self.write(inst, Reg::S(code + k as u8), x, None);
         }
         Ok(())
+    }
+
+    /// Direct-heap reads have no used-resource record. If a vector byte
+    /// load uses the very same SSA descriptor, it already requires a raw
+    /// SRV. Scalar loads through that descriptor must not annotate it as a
+    /// CBV. Do not infer a class from a different descriptor or just from
+    /// the fact that both descriptors live on the resource heap.
+    fn heap_raw_srv(&self, src: &Source) -> bool {
+        let Source::Loaded { load, .. } = src else { return false };
+        if !self.scalar.get(load).is_some_and(|a| {
+            self.x.native.layout.get(a.param).is_some_and(|p| p.root == RootType::ResourceHeap)
+        }) {
+            return false;
+        }
+        self.x.res.descriptors.iter().any(|d| {
+            d.role == Role::Resource && &d.source == src && {
+                let (b, i) = d.site;
+                let inst = &self.x.p.blocks[b].insts[i];
+                matches!(inst.fields, Fields::Buffer { idxen: false, format: None, lds: false, tfe: false, .. })
+                    && matches!(inst.name(), "buffer_load_dword" | "buffer_load_dwordx2" | "buffer_load_dwordx3" | "buffer_load_dwordx4")
+            }
+        })
     }
 
     /// A descriptor load (`s_load_dword*` from a table or heap) whose dwords
@@ -2975,7 +2998,10 @@ impl<'a> Lower<'a> {
                 let props = if un.starts_with("buffer_load_format")
                     || un.starts_with("buffer_store_format")
                 {
-                    let component = self.typed_buffer_component(un, &src, used);
+                    // Match the operand of the access, not a single leaf of
+                    // a descriptor selected by control flow.
+                    let operand = self.descriptors[&(at, false)];
+                    let component = self.typed_buffer_component(un, operand, used);
                     (10 | u, component.unwrap_or(0x409))
                 } else if *idxen && format.is_none() && stride >= 4 && stride.is_multiple_of(4) {
                     (12 | u, stride)
@@ -3286,7 +3312,7 @@ impl<'a> Lower<'a> {
     ) -> Option<u32> {
         let used = used.filter(|u| u.root == RootType::Table)?;
         let expected = match kind {
-            IntegerViewKind::ImageUav => ResourceType::Uav,
+            IntegerViewKind::ImageUav | IntegerViewKind::BufferUav { .. } => ResourceType::Uav,
             IntegerViewKind::BufferSrv => ResourceType::Srv,
         };
         if used.kind != expected {
@@ -3302,23 +3328,54 @@ impl<'a> Lower<'a> {
             .map(|view| if view.signed { 0x104 } else { 0x105 })
     }
 
-    /// The typed component at a fixed table entry read by a scalar format load.
+    /// DXIL typed-buffer properties: component count in bits 8..15 and
+    /// component type in bits 0..7. A containing range is enough to infer the
+    /// SRV/UAV class, but not the format of another descriptor in the range.
     fn typed_buffer_component(
         &self,
         name: &str,
         src: &Source,
         used: Option<&UsedResource>,
     ) -> Option<u32> {
+        if self.integer_views.is_empty()
+            || !(name.starts_with("buffer_load_format_") || name.starts_with("buffer_store_format_"))
+        {
+            return None;
+        }
         let Source::Loaded { load, first } = src else {
             return None;
         };
         let addr = self.scalar.get(load)?;
-        let used = used.filter(|u| {
-            name == "buffer_load_format_x"
-                && addr.dynamic.is_none()
-                && addr.offset / 4 + u32::from(*first) == u.table_offset_dwords
+        let param = self.x.native.layout.get(addr.param)?;
+        let used = used?;
+        if param.root != RootType::Table || used.root != RootType::Table || used.dwords != 4
+            || used.slot != param.slot || used.user_data != param.user_data || addr.dynamic.is_some()
+            || !addr.offset.is_multiple_of(4) || !used.table_offset_dwords.is_multiple_of(8)
+            || addr.offset / 4 + u32::from(*first) != used.table_offset_dwords
+        {
+            return None;
+        }
+        if self.x.native.used.iter().any(|other| other.root == RootType::Table
+            && other.table_offset_dwords == used.table_offset_dwords
+            && (other.slot == used.slot || other.user_data == used.user_data) && other != used)
+        {
+            return None;
+        }
+        let mut views = self.integer_views.iter().filter(|v| {
+            v.slot == used.slot && v.table_offset_dwords == used.table_offset_dwords
         });
-        self.integer_component(used, IntegerViewKind::BufferSrv)
+        let view = views.next()?;
+        if views.any(|other| other != view) {
+            return None;
+        }
+        match (used.kind, view.kind) {
+            (ResourceType::Srv, IntegerViewKind::BufferSrv) if name == "buffer_load_format_x" => {
+                Some(if view.signed { 0x104 } else { 0x105 })
+            }
+            (ResourceType::Uav, IntegerViewKind::BufferUav { channels: n @ (1 | 4) })
+                if !view.signed && self.x.native.stage == HwStage::Cs => Some(u32::from(n) << 8 | 5),
+            _ => None,
+        }
     }
 
     /// A handle for the descriptor `src` read at `site`.
@@ -6377,8 +6434,18 @@ impl<'a> Lower<'a> {
             }
             return Ok(());
         }
+        let component = self.typed_buffer_component(name, src, used);
+        if component.is_some() && d16 {
+            return Err("a packed integer typed buffer access");
+        }
         if store {
-            let regs = if d16 { count.div_ceil(2) } else { count };
+            // An ordinary format store writes one full element. An R16 view
+            // consumes only X, even for the four-register instruction.
+            let regs = if let Some(props) = component { props >> 8 }
+                else if d16 { count.div_ceil(2) } else { count };
+            if component.is_some() && count < regs {
+                return Err("a partial integer typed buffer store");
+            }
             let mut vals =
                 self.vgprs(inst, data.as_ref().ok_or("buffer store data")?, regs as u8)?;
             if d16 {
@@ -6401,17 +6468,29 @@ impl<'a> Lower<'a> {
             }
             let mut args = Vec::new();
             let (op, name) = if typed {
-                // shortcut: typed stores are taken to write all four channels
-                // of a float format.
-                if count != 4 || *offen || *offset != 0 {
+                if (component.is_none() && count != 4) || *offen || *offset != 0
+                    || (component.is_some() && !matches!(soffset, Operand::Scalar { code: NULL, .. } | Operand::Const(128)))
+                {
                     return Err("a typed buffer store of some channels or at an offset");
                 }
-                args.push(self.handle(site, src, false, (10 | u, 0x409))?);
+                args.push(self.handle(site, src, false, (10 | u, component.unwrap_or(0x409)))?);
                 args.extend([index.unwrap_or(self.s.m.i32(0)), iu]);
-                for x in vals {
-                    args.push(self.as_float(x));
+                if component.is_some() {
+                    // GFX10 UINT16 stores saturate rather than wrap. DXIL's
+                    // typed store always takes four values and a full mask.
+                    let max = self.s.m.i32(u16::MAX.into());
+                    for x in vals {
+                        let fits = self.s.m.cmp(c, pred::IULT, x, max);
+                        args.push(self.s.m.select(c, fits, x, max));
+                    }
+                    args.resize(3 + 4, self.s.m.i32(0));
+                    (69, "bufferStore.i32")
+                } else {
+                    for x in vals {
+                        args.push(self.as_float(x));
+                    }
+                    (69, "bufferStore.f32")
                 }
-                (69, "bufferStore.f32")
             } else {
                 match index {
                     Some(index) => {
@@ -6454,12 +6533,16 @@ impl<'a> Lower<'a> {
             }
             return Ok(());
         }
-        let component = self.typed_buffer_component(name, src, used);
         let r = if typed {
+            if component.is_some_and(|props| count > props >> 8) {
+                return Err("an integer typed buffer load beyond the view's channels");
+            }
             if *offen || matches!(off, V::Inst(_)) || *offset != 0 {
                 return Err("a typed buffer load at an offset");
             }
-            if uav {
+            // The validator derives this feature from the annotated component
+            // count, not the byte width of the DXGI format bound at dispatch.
+            if uav && component.unwrap_or(0x409) >> 8 > 1 {
                 self.s.flags |= flags::TYPED_UAV_LOADS;
             }
             let h = self.handle(site, src, false, (10 | u, component.unwrap_or(0x409)))?;

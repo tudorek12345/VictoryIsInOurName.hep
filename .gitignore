@@ -37,3 +37,9 @@ __pycache__/
 *.exp
 *.log
 .vs/
+
+# ---- workstation handoffs and publication receipts (README is public) ----
+/handoff.md
+/currenstatus.md
+/currentstatus.md
+/.local-progress/

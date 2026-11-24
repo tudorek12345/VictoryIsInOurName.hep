@@ -204,6 +204,26 @@
       "references": [
         "https://github.com/Marvisak/VIctory/issues/181"
       ]
+    },
+    {
+      "purpose": "Keep scalar and vector byte loads through the same direct-heap SSA descriptor on a raw SRV, without reclassifying unrelated CBVs or fixed structured SRVs. Cover the rule with synthetic readback.",
+      "paths": ["crates/victory-shader/src/emit/lower.rs", "crates/victory-shader/src/emit/valu_tests.rs", "docs/architecture.md"]
+    },
+    {
+      "purpose": "Specialize fixed compute UINT16 buffer UAVs for R and RGBA shapes, retaining unsigned semantics and matching null views. Verify hand-written synthetic load/store readbacks.",
+      "paths": ["crates/victory-gpu/src/descriptor/host.rs", "crates/victory-gpu/src/draw.rs", "crates/victory-shader/src/emit/host.rs", "crates/victory-shader/src/emit/lower.rs", "crates/victory-shader/src/emit/mod.rs", "crates/victory-shader/src/emit/valu_tests.rs", "docs/architecture.md"]
+    },
+    {
+      "purpose": "Use a direct texel read for exact 3:1 compositor downscaling, retaining premultiplied blending and a linear fallback. Add synthetic equivalence tests and an opt-in benchmark.",
+      "paths": ["crates/victory-gpu/src/present.rs", "crates/victory-gpu/src/present/tests.rs"]
+    },
+    {
+      "purpose": "Coalesce identical cold shader-cache requests while allowing unrelated keys to translate concurrently, with failure, repair, retry and unwind tests.",
+      "paths": ["crates/victory-gpu/src/shader_cache.rs", "crates/victory-pipeline/src/cache.rs"]
+    },
+    {
+      "purpose": "Retain submission callers and exact Signal/event/wait failure phases, check split-list device removal and report swap-chain Present removal. These diagnostics do not establish the remaining world-transition failure's cause.",
+      "paths": ["crates/victory-gpu/src/host.rs"]
     }
   ],
   "modifiedFiles": [
@@ -225,15 +245,19 @@
     "crates/victory-gpu/src/memstat.rs",
     "crates/victory-gpu/src/pipeline/host.rs",
     "crates/victory-gpu/src/present.rs",
+    "crates/victory-gpu/src/present/tests.rs",
     "crates/victory-gpu/src/queue.rs",
     "crates/victory-gpu/src/resource.rs",
     "crates/victory-gpu/src/shadow.rs",
+    "crates/victory-gpu/src/shader_cache.rs",
     "crates/victory-gpu/src/texture.rs",
     "crates/victory-hle/src/modules/audio/capture.rs",
     "crates/victory-hle/src/modules/dstorage.rs",
     "crates/victory-hle/src/modules/gameinput.rs",
     "crates/victory-pe/src/image.rs",
+    "crates/victory-pipeline/src/cache.rs",
     "crates/victory-shader/src/emit/diff_tests.rs",
+    "crates/victory-shader/src/emit/host.rs",
     "crates/victory-shader/src/emit/lower.rs",
     "crates/victory-shader/src/emit/mod.rs",
     "crates/victory-shader/src/emit/valu_tests.rs",

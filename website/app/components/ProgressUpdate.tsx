@@ -1,4 +1,4 @@
-import { PROGRESS_UPDATE } from "../lib/progress-update";
+import { PROGRESS_UPDATE, RECENT_RUNTIME_UPDATE } from "../lib/progress-update";
 import "./progress-update.css";
 
 export default function ProgressUpdate() {
@@ -15,8 +15,37 @@ export default function ProgressUpdate() {
       <div className="progress-update__heading">
         <div>
           <p className="progress-update__eyebrow">USER-REPORTED PROGRESS</p>
-          <h2 id="progress-update-title">Working stages &amp; next steps.</h2>
+          <h2 id="progress-update-title">Runtime updates &amp; reported stages.</h2>
         </div>
+      </div>
+
+      <section className="progress-update__next" aria-labelledby="recent-runtime-update-title">
+        <div className="progress-update__next-heading">
+          <h3 id="recent-runtime-update-title">Latest runtime update</h3>
+          <time dateTime={RECENT_RUNTIME_UPDATE.timestamp}>{RECENT_RUNTIME_UPDATE.label}</time>
+        </div>
+        <p className="progress-update__scope">{RECENT_RUNTIME_UPDATE.environment}. {RECENT_RUNTIME_UPDATE.scope}</p>
+        <p className="progress-update__scope">{RECENT_RUNTIME_UPDATE.changes.join(" ")}</p>
+        <p className="progress-update__scope">
+          {RECENT_RUNTIME_UPDATE.performance.scope} Hardware: {RECENT_RUNTIME_UPDATE.performance.hardware.fps} FPS / {RECENT_RUNTIME_UPDATE.performance.hardware.frameTimeMs} ms;
+          {" "}WARP: ~{RECENT_RUNTIME_UPDATE.performance.warp.fps} FPS / ~{RECENT_RUNTIME_UPDATE.performance.warp.frameTimeMs} ms.
+        </p>
+        <ol aria-label="Recent runtime work checklist">
+          {RECENT_RUNTIME_UPDATE.checklist.map(item => (
+            <li key={item.id} style={{ gridTemplateColumns: "max-content minmax(0, 1fr)" }}>
+              <span aria-hidden="true" style={{ whiteSpace: "pre" }}>{item.status === "completed" ? "[✓]" : "[ ]"}</span>
+              <div>
+                <h4>{item.title}</h4>
+                <span className="progress-update__next-label">{item.status === "completed" ? "Completed" : item.status === "partial" ? "In progress (partial)" : "Pending"}</span>
+                <p>{item.detail}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <div className="progress-update__heading">
+        <h3>Historical stage report</h3>
         <div className="progress-update__environment">
           <time dateTime={PROGRESS_UPDATE.date}>{dateLabel}</time>
           <span>{PROGRESS_UPDATE.environment}</span>
@@ -74,7 +103,7 @@ export default function ProgressUpdate() {
 
       <p className="progress-update__scope">{PROGRESS_UPDATE.scope}</p>
       <div className="progress-update__next">
-        <div className="progress-update__next-heading"><h3>Next implementation steps</h3><span>OPEN WORK · NOT COMPLETED</span></div>
+        <div className="progress-update__next-heading"><h3>Next steps from the 23 November report</h3><span>OPEN WORK · NOT COMPLETED</span></div>
         <ol>
           {PROGRESS_UPDATE.nextSteps.map(step => (
             <li key={step.id}>

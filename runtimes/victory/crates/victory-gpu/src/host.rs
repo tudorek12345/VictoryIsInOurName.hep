@@ -531,7 +531,9 @@ impl Host {
     }
 
     /// Runs closed lists and waits for them.
+    #[track_caller]
     pub(crate) fn execute(&self, runs: &[&HostList]) {
+        let caller = std::panic::Location::caller();
         // One submission at a time from preparation to copy-back: snapshots
         // and the ranges shaders write are per host copy, not per submission.
         let mut submitted = self.submitted.lock().unwrap_or_else(|e| e.into_inner());
@@ -573,28 +575,55 @@ impl Host {
             // SAFETY: closed lists; the fence and event are ours.
             unsafe {
                 self.queue.ExecuteCommandLists(group);
-                let waited = self
-                    .queue
-                    .Signal(&self.fence, fence_value)
-                    .and_then(|()| self.fence.SetEventOnCompletion(fence_value, self.event));
-                match waited {
-                    Ok(())
-                        if WaitForSingleObject(self.event, INFINITE)
-                            == windows::Win32::Foundation::WAIT_OBJECT_0 => {}
-                    result => {
-                        if let Err(e) = result {
-                            tracing::error!(%e, fence = fence_value, "host submission fence failed");
-                        } else {
-                            tracing::error!(fence = fence_value, "host submission fence wait failed");
+                let failed = match self.queue.Signal(&self.fence, fence_value) {
+                    Err(e) => Some(("queue Signal", Some(e.code()), None, None)),
+                    Ok(()) => match self.fence.SetEventOnCompletion(fence_value, self.event) {
+                        Err(e) => Some(("SetEventOnCompletion", Some(e.code()), None, None)),
+                        Ok(()) => {
+                            let wait = WaitForSingleObject(self.event, INFINITE);
+                            (wait != windows::Win32::Foundation::WAIT_OBJECT_0).then(|| {
+                                let last_error = (wait == windows::Win32::Foundation::WAIT_FAILED)
+                                    .then(|| windows::Win32::Foundation::GetLastError().0);
+                                ("WaitForSingleObject", None, Some(wait.0), last_error)
+                            })
                         }
-                        fail(format_args!(
-                            "host GPU fence failed during a submission of {} lists{}{}",
-                            runs.len(),
-                            self.removal_data(runs),
-                            last_notes(runs)
-                        ));
-                    }
+                    },
+                };
+                if let Some((phase, hr, wait, last_error)) = failed {
+                    #[cfg(feature = "diagnostics")]
+                    let (report_runs, list_label) = if groups.len() > 1 {
+                        (&runs[i..i + 1], format!(" at list {i} of {}", runs.len()))
+                    } else {
+                        (runs, String::new())
+                    };
+                    #[cfg(not(feature = "diagnostics"))]
+                    let (report_runs, list_label) = (runs, String::new());
+                    tracing::error!(%caller, phase, ?hr, ?wait, ?last_error, fence = fence_value, %list_label,
+                        "host submission fence failed");
+                    fail(format_args!(
+                        "host GPU fence failed at {phase} during a submission of {} lists{list_label} from {caller}{}{}",
+                        runs.len(),
+                        self.removal_data(report_runs),
+                        last_notes(report_runs)
+                    ));
                 }
+            }
+            #[cfg(feature = "diagnostics")]
+            if groups.len() > 1 {
+                // An empty DRED breadcrumb history on WARP cannot locate the
+                // bad list in a batch. Only opt-in timing splits the batch;
+                // check the device after *each* completed fence, before
+                // submitting the next list (or its prelude).
+                let completed = unsafe { self.fence.GetCompletedValue() };
+                if let Err(e) = unsafe { self.device.GetDeviceRemovedReason() } {
+                    let one = &runs[i..i + 1];
+                    fail(format_args!(
+                        "host GPU device removed after list {i} of {} from {caller} (fence {fence_value}, completed {completed}, reason {e}){}{}",
+                        runs.len(), self.removal_data(one), last_notes(one)
+                    ));
+                }
+                tracing::info!(list = i, lists = runs.len(), fence = fence_value, completed,
+                    elapsed_ms = started.elapsed().as_millis(), "diagnostic host list completed");
             }
             #[cfg(feature = "diagnostics")]
             if groups.len() > 1 && started.elapsed() > std::time::Duration::from_millis(50) {
@@ -622,9 +651,11 @@ impl Host {
         }
         // SAFETY: a plain query.
         if unsafe { self.device.GetDeviceRemovedReason() }.is_err() {
+            let completed = unsafe { self.fence.GetCompletedValue() };
             fail(format_args!(
-                "host GPU device removed after a submission of {} lists{}{}",
+                "host GPU device removed after a submission of {} lists from {caller} (fence {}, completed {completed}){}{}",
                 runs.len(),
+                submitted.fence_value,
                 self.removal_data(runs),
                 last_notes(runs)
             ));
@@ -1763,6 +1794,12 @@ impl Host {
             }
             let status = p.swap_chain.Present(0, DXGI_PRESENT(0));
             if status.is_err() {
+                if self.device.GetDeviceRemovedReason().is_err() {
+                    fail(format_args!(
+                        "host GPU device removed during swap chain Present (frame {frame}, {width}x{height}, format {}, status {:#010x}){}",
+                        format.0, status.0 as u32, self.removal_data(&[&p.copy])
+                    ));
+                }
                 if p.last_present_error != Some(status.0) {
                     tracing::warn!(frame, status = format_args!("{:#010x}", status.0 as u32),
                         width, height, format = format.0, "host swap chain present failed");

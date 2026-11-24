@@ -19,3 +19,28 @@ export const PROGRESS_UPDATE = {
     { id: "reproduce", status: "next", title: "Reproduce on another machine", detail: "Repeat the documented run independently before expanding compatibility claims." },
   ],
 } as const;
+
+/** Separate runtime update; the 23 November stage report above keeps its original provenance. */
+export const RECENT_RUNTIME_UPDATE = {
+  timestamp: "2026-11-24T03:00:00-05:00",
+  label: "24 November 2026, 03:00 EST (UTC−05:00)",
+  environment: "AMD Radeon RX 9060 XT 16GB · AMD Ryzen 7 5700X · 32GB RAM",
+  scope: "Maintainer-reported runtime work on this machine; controllable hardware gameplay remains unverified.",
+  changes: [
+    "Raw bindless SRV consistency.",
+    "Typed UINT16 UAV support.",
+    "Exact 3:1 compositor downscaling and concurrent cache-fill coalescing.",
+    "Caller, fence and Present diagnostics.",
+  ],
+  performance: {
+    scope: "Short intro only; no gameplay.",
+    hardware: { fps: 30, frameTimeMs: 33.3 },
+    warp: { fps: 10, frameTimeMs: 100, approximate: true },
+  },
+  checklist: [
+    { id: "single-list-removal", status: "completed", title: "Trace single-list device removal", detail: "Single-list device removal traced; the remaining defect is not yet attributed." },
+    { id: "failure-path-diagnostics", status: "completed", title: "Distinguish failure paths and retain the fence phase", detail: "Caller/fence/Present instrumentation is implemented to distinguish failure paths and retain the fence phase; defect attribution remains pending." },
+    { id: "serial-reproduction", status: "partial", title: "Serial build, tests and debug reproduction", detail: "Serial build succeeded; 303 workspace tests passed, 5 ignored (GPU crate: 62 passed, 2 ignored). Original-file protection checks passed. The latest debug request could not enable the missing debug layer and exited with code 0 after 28.42 s, before reaching the world. This does not verify a successful world run." },
+    { id: "hardware-gameplay", status: "pending", title: "Fix the demonstrated remaining defect and verify controllable hardware gameplay", detail: "The remaining defect still needs a demonstrated fix followed by controllable gameplay verification on hardware." },
+  ],
+} as const;

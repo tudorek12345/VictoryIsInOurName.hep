@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProjectService, createProjectResponse, PROJECT_STATUS, REPOSITORY, REPOSITORY_URL } from '../app/lib/project-data.ts';
+import { PROGRESS_UPDATE, RECENT_RUNTIME_UPDATE } from '../app/lib/progress-update.ts';
 
 const sha = 'a'.repeat(40);
 function responseFor(url) {
@@ -85,6 +86,12 @@ test('redirect responses are rejected and diagnostics expose only category and s
 });
 
 test('status distinguishes the single-machine maintainer report from independent verification and historical upstream evidence', () => {
+  assert.equal(PROGRESS_UPDATE.date, '2026-11-23');
+  assert.equal(PROJECT_STATUS.lastReviewed, PROGRESS_UPDATE.date);
+  assert.match(PROJECT_STATUS.lastReviewedScope, /Legacy stage report only/);
+  assert.equal(PROJECT_STATUS.experiment.date, PROGRESS_UPDATE.date);
+  assert.match(PROJECT_STATUS.experiment.label, /Historical stage report/);
+  assert.match(PROJECT_STATUS.currentBlocker.label, /23 November 2026/);
   assert.equal(PROJECT_STATUS.renderedGameplayVerified, false);
   assert.equal(PROJECT_STATUS.forkFirstFrameVerified, false);
   assert.equal(PROJECT_STATUS.verificationScope, 'reported-single-machine');
@@ -103,6 +110,48 @@ test('status distinguishes the single-machine maintainer report from independent
   assert.equal(PROJECT_STATUS.nextMilestones.find(m => m.id === 'world-frame').state, 'goal');
   assert.match(PROJECT_STATUS.historicalReference.sourceUrl, /8e3c7c72/);
   assert.match(PROJECT_STATUS.historicalReference.environment, /RTX 4090/);
+});
+
+test('recent runtime update keeps its fixed EST timestamp separate from the legacy stage report', () => {
+  const recent = PROJECT_STATUS.recentRuntimeUpdate;
+  assert.equal(recent, RECENT_RUNTIME_UPDATE);
+  assert.equal(recent.timestamp, '2026-11-24T03:00:00-05:00');
+  assert.equal(recent.label, '24 November 2026, 03:00 EST (UTC−05:00)');
+  assert.equal(new Date(recent.timestamp).toISOString(), '2026-11-24T08:00:00.000Z');
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset',
+  }).formatToParts(new Date(recent.timestamp));
+  const value = type => parts.find(part => part.type === type).value;
+  assert.deepEqual(['year', 'month', 'day', 'hour', 'minute', 'timeZoneName'].map(value), ['2026', '11', '24', '03', '00', 'GMT-5']);
+  assert.match(recent.environment, /RX 9060 XT 16GB/);
+  assert.match(recent.environment, /Ryzen 7 5700X/);
+  assert.match(recent.environment, /32GB RAM/);
+  assert.match(PROJECT_STATUS.experiment.environment, /RX 9070 XT/);
+  assert.equal(PROJECT_STATUS.experiment.environment, PROGRESS_UPDATE.environment);
+  assert.match(recent.performance.scope, /Short intro only; no gameplay/);
+  assert.deepEqual(recent.performance.hardware, { fps: 30, frameTimeMs: 33.3 });
+  assert.deepEqual(recent.performance.warp, { fps: 10, frameTimeMs: 100, approximate: true });
+});
+
+test('recent checklist distinguishes completed instrumentation, partial reproduction and pending gameplay verification', () => {
+  const checklist = PROJECT_STATUS.recentRuntimeUpdate.checklist;
+  assert.deepEqual(checklist.map(({ id, status }) => [id, status]), [
+    ['single-list-removal', 'completed'],
+    ['failure-path-diagnostics', 'completed'],
+    ['serial-reproduction', 'partial'],
+    ['hardware-gameplay', 'pending'],
+  ]);
+  assert.match(checklist[0].detail, /Single-list device removal traced/);
+  assert.match(checklist[1].detail, /instrumentation is implemented/);
+  assert.match(checklist[1].detail, /retain the fence phase; defect attribution remains pending/);
+  assert.match(checklist[2].detail, /Serial build succeeded; 303 workspace tests passed, 5 ignored/);
+  assert.match(checklist[2].detail, /GPU crate: 62 passed, 2 ignored/);
+  assert.match(checklist[2].detail, /could not enable the missing debug layer/);
+  assert.match(checklist[2].detail, /exited with code 0 after 28\.42 s, before reaching the world/);
+  assert.match(checklist[2].detail, /does not verify a successful world run/);
+  assert.match(checklist[3].title, /Fix the demonstrated remaining defect and verify controllable hardware gameplay/);
+  assert.equal(PROJECT_STATUS.renderedGameplayVerified, false);
 });
 
 test('route boundary returns a labeled snapshot when a runtime loader unexpectedly rejects', async (t) => {

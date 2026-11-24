@@ -43,7 +43,11 @@
 //!   them: raw (ByteAddressBuffer) for dword loads and stores, atomics and
 //!   typed-format loads without an index; structured with the used-resource
 //!   entry's stride when indexed; typed with four 32-bit float channels for
-//!   `buffer_load_format_*` and `buffer_store_format_*`. The host's view at
+//!   `buffer_load_format_*` and `buffer_store_format_*` by default. Fixed
+//!   compute-table R16_UINT and R16G16B16A16_UINT buffer UAVs specialize
+//!   ordinary format loads within the view width and full-element stores to
+//!   one or four unsigned channels, including the element-count query.
+//!   The host's view at
 //!   that index must be of that kind and start at the console descriptor's
 //!   base address (raw: `R32_TYPELESS` with the raw flag), whatever kind the
 //!   title's view description says. Typed-format loads from heap
@@ -210,9 +214,11 @@ pub fn translate(container: &[u8]) -> Result<HostShader, ShaderError> {
 pub enum IntegerViewKind {
     ImageUav,
     BufferSrv,
+    /// Typed UINT16 elements, one (R) or four (RGBA) channels per element.
+    BufferUav { channels: u8 },
 }
 
-/// A one-channel integer view identified by its table position.
+/// An integer view identified by its table position. Its shape is part of the PSO key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct IntegerView {
     pub kind: IntegerViewKind,
