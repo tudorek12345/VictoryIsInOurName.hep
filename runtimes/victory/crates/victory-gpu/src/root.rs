@@ -225,10 +225,6 @@ mod tests {
             D3D12_ROOT_CONSTANTS, D3D12_ROOT_PARAMETER, D3D12_ROOT_PARAMETER_0,
             D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS, D3D12_SHADER_VISIBILITY_ALL,
         };
-
-        // Use the native ABI: the parameter union contains a pointer-bearing
-        // descriptor table and is 8-byte aligned on x64. Five packed u32s
-        // place Num32BitValues at the wrong offset for the host serializer.
         let parameter = D3D12_ROOT_PARAMETER {
             ParameterType: D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
             Anonymous: D3D12_ROOT_PARAMETER_0 {

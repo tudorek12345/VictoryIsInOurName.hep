@@ -13,21 +13,39 @@ use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
-use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, ERROR_COMMITMENT_LIMIT, HANDLE, INVALID_HANDLE_VALUE,
+};
 use windows_sys::Win32::System::Memory::{
     CreateFileMappingW, MEM_ADDRESS_REQUIREMENTS, MEM_COMMIT, MEM_EXTENDED_PARAMETER,
     MEM_PRESERVE_PLACEHOLDER, MEM_RELEASE, MEM_REPLACE_PLACEHOLDER, MEM_RESERVE,
     MEM_RESERVE_PLACEHOLDER, MEMORY_BASIC_INFORMATION, MEMORY_MAPPED_VIEW_ADDRESS, MapViewOfFile3,
-    MemExtendedParameterAddressRequirements, PAGE_NOACCESS, PAGE_READWRITE, SEC_RESERVE,
-    UnmapViewOfFile2, VirtualAlloc, VirtualAlloc2, VirtualFree, VirtualQueryEx,
+    MemExtendedParameterAddressRequirements, PAGE_NOACCESS, PAGE_READWRITE, SEC_COMMIT,
+    SEC_RESERVE, UnmapViewOfFile2, VirtualAlloc, VirtualAlloc2, VirtualFree, VirtualQueryEx,
 };
-use windows_sys::Win32::System::ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+use windows_sys::Win32::System::ProcessStatus::{
+    K32GetPerformanceInfo, K32GetProcessMemoryInfo, PERFORMANCE_INFORMATION,
+    PROCESS_MEMORY_COUNTERS,
+};
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
 use windows_sys::core::BOOL;
 
 use crate::{HleModule, hle_export};
 
 const MIB: usize = 1 << 20;
+
+/// Whether we run under Wine (its ntdll exports `wine_get_version`).
+pub(crate) fn on_wine() -> bool {
+    static WINE: LazyLock<bool> = LazyLock::new(|| {
+        use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+        // SAFETY: plain lookups in ntdll, always loaded.
+        unsafe {
+            let ntdll = GetModuleHandleA(c"ntdll.dll".as_ptr().cast());
+            !ntdll.is_null() && GetProcAddress(ntdll, c"wine_get_version".as_ptr().cast()).is_some()
+        }
+    });
+    *WINE
+}
 
 /// Standard memory the title has handed to the system.
 static TRANSFERRED: AtomicUsize = AtomicUsize::new(0);
@@ -388,7 +406,11 @@ pub extern "system" fn XMemAllocatePhysicalPages(
         CreateFileMappingW(
             INVALID_HANDLE_VALUE,
             std::ptr::null(),
-            PAGE_READWRITE | SEC_RESERVE,
+            // Under Wine a committed section is a sparse file, free until
+            // touched, and committing a reserved one page by page costs a
+            // wineserver request each that scans every range committed so
+            // far: commit it whole there.
+            PAGE_READWRITE | if on_wine() { SEC_COMMIT } else { SEC_RESERVE },
             (size as u64 >> 32) as u32,
             size as u32,
             std::ptr::null(),
@@ -441,51 +463,128 @@ pub extern "system" fn XMemFreePhysicalPages(n: usize, pages: *const usize) -> B
     1
 }
 
-/// Copies `data` into physical pages, from `offset` bytes into the first,
-/// whether or not they are mapped anywhere (DirectStorage destinations).
-/// False if a page is unknown or the host fails.
-pub(crate) fn write_physical(pages: &[usize], offset: usize, data: &[u8]) -> bool {
-    use windows_sys::Win32::System::Memory::{FILE_MAP_WRITE, MapViewOfFile, UnmapViewOfFile};
-    let mut done = 0;
-    while done < data.len() {
-        let (page, within) = ((offset + done) / PAGE, (offset + done) % PAGE);
-        let Some(slice) = pages
-            .get(page)
-            .and_then(|p| physical().pages.get(p).cloned())
-        else {
-            return false;
-        };
-        let at = (slice.index * PAGE) as u64;
-        // SAFETY: one page of a section we own, mapped for the copy only.
-        let view = unsafe {
+/// A view of our own on consecutive slices of one section, committed and
+/// writable, unmapped when dropped.
+struct View {
+    at: MEMORY_MAPPED_VIEW_ADDRESS,
+    len: usize,
+}
+
+impl View {
+    /// Maps `n` slices from `slice` on.
+    fn map(slice: &Slice, n: usize) -> Option<View> {
+        use windows_sys::Win32::System::Memory::{FILE_MAP_WRITE, MapViewOfFile};
+        let (offset, len) = ((slice.index * PAGE) as u64, n * PAGE);
+        // SAFETY: slices of a section we own; the view is ours until dropped.
+        let at = unsafe {
             MapViewOfFile(
                 slice.section.0,
                 FILE_MAP_WRITE,
-                (at >> 32) as u32,
-                at as u32,
-                PAGE,
+                (offset >> 32) as u32,
+                offset as u32,
+                len,
             )
         };
-        if view.Value.is_null() {
+        if at.Value.is_null() {
+            return None;
+        }
+        let view = View { at, len };
+        commit(at.Value as usize, len).then_some(view)
+    }
+
+    fn bytes(&mut self) -> &mut [u8] {
+        // SAFETY: the view holds `len` committed read-write bytes, ours
+        // alone while `self` lives (other views of the slices only alias
+        // them, as the console's do).
+        unsafe { std::slice::from_raw_parts_mut(self.at.Value.cast(), self.len) }
+    }
+}
+
+impl Drop for View {
+    fn drop(&mut self) {
+        use windows_sys::Win32::System::Memory::UnmapViewOfFile;
+        // SAFETY: our view.
+        unsafe { UnmapViewOfFile(self.at) };
+    }
+}
+
+/// The pages behind bytes `[offset, offset + len)` of `pages` (64 KiB
+/// each), as runs of consecutive slices of one section: each run's first
+/// slice and its length in pages. One look at the page table, which the
+/// title's own mapping calls share with every DirectStorage worker. `None`
+/// if a page is unknown or `pages` ends early.
+fn runs(pages: &[usize], offset: usize, len: usize) -> Option<Vec<(Slice, usize)>> {
+    let end = offset.checked_add(len)?;
+    let pages = pages.get(offset / PAGE..end.div_ceil(PAGE))?;
+    let physical = physical();
+    let mut runs: Vec<(Slice, usize)> = Vec::new();
+    for page in pages {
+        let slice = physical.pages.get(page)?;
+        match runs.last_mut() {
+            Some((first, n))
+                if Arc::ptr_eq(&first.section, &slice.section)
+                    && slice.index == first.index + *n =>
+            {
+                *n += 1;
+            }
+            _ => runs.push((slice.clone(), 1)),
+        }
+    }
+    Some(runs)
+}
+
+/// Copies `data` into physical pages, from `offset` bytes into the first,
+/// whether or not they are mapped anywhere (DirectStorage destinations).
+/// One view per run of consecutive pages, not one per page: each view
+/// costs a map, a commit and an unmap (which flushes every core's TLB).
+/// False if a page is unknown or the host fails.
+pub(crate) fn write_physical(pages: &[usize], offset: usize, data: &[u8]) -> bool {
+    let Some(runs) = runs(pages, offset, data.len()) else {
+        return false;
+    };
+    let (mut within, mut done) = (offset % PAGE, 0);
+    for (slice, n) in &runs {
+        let Some(mut view) = View::map(slice, *n) else {
             return false;
-        }
-        if !commit(view.Value as usize, PAGE) {
-            // SAFETY: our view.
-            unsafe { UnmapViewOfFile(view) };
-            return false;
-        }
-        let n = (PAGE - within).min(data.len() - done);
-        // SAFETY: the view holds `PAGE` bytes; `within + n <= PAGE`.
-        unsafe {
-            view.Value
-                .cast::<u8>()
-                .add(within)
-                .copy_from_nonoverlapping(data[done..].as_ptr(), n);
-            UnmapViewOfFile(view);
-        }
-        done += n;
+        };
+        let k = (n * PAGE - within).min(data.len() - done);
+        view.bytes()[within..within + k].copy_from_slice(&data[done..done + k]);
+        (within, done) = (0, done + k);
     }
     true
+}
+
+/// Bytes `[offset, offset + len)` of physical pages, writable in place
+/// until dropped: DirectStorage decodes into it instead of a buffer it
+/// would then copy.
+pub(crate) struct PageWindow {
+    view: View,
+    within: usize,
+    len: usize,
+}
+
+impl PageWindow {
+    pub(crate) fn bytes(&mut self) -> &mut [u8] {
+        let (within, len) = (self.within, self.len);
+        &mut self.view.bytes()[within..within + len]
+    }
+}
+
+/// A window on bytes `[offset, offset + len)` of `pages` when they are
+/// consecutive pages of one allocation (how titles usually hand them out);
+/// `None` otherwise (pages of several allocations, out of order, or
+/// unknown, or a host failure), which `write_physical` then handles or
+/// reports.
+pub(crate) fn page_window(pages: &[usize], offset: usize, len: usize) -> Option<PageWindow> {
+    let runs = runs(pages, offset, len)?;
+    let [(slice, n)] = runs.as_slice() else {
+        return None;
+    };
+    Some(PageWindow {
+        view: View::map(slice, *n)?,
+        within: offset % PAGE,
+        len,
+    })
 }
 
 /// Maps `n` pages at `address`, in place of what is mapped there; null
@@ -635,17 +734,48 @@ fn map(physical: &mut Physical, base: usize, len: usize, slice: Slice) -> bool {
 
 /// Commits the section pages a view shows (once per page, whichever view).
 fn commit(base: usize, len: usize) -> bool {
+    if on_wine() {
+        return true; // sections are committed whole there
+    }
     // SAFETY: `[base, base + len)` is a view of a reserved section.
-    let done =
-        !unsafe { VirtualAlloc(base as *const c_void, len, MEM_COMMIT, PAGE_READWRITE) }.is_null();
-    if !done {
-        tracing::warn!(
-            len,
-            error = %std::io::Error::last_os_error(),
-            "committing physical pages failed"
+    if !unsafe { VirtualAlloc(base as *const c_void, len, MEM_COMMIT, PAGE_READWRITE) }.is_null() {
+        return true;
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(ERROR_COMMITMENT_LIMIT as i32) {
+        let mut info = PERFORMANCE_INFORMATION::default();
+        info.cb = size_of::<PERFORMANCE_INFORMATION>() as u32;
+        // SAFETY: the buffer and size describe a writable PERFORMANCE_INFORMATION.
+        let queried = unsafe { K32GetPerformanceInfo(&mut info, info.cb) } != 0;
+        victory_loader::log_crash(&commit_limit_message(len, &error, queried.then_some(&info)));
+    } else {
+        tracing::warn!(len, %error, "committing physical pages failed");
+    }
+    false
+}
+
+fn commit_limit_message(
+    len: usize,
+    error: &std::io::Error,
+    info: Option<&PERFORMANCE_INFORMATION>,
+) -> String {
+    let mut message = format!(
+        "VIctory: Windows commit limit reached while committing {len} bytes of physical pages: {error}.\n"
+    );
+    if let Some(info) = info {
+        use std::fmt::Write;
+
+        let committed = info.CommitTotal * info.PageSize / MIB;
+        let limit = info.CommitLimit * info.PageSize / MIB;
+        let _ = writeln!(
+            message,
+            "System commit: {committed} MiB of {limit} MiB in use."
         );
     }
-    done
+    message.push_str(
+        "Close other applications or increase the Windows paging file size, then retry.\n",
+    );
+    message
 }
 
 /// Returns `[base, base + len)` to placeholders; views reaching past it
@@ -878,6 +1008,26 @@ mod tests {
     }
 
     #[test]
+    fn commit_limit_report_includes_request_and_system_commit() {
+        let error = std::io::Error::from_raw_os_error(ERROR_COMMITMENT_LIMIT as i32);
+        let info = PERFORMANCE_INFORMATION {
+            CommitTotal: 512,
+            CommitLimit: 768,
+            PageSize: 4096,
+            ..Default::default()
+        };
+        let report = commit_limit_message(4 * MIB, &error, Some(&info));
+        assert!(report.contains("4194304 bytes"));
+        assert!(report.contains("2 MiB of 3 MiB in use"));
+        let fallback = commit_limit_message(4 * MIB, &error, None);
+        for report in [&report, &fallback] {
+            assert!(report.contains("os error 1455"));
+            assert!(report.contains("Windows paging file size"));
+        }
+        assert!(!fallback.contains("System commit:"));
+    }
+
+    #[test]
     fn physical_pages_map_alias_and_unmap() {
         let mut pages = [0usize; 3];
         let mut n = 3;
@@ -952,5 +1102,91 @@ mod tests {
         assert!(!map_alias(b as u64, at(a, 1) as u64, PAGE as u64));
         assert_eq!(XMemFreePhysicalPages(3, pages.as_ptr()), 1);
         assert_eq!(XMemIsToolsMemAvailable(), 0);
+    }
+    /// `n` pages of one new allocation.
+    fn allocate(n: usize) -> Vec<usize> {
+        let (mut pages, mut given) = (vec![0; n], n);
+        assert_eq!(
+            XMemAllocatePhysicalPages(0, &mut given, pages.as_mut_ptr()),
+            1
+        );
+        assert_eq!(given, n);
+        pages
+    }
+
+    /// The bytes of one page, through a view of our own.
+    fn page_bytes(page: usize) -> Vec<u8> {
+        let slice = physical().pages.get(&page).cloned().expect("known page");
+        View::map(&slice, 1).expect("mapped").bytes().to_vec()
+    }
+
+    #[test]
+    fn runs_group_consecutive_pages_of_one_allocation() {
+        let (a, b) = (allocate(3), allocate(1));
+        let lengths = |pages: &[usize], offset, len| {
+            runs(pages, offset, len).map(|r| r.iter().map(|&(_, n)| n).collect::<Vec<_>>())
+        };
+        assert_eq!(lengths(&a, 0, 3 * PAGE), Some(vec![3]));
+        // Only the pages the bytes reach.
+        assert_eq!(lengths(&a, PAGE + 5, 10), Some(vec![1]));
+        assert_eq!(lengths(&a, PAGE - 1, 2), Some(vec![2]));
+        assert_eq!(lengths(&a, 0, 0), Some(vec![]));
+        // Out of order, or across allocations: one run each.
+        assert_eq!(
+            lengths(&[a[0], a[2], a[1]], 0, 3 * PAGE),
+            Some(vec![1, 1, 1])
+        );
+        assert_eq!(lengths(&[a[1], a[2], b[0]], 0, 3 * PAGE), Some(vec![2, 1]));
+        // A slice that follows on in another section starts a run.
+        assert_eq!(lengths(&[b[0], a[1]], 0, 2 * PAGE), Some(vec![1, 1]));
+        // Too few pages for the bytes, or an unknown one.
+        assert_eq!(lengths(&a, 0, 3 * PAGE + 1), None);
+        assert_eq!(lengths(&[a[0], 0x10], 0, 2 * PAGE), None);
+        assert_eq!(lengths(&a, usize::MAX, 2), None);
+        assert_eq!(XMemFreePhysicalPages(3, a.as_ptr()), 1);
+        assert_eq!(XMemFreePhysicalPages(1, b.as_ptr()), 1);
+    }
+
+    #[test]
+    fn writes_cross_runs_and_allocations() {
+        let (a, b) = (allocate(2), allocate(1));
+        let pages = [a[0], a[1], b[0]];
+        let data: Vec<u8> = (0..2 * PAGE + 64).map(|i| (i * 7 % 251) as u8).collect();
+        let offset = PAGE - 32;
+        // Past the third page: the second run is too short.
+        assert!(!write_physical(&pages, offset, &data));
+        assert!(write_physical(&pages, offset, &data[..2 * PAGE]));
+        let seen: Vec<u8> = pages.iter().flat_map(|&p| page_bytes(p)).collect();
+        assert!(seen[..offset].iter().all(|&b| b == 0), "before the offset");
+        assert_eq!(seen[offset..offset + 2 * PAGE], data[..2 * PAGE]);
+        assert!(seen[offset + 2 * PAGE..].iter().all(|&b| b == 0), "after");
+        assert!(
+            !write_physical(&[a[0], 0x10], 0, &data[..PAGE + 1]),
+            "unknown page"
+        );
+        assert_eq!(XMemFreePhysicalPages(2, a.as_ptr()), 1);
+        assert_eq!(XMemFreePhysicalPages(1, b.as_ptr()), 1);
+    }
+
+    #[test]
+    fn page_windows_cover_one_run_in_place() {
+        let (a, b) = (allocate(3), allocate(1));
+        let mut window = page_window(&a, PAGE + 3, PAGE).expect("one run");
+        assert_eq!(window.bytes().len(), PAGE);
+        window.bytes().fill(0x5a);
+        drop(window);
+        let (second, third) = (page_bytes(a[1]), page_bytes(a[2]));
+        assert!(second[..3].iter().all(|&b| b == 0));
+        assert!(second[3..].iter().all(|&b| b == 0x5a));
+        assert!(third[..3].iter().all(|&b| b == 0x5a));
+        assert!(third[3..].iter().all(|&b| b == 0));
+        // Several runs, or an unknown page: no window.
+        assert!(page_window(&[a[0], b[0]], 0, PAGE + 1).is_none());
+        assert!(page_window(&[a[1], a[0]], 0, PAGE + 1).is_none());
+        assert!(page_window(&[0x10], 0, 1).is_none());
+        // One page of several is still one run.
+        assert!(page_window(&[a[0], b[0]], 0, PAGE).is_some());
+        assert_eq!(XMemFreePhysicalPages(3, a.as_ptr()), 1);
+        assert_eq!(XMemFreePhysicalPages(1, b.as_ptr()), 1);
     }
 }

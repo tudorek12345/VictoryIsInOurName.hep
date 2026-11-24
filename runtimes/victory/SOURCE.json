@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "https://github.com/Marvisak/VIctory",
-  "commit": "35b054ec038c11bc8a0de66b1eee764b1ad4f101",
+  "commit": "d2a4bae1f49533ef5cb512fd1b1ba1513f2e1989",
   "obtainedAt": "2026-11-24T00:21:49.794937Z",
   "originalAuthor": "Marvisak and VIctory contributors",
   "license": "GPL-3.0-or-later",
@@ -44,7 +44,7 @@
       ]
     },
     {
-      "purpose": "Keep current-executable PE probes on Windows and add hand-written synthetic PE parser/import coverage for other hosts.",
+      "purpose": "Keep current-executable PE probes on Windows and add hand-written synthetic PE parser/import coverage for other hosts. Run the upstream RVA-overflow regression on the portable fixture and rename the upstream export fixture helper to avoid a name collision; production parser code matches the pinned upstream.",
       "paths": [
         "crates/victory-pe/src/image.rs"
       ]
@@ -54,12 +54,6 @@
       "paths": [
         "crates/victory-formats/src/xma/tables.rs"
       ]
-    },
-    {
-      "purpose": "Correct the Windows-only root-signature test fixture to use the native D3D12_ROOT_PARAMETER union layout instead of five incorrectly packed u32 fields. Preserve the host serialization and root creation assertions; production serialization is unchanged.",
-      "paths": [
-        "crates/victory-gpu/src/root.rs"
-      ]
     }
   ],
   "modifiedFiles": [
@@ -68,7 +62,6 @@
     "crates/victory-formats/Cargo.toml",
     "crates/victory-formats/src/bcpack.rs",
     "crates/victory-formats/src/xma/tables.rs",
-    "crates/victory-gpu/src/root.rs",
     "crates/victory-hle/src/modules/dstorage.rs",
     "crates/victory-pe/src/image.rs",
     "docs/asset-policy.md",
@@ -76,5 +69,17 @@
     "xtask/src/main.rs",
     "xtask/src/policy.rs"
   ],
-  "parentSourceMarker": "../../.victory-root"
+  "parentSourceMarker": "../../.victory-root",
+  "previousCommit": "35b054ec038c11bc8a0de66b1eee764b1ad4f101",
+  "updatedAt": "2026-11-24T01:07:14.877867Z",
+  "upstreamRefresh": {
+    "fromCommit": "35b054ec038c11bc8a0de66b1eee764b1ad4f101",
+    "toCommit": "d2a4bae1f49533ef5cb512fd1b1ba1513f2e1989",
+    "upstreamCommits": 58,
+    "upstreamRuntimeFiles": 22,
+    "readmeChangesOmitted": true,
+    "convergedLocalFixes": [
+      "The native D3D12 root-parameter test fixture correction is now upstream; use its exact implementation."
+    ]
+  }
 }

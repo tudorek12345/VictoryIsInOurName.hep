@@ -86,6 +86,8 @@ mod sampler;
 mod shader;
 #[cfg(windows)]
 pub mod validator;
+#[cfg(all(test, windows))]
+mod valu_tests;
 mod wave;
 
 use crate::dxbc::{Container, FourCC};
@@ -94,6 +96,44 @@ use crate::{ShaderError, io, ir, resource, structure};
 
 pub use sampler::StaticSampler;
 pub use shader::{ROOT_CBV_SPACE, SAMPLER_SPACE, USER_DATA_SPACE};
+
+/// The loop limit without an override: 2^20.
+pub const DEFAULT_LOOP_LIMIT: u32 = lower::LOOP_LIMIT;
+
+/// The iteration count after which a translated loop is left, per lane and
+/// per entry into the loop: [`DEFAULT_LOOP_LIMIT`].
+///
+/// With the `diagnostics` feature, `VICTORY_SHADER_LOOP_LIMIT` (decimal or
+/// `0x` hex, at least 1) sets it instead. A loop that hits the limit in
+/// every lane of a full-screen pass still runs for seconds (2^20 times a
+/// 4K screen is about 10^13 iterations); a much lower limit shows whether
+/// such loops are what makes a frame slow. The value is part of the
+/// translation, so the shader cache must key on it (`victory-gpu`'s does).
+pub fn loop_limit() -> u32 {
+    static LIMIT: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *LIMIT.get_or_init(|| {
+        if cfg!(feature = "diagnostics") {
+            parse_loop_limit(std::env::var("VICTORY_SHADER_LOOP_LIMIT").ok().as_deref())
+        } else {
+            lower::LOOP_LIMIT
+        }
+    })
+}
+
+/// `VICTORY_SHADER_LOOP_LIMIT`'s value; the default when it is unset,
+/// unreadable or 0. Pure, for testing.
+fn parse_loop_limit(value: Option<&str>) -> u32 {
+    let parsed = value
+        .map(str::trim)
+        .and_then(|v| match v.strip_prefix("0x") {
+            Some(hex) => u32::from_str_radix(hex, 16).ok(),
+            None => v.parse().ok(),
+        });
+    match parsed {
+        Some(n) if n > 0 => n,
+        _ => lower::LOOP_LIMIT,
+    }
+}
 
 /// A translated shader and what the host binds for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -353,8 +393,58 @@ fn signature(part: &[u8]) -> Result<Vec<container::SigElement>, ShaderError> {
 #[cfg(test)]
 mod tests {
     use super::bitcode::Attr;
+    use super::lower::LOOP_LIMIT;
+    use super::parse_loop_limit;
+
+    #[test]
+    fn the_loop_limit_switch_parses_or_falls_back() {
+        assert_eq!(parse_loop_limit(None), LOOP_LIMIT);
+        assert_eq!(parse_loop_limit(Some("4096")), 4096);
+        assert_eq!(parse_loop_limit(Some(" 0x1000 ")), 4096);
+        assert_eq!(parse_loop_limit(Some("1")), 1);
+        for bad in ["", "0", "-5", "lots", "0x", "4294967296"] {
+            assert_eq!(parse_loop_limit(Some(bad)), LOOP_LIMIT, "{bad:?}");
+        }
+    }
     use super::container::SigElement;
     use super::shader::Shader;
+    use super::*;
+    use crate::native::{ComputeIo, StageIo};
+
+    /// A wave64 compute program that writes only EXEC's high dword
+    /// (`s_mov_b32 exec_hi, 0`) before a vector instruction. The new mask is
+    /// opaque and keyed by the unchanged low dword, so building its lane bit
+    /// needed the mask's own value: lowering recursed until the stack
+    /// overflowed, which takes the whole process down (found by
+    /// random-input testing). Now the instruction fails like any other that
+    /// cannot be expressed: its result is missing, and only a side effect
+    /// that uses it would stop the translation.
+    #[test]
+    fn an_exec_high_write_does_not_overflow_the_stack() {
+        // s_mov_b32 exec_hi, 0; v_mov_b32 v1, v0; s_endpgm
+        let words = [0xBEFF_0380u32, 0x7E02_0300, 0xBF81_0000];
+        let native = NativeProgram {
+            stage: HwStage::Cs,
+            wave64: true,
+            vgprs: 2,
+            layout: vec![],
+            used: vec![],
+            io: StageIo::Cs(ComputeIo {
+                rsrc2: 0,
+                threads: [64, 1, 1],
+            }),
+            code: words.iter().flat_map(|w| w.to_le_bytes()).collect(),
+        };
+        let p = ir::build(&native.patched_code(), native.wave64, native.vgprs).unwrap();
+        let res = resource::track(&p, &native.layout, native.stage).unwrap();
+        let io = io::raise(&p, &native).unwrap();
+        let st = structure::structure(&p).unwrap();
+        let container = crate::dxbc::build(&[]);
+        let c = Container::parse(&container).unwrap();
+        if let Err(e) = emit(&c, &native, &p, &st, &io, &res) {
+            assert!(e.to_string().contains("its own value"), "{e}");
+        }
+    }
 
     /// A pixel shader writing a constant colour.
     fn constant_color() -> Vec<u8> {
@@ -448,5 +538,60 @@ mod tests {
         let ours = c[4..20].to_vec();
         v.validate(&mut c).unwrap();
         assert_eq!(c[4..20], ours[..], "our hash differs from the validator's");
+    }
+
+    /// A pixel shader reading channel z of an input whose element starts at
+    /// w. Looking the channel up subtracted the element's first channel
+    /// before checking the channel lies in it, so in a build with overflow
+    /// checks (tests, debug) any read below an element that starts at z or
+    /// w panicked, whichever row it was in (found by random-input testing).
+    #[test]
+    fn reading_a_channel_below_an_input_element_does_not_underflow() {
+        // v_interp_mov_f32 v3, p0, attr0.z; s_endpgm
+        let words = [0xC80E_0202u32, 0xBF81_0000];
+        let native = super::NativeProgram {
+            stage: super::HwStage::Ps,
+            wave64: false,
+            vgprs: 4,
+            layout: vec![],
+            used: vec![],
+            io: crate::native::StageIo::Ps {
+                inputs: vec![crate::native::PsInput {
+                    usage: crate::native::Usage::Generic,
+                    row: 0,
+                    mask: 0b1000,
+                    attr: 0,
+                    flat: false,
+                    fp16: false,
+                    pack2: false,
+                    row2: 0,
+                }],
+                input_addr: 0,
+                db_shader_control: 0,
+                patches: vec![],
+            },
+            code: words.iter().flat_map(|w| w.to_le_bytes()).collect(),
+        };
+        let w_only = SigElement {
+            name: "TEXCOORD".into(),
+            index: 0,
+            kind: 0,
+            comp: 9,
+            interp: 0,
+            row: Some(0),
+            col: 3,
+            cols: 1,
+            usage: 0,
+            half: false,
+        };
+        let isg1 = super::container::signature(&[w_only], true);
+        let bytes = crate::dxbc::build(&[(super::FourCC::ISG1, &isg1)]);
+        let c = super::Container::parse(&bytes).unwrap();
+        let p = crate::ir::build(&native.patched_code(), native.wave64, native.vgprs).unwrap();
+        let res = crate::resource::track(&p, &native.layout, native.stage).unwrap();
+        let io = crate::io::raise(&p, &native).unwrap();
+        let st = crate::structure::structure(&p).unwrap();
+        // Translated or refused with a reason; it must not panic.
+        let _ = super::emit(&c, &native, &p, &st, &io, &res);
     }
 }
