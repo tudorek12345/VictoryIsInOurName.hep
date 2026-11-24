@@ -45,7 +45,7 @@ npm run build
 The responsive site uses a retro computer interface: self-hosted Bowlby One SC display headings with a GTA-inspired outline, Pixelify Sans details and IBM Plex Mono body text, framed windows, syntax colors, optional CRT scanlines, and phosphor/amber display modes. Appearance preferences are saved in the browser; reduced-motion settings are respected.
 
 - **Showcase alert:** a prominent Discord event invitation, supplied screenshot, warning symbols and silent, pausable VFX.
-- **First Boot panel:** the original setup-screen image with an animated RGB title and full-size/source links.
+- **First Boot panel:** a self-hosted first-boot loading video inside the existing RGB-titled retro window. Native controls support playback, seeking, volume and fullscreen; the original setup-screen image remains the poster and a separate link. Visitors can download the MP4 or open the [original Streamable source](https://streamable.com/0dtjxh).
 - **Runtime report:** a stage-by-stage maintainer report, single-machine scope, current blocker and collaboration credit, backed by shared status data.
 - **Quick resource search:** Ctrl/Cmd+K opens a keyboard-accessible command menu; the on-page library can also be searched.
 - **Experiment workbench:** three investigation presets, browser-local draft saving, editable evidence fields, Markdown preview, copy/download and reset with undo. Commands are text; the website does not execute them.
@@ -93,6 +93,10 @@ The live app uses Sites hosting with a Cloudflare Worker backend. The tracked `.
 
 The repository's website CI checks this subtree and retains its build artifacts. A static GitHub Pages deployment alone would not run the API routes.
 
+### First-boot recording
+
+The player serves [`public/media/first-boot-loading.mp4`](public/media/first-boot-loading.mp4) from the same website, with metadata-only preload and playback started by the visitor. The video is included in the GitHub source and deployment assets, so playback does not depend on a Streamable embed or an expiring external media URL. Preserve the media file when rebuilding or moving the site. Source and media details are recorded in [`public/media/README.md`](public/media/README.md).
+
 ## Editing
 
 - Page and visual styles: `app/page.tsx`, `app/globals.css`, `app/gta-display.css`.
@@ -104,7 +108,7 @@ The repository's website CI checks this subtree and retains its build artifacts.
 - Local experiment tools: `app/components/ExperimentWorkbench.tsx`, `app/lib/workbench.ts`.
 - Command menu: `app/components/CommandPalette.tsx`.
 - Event alert and progress table: `app/components/ShowcaseAlert.tsx`, `app/components/ProgressUpdate.tsx`, and their CSS files.
-- First-boot image panel: `app/components/FirstBootPanel.tsx`.
+- First-boot video panel: `app/components/FirstBootPanel.tsx`, `app/components/first-boot-panel.css`, `public/media/`.
 - Server and workbench tests: `tests/*.test.mjs`.
 - Font licenses: `public/fonts/*-OFL.txt`. The unmodified Bowlby One SC font and its SIL OFL 1.1 license come from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/bowlbyonesc).
 
