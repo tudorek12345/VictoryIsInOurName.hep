@@ -1,7 +1,8 @@
 //! Presented frames written to PNG files, to see what reaches the screen:
 //! with `VICTORY_CAPTURE=<folder>`, every frame whose number is a power of
 //! two (the frames the log reports) is saved as `frame-<n>.png`, at half
-//! size. Only in builds with diagnostics.
+//! size. A bounded set of frames following dark transitions are saved too.
+//! Only in builds with diagnostics.
 
 use std::path::PathBuf;
 
@@ -31,7 +32,14 @@ pub(crate) fn listed(n: u64) -> bool {
 
 /// Whether frame `n` is saved.
 pub(crate) fn wanted(n: u64) -> bool {
-    folder().is_some() && (n.is_power_of_two() || listed(n))
+    folder().is_some()
+        && (n.is_power_of_two()
+            || listed(n)
+            || PROBES
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .captures
+                .contains(&n))
 }
 
 /// Saves 8-bit RGBA or BGRA rows (`pitch` bytes apart) as frame `n`.
@@ -398,11 +406,12 @@ const SLOT: u64 = 512;
 
 /// Records copies of a grid of pixels of `texture` (8-bit color, in the
 /// copy-source state) into a readback buffer, to tell black frames.
-pub(crate) fn probe(
+pub(crate) fn probe<'a>(
     device: &ID3D12Device,
     list: &ID3D12GraphicsCommandList,
     texture: &ID3D12Resource,
-) -> Option<ID3D12Resource> {
+    buffer: &'a mut Option<ID3D12Resource>,
+) -> Option<&'a ID3D12Resource> {
     // SAFETY: a live resource.
     let d = unsafe { texture.GetDesc() };
     if !matches!(d.Format.0, 27..=29 | 87 | 90 | 91) {
@@ -425,27 +434,27 @@ pub(crate) fn probe(
         Type: D3D12_HEAP_TYPE_READBACK,
         ..Default::default()
     };
-    let mut buffer: Option<ID3D12Resource> = None;
     // SAFETY: plain creation; an open list; locations naming live resources.
     unsafe {
-        device
-            .CreateCommittedResource(
+        if buffer.is_none() {
+            device.CreateCommittedResource(
                 &heap,
                 D3D12_HEAP_FLAG_NONE,
                 &desc,
                 D3D12_RESOURCE_STATE_COPY_DEST,
                 None,
-                &mut buffer,
+                buffer,
             )
             .ok()?;
-        let buffer = buffer?;
+        }
+        let buffer = buffer.as_ref()?;
         for i in 0..GRID * GRID {
             let (x, y) = (
                 (2 * (i % GRID) + 1) * d.Width as u32 / (2 * GRID),
                 (2 * (i / GRID) + 1) * d.Height / (2 * GRID),
             );
             let to = D3D12_TEXTURE_COPY_LOCATION {
-                pResource: std::mem::transmute_copy(&buffer),
+                pResource: std::mem::transmute_copy(buffer),
                 Type: D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
                 Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
                     PlacedFootprint: D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
@@ -482,44 +491,112 @@ pub(crate) fn probe(
 }
 
 /// Whether every pixel [`probe`] read is (near) black.
-pub(crate) fn black(buffer: &ID3D12Resource) -> bool {
+pub(crate) fn sampled_black(buffer: &ID3D12Resource, frame: u64) -> Option<bool> {
     let mut data = std::ptr::null_mut();
     // SAFETY: the copies finished (every submission is waited for).
-    unsafe {
-        if buffer.Map(0, None, Some(&mut data)).is_err() {
-            return false;
-        }
+    let (lowest, highest) = unsafe {
+        buffer.Map(0, None, Some(&mut data)).ok()?;
         let bytes =
             std::slice::from_raw_parts(data.cast::<u8>(), (SLOT * u64::from(GRID * GRID)) as usize);
-        let level = bytes
+        let bounds = bytes
             .chunks(SLOT as usize)
-            .flat_map(|pixel| pixel[..3].iter().copied())
-            .max()
-            .unwrap_or(0);
+            .map(|pixel| pixel[0].max(pixel[1]).max(pixel[2]))
+            .fold((u8::MAX, 0), |(lo, hi), p| (lo.min(p), hi.max(p)));
         buffer.Unmap(0, None);
-        let mut levels = LEVELS.lock().unwrap_or_else(|e| e.into_inner());
-        if levels.len() == 12 {
-            levels.pop_front();
+        bounds
+    };
+    let mut probes = PROBES.lock().unwrap_or_else(|e| e.into_inner());
+    let tone = probes.record(frame, lowest, highest, folder().is_some());
+    Some(tone == Tone::Black)
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Tone {
+    Black,
+    FlatDark,
+    Other,
+}
+
+struct Probes {
+    /// Recent brightest samples, oldest first.
+    levels: std::collections::VecDeque<u8>,
+    last_tone: Option<Tone>,
+    /// A fixed capture budget for transitions over the whole run.
+    captures: Vec<u64>,
+}
+
+impl Probes {
+    fn record(&mut self, frame: u64, lowest: u8, highest: u8, capturing: bool) -> Tone {
+        let tone = if highest < 8 {
+            Tone::Black
+        } else if highest < 64 && highest - lowest <= 2 {
+            Tone::FlatDark
+        } else {
+            Tone::Other
+        };
+        if self.levels.len() == 12 {
+            self.levels.pop_front();
         }
-        levels.push_back(level);
-        level < 8
+        self.levels.push_back(highest);
+        // The readback that detects the transition has already finished.
+        // Save two following frames, including the one six presents later.
+        // The interior samples can miss UI drawn at the edge of the picture.
+        if capturing
+            && tone != Tone::Other
+            && self.last_tone.is_some_and(|last| last != tone)
+            && self.captures.len() <= 14
+        {
+            for offset in [1, 6] {
+                let next = frame + offset;
+                if !self.captures.contains(&next) {
+                    self.captures.push(next);
+                }
+            }
+            tracing::info!(frame, ?tone, lowest, highest, "capturing frames after a dark transition");
+        }
+        self.last_tone = Some(tone);
+        tone
     }
 }
 
-/// The brightest probed channel of the last frames, oldest first: a fade
-/// darkens over several, a glitch drops at once.
-static LEVELS: std::sync::Mutex<std::collections::VecDeque<u8>> =
-    std::sync::Mutex::new(std::collections::VecDeque::new());
+static PROBES: std::sync::Mutex<Probes> = std::sync::Mutex::new(Probes {
+    levels: std::collections::VecDeque::new(),
+    last_tone: None,
+    captures: Vec::new(),
+});
 
 pub(crate) fn recent_levels() -> Vec<u8> {
-    let levels = LEVELS.lock().unwrap_or_else(|e| e.into_inner());
-    levels.iter().copied().collect()
+    let probes = PROBES.lock().unwrap_or_else(|e| e.into_inner());
+    probes.levels.iter().copied().collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn crc_matches_the_png_check_value() {
         assert_eq!(super::crc32(b"IEND"), 0xae42_6082);
+    }
+
+    #[test]
+    fn dark_transitions_choose_followup_captures_within_budget() {
+        let mut p = Probes {
+            levels: std::collections::VecDeque::new(),
+            last_tone: None,
+            captures: Vec::new(),
+        };
+        assert_eq!(p.record(1, 0, 0, true), Tone::Black);
+        assert!(p.captures.is_empty());
+        assert_eq!(p.record(2, 30, 140, true), Tone::Other);
+        assert_eq!(p.record(3, 44, 44, true), Tone::FlatDark);
+        assert_eq!(p.record(4, 44, 44, true), Tone::FlatDark);
+        assert_eq!(p.record(5, 0, 0, true), Tone::Black);
+        assert_eq!(p.captures, [4, 9, 6, 11]);
+        for n in 6..30 {
+            p.record(n, 0, if n % 2 == 0 { 140 } else { 0 }, true);
+        }
+        assert_eq!(p.captures.len(), 16);
+        assert_eq!(p.levels.len(), 12);
     }
 }

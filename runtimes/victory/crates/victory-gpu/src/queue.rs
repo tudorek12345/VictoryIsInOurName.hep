@@ -411,19 +411,18 @@ extern "system" fn present(
 /// not, with what was presented and how many draws ran since.
 #[cfg(all(windows, feature = "diagnostics"))]
 fn blinks(frame: u64, resource: This, state: u32, shown: Option<bool>) {
-    static LAST: std::sync::Mutex<(bool, u64, u64)> = std::sync::Mutex::new((false, 0, 0));
+    static LAST: std::sync::Mutex<(Option<bool>, u64, u64)> =
+        std::sync::Mutex::new((None, 0, 0));
     let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
     let drawn = crate::draw::drawn();
-    let black = shown.unwrap_or(false);
     let draws = crate::draw::take_frame();
-    if black && !last.0 {
+    if shown == Some(true) && last.0 == Some(false) {
         last.2 += 1;
         tracing::warn!(
             frame,
             resource = ?resource,
             state = format_args!("{state:#x}"),
             draws = drawn - last.1,
-            copied = shown.is_some(),
             black_frames = last.2,
             levels = ?crate::capture::recent_levels(),
             "a black frame after a frame that was not"
@@ -438,7 +437,7 @@ fn blinks(frame: u64, resource: This, state: u32, shown: Option<bool>) {
     if AFTER.load(Ordering::Relaxed) == frame {
         tracing::warn!(frame, levels = ?crate::capture::recent_levels(), "levels after the black frame");
     }
-    *last = (black, drawn, last.2);
+    *last = (shown.or(last.0), drawn, last.2);
 }
 
 /// A run of destination pages: how they are mapped (0 pool pages from

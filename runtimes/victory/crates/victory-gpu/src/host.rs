@@ -1485,6 +1485,8 @@ struct Presenter {
     hwnd: HWND,
     meter: Meter,
     last_present_error: Option<i32>,
+    #[cfg(feature = "diagnostics")]
+    probe_buffer: Option<ID3D12Resource>,
 }
 
 /// The frame rate, shown in the window's caption every second and logged
@@ -1665,7 +1667,7 @@ impl Host {
                 .then(|| crate::capture::read_back(&self.device, list, texture))
                 .flatten();
             #[cfg(feature = "diagnostics")]
-            let probe = crate::capture::probe(&self.device, list, texture);
+            let probe = crate::capture::probe(&self.device, list, texture, &mut p.probe_buffer);
             #[cfg(not(feature = "diagnostics"))]
             let _ = frame;
             if state != copy_source {
@@ -1698,7 +1700,7 @@ impl Host {
                 self.video_memory.as_ref(),
             );
             #[cfg(feature = "diagnostics")]
-            return Some(probe.is_some_and(|b| crate::capture::black(&b)));
+            return probe.and_then(|b| crate::capture::sampled_black(b, frame));
             #[cfg(not(feature = "diagnostics"))]
             Some(false)
         }
@@ -1745,6 +1747,8 @@ impl Host {
                 hwnd,
                 meter: Meter::new(),
                 last_present_error: None,
+                #[cfg(feature = "diagnostics")]
+                probe_buffer: None,
             })
         }
     }

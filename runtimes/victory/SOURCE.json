@@ -123,6 +123,14 @@
       ]
     },
     {
+      "purpose": "Capture a bounded number of frames after dark presentation transitions so the loading screen and first world frames can be inspected without predicting frame numbers.",
+      "paths": [
+        "crates/victory-gpu/src/capture.rs",
+        "crates/victory-gpu/src/host.rs",
+        "crates/victory-gpu/src/queue.rs"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",
@@ -140,6 +148,7 @@
     "crates/victory-formats/Cargo.toml",
     "crates/victory-formats/src/bcpack.rs",
     "crates/victory-formats/src/xma/tables.rs",
+    "crates/victory-gpu/src/capture.rs",
     "crates/victory-gpu/src/descriptor/host.rs",
     "crates/victory-gpu/src/draw.rs",
     "crates/victory-gpu/src/host.rs",
