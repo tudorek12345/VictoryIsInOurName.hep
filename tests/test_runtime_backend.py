@@ -24,7 +24,9 @@ class RuntimeBackendTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        # Windows TEMP can use an 8.3 alias; expected paths use the same
+        # canonical long form that the launcher deliberately returns.
+        self.base = Path(self.temp.name).resolve()
         self.root = self.base / "checkout"
         self.root.mkdir()
         self.game = self.base / "Game's package & space λ"
