@@ -213,26 +213,14 @@ impl HostHeap {
         let mut guard = self.next.lock().unwrap_or_else(|e| e.into_inner());
         let (next, taken) = &mut *guard;
         let n = n as usize;
-        // Search from `next` on, then from the start.
-        let starts = (*next as usize..DYNAMIC as usize).chain(0..*next as usize);
-        let mut run = 0;
-        let mut found = None;
-        let mut last = usize::MAX;
-        for at in starts {
-            // A run cannot wrap past the end.
-            if at != last.wrapping_add(1) {
-                run = 0;
-            }
-            last = at;
-            run = if taken[at] { 0 } else { run + 1 };
-            if run == n {
-                found = Some(at + 1 - n);
-                break;
-            }
-        }
-        let Some(first) = found else {
+        let Some(first) = free_table(taken, *next as usize, n) else {
             static ONCE: std::sync::Once = std::sync::Once::new();
-            ONCE.call_once(|| tracing::warn!(n, "no free dynamic descriptor slots: a table is not made"));
+            ONCE.call_once(|| {
+                let free = taken.iter().filter(|&&held| !held).count();
+                let largest = taken.split(|&held| held).map(<[bool]>::len).max().unwrap_or(0);
+                tracing::warn!(requested = n, free, largest, capacity = taken.len(),
+                    "no contiguous dynamic descriptors for table");
+            });
             return None;
         };
         taken[first..first + n].fill(true);
@@ -408,6 +396,23 @@ impl HostHeap {
         }
         Some(text)
     }
+}
+
+/// Search candidate starts in cursor order. A span can cross the cursor,
+/// while its end must remain inside the heap.
+fn free_table(taken: &[bool], cursor: usize, n: usize) -> Option<usize> {
+    let end = taken.len().checked_sub(n)? + 1;
+    let split = cursor.min(end);
+    for range in [split..end, 0..split] {
+        let mut first = range.start;
+        while first < range.end {
+            match taken[first..first + n].iter().position(|&held| held) {
+                Some(offset) => first += offset + 1,
+                None => return Some(first),
+            }
+        }
+    }
+    None
 }
 
 /// Logs `what` the first time it happens.
@@ -976,6 +981,13 @@ fn null_view(at: D3D12_CPU_DESCRIPTOR_HANDLE) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn free_table_can_straddle_the_allocator_cursor() {
+        let slots = [true, false, false, false, false, false, true];
+        assert_eq!(free_table(&slots, 3, 5), Some(1));
+        assert_eq!(free_table(&slots, 3, 6), None);
+    }
 
     #[test]
     fn placed_integer_texture_reads_and_writes_use_the_same_resource() {

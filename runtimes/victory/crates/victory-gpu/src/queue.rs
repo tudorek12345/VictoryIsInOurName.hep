@@ -138,7 +138,16 @@ pub(crate) struct Plane {
     token: u64,
     count: u32,
     resources: *const This,
+    _source_rects: usize,
+    _placement: usize,
+    color_space: u32,
+    _scale_filter: u32,
+    _extended_count: u32,
+    _extended: usize,
+    _flags: u32,
 }
+
+const _: () = assert!(std::mem::size_of::<Plane>() == 0x48);
 /// Submission tagged with the frame it belongs to `(count, lists, frame
 /// token, flags)`; frames are paced elsewhere, so it runs as a plain one.
 extern "system" fn execute_x(this: This, count: u32, lists: *const This, _token: u64, _flags: u32) {
@@ -309,10 +318,7 @@ pub(crate) mod menu_picture {
     }
 }
 
-/// Shows the first plane's first resource in our window.
-///
-/// shortcut: one plane, no scaling or placement, the source expected in
-/// the common state.
+/// Shows the scene and, on the Series S SDR path, its UI plane.
 extern "system" fn present(
     _: This,
     planes: u32,
@@ -369,9 +375,51 @@ extern "system" fn present(
         && !plane.resources.is_null()
         // SAFETY: the plane lists `count` resources.
         && let resource = unsafe { *plane.resources }
-        && let Some(texture) = crate::resource::host_resource(resource)
+        && let Some(primary) = crate::resource::host_copy(resource)
         && let Some(host) = crate::host::host()
     {
+        use crate::host::legal_state;
+
+        let overlay = if planes == 2 && crate::console::current() == crate::console::Console::SeriesS {
+            // SAFETY: the title supplied exactly two plane parameters.
+            let overlay = unsafe { &*plane_parameters.add(1) };
+            if overlay.count == 1 && !overlay.resources.is_null() && overlay.color_space == plane.color_space {
+                // SAFETY: the plane lists one resource.
+                let resource = unsafe { *overlay.resources };
+                crate::resource::host_copy(resource).filter(|other| {
+                    // SAFETY: both Arcs own live resources.
+                    other.texture != primary.texture
+                        && crate::present::sampleable(&unsafe { other.texture.GetDesc() })
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let texture = &primary.texture;
+        let state = legal_state(texture, primary.state.load(Ordering::Relaxed));
+        if let Some(overlay) = overlay {
+            #[cfg(feature = "diagnostics")]
+            {
+                static REPORTED: std::sync::Once = std::sync::Once::new();
+                REPORTED.call_once(|| {
+                    let sizes = [&primary.texture, &overlay.texture].map(|texture| {
+                        // SAFETY: both Arcs own live resources.
+                        let desc = unsafe { texture.GetDesc() };
+                        (desc.Width, desc.Height, desc.Format.0)
+                    });
+                    tracing::info!(frame, ?sizes, "compositing the Series S scene and UI planes");
+                });
+            }
+            let other = legal_state(&overlay.texture, overlay.state.load(Ordering::Relaxed));
+            let shown = host.present(&[(texture, state), (&overlay.texture, other)], frame);
+            #[cfg(feature = "diagnostics")]
+            blinks(frame, resource, state, shown);
+            #[cfg(not(feature = "diagnostics"))]
+            let _ = shown;
+            return S_OK;
+        }
         #[cfg(feature = "diagnostics")]
         if let Some((menu_resource, menu)) = menu_picture {
             use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -388,16 +436,12 @@ extern "system" fn present(
                 });
                 let state =
                     crate::host::legal_state(&menu.texture, menu.state.load(Ordering::Relaxed));
-                let shown = host.present(&menu.texture, state, frame);
+                let shown = host.present(&[(&menu.texture, state)], frame);
                 blinks(frame, menu_resource as This, state, shown);
                 return S_OK;
             }
         }
-        const COPY_SOURCE: u32 = 0x800;
-        let state = crate::resource::host_transition(resource, COPY_SOURCE)
-            .map_or(COPY_SOURCE, |(_, before)| before);
-        let shown = host.present(texture, state, frame);
-        crate::resource::host_transition(resource, state);
+        let shown = host.present(&[(texture, state)], frame);
         #[cfg(feature = "diagnostics")]
         blinks(frame, resource, state, shown);
         #[cfg(not(feature = "diagnostics"))]

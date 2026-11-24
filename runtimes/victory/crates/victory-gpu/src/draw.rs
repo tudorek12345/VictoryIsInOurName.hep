@@ -472,7 +472,9 @@ impl State {
         }
         for stage in &p.stages {
             let t = stage.translated();
-            let made = self.tables(list, &t.used, compute);
+            let Some(made) = self.tables(list, &t.used, compute) else {
+                return false;
+            };
             if let Some((param, dwords)) = stage.user_data {
                 let mut values = vec![0u32; dwords as usize];
                 for u in &t.host.user_data {
@@ -715,7 +717,12 @@ impl State {
     /// once: its constant data is copied at submission either way, and the
     /// big tables the world binds would otherwise take hundreds of slots per
     /// draw, wrapping the dynamic slots onto lists not yet submitted.
-    fn tables(&mut self, list: &HostList, used: &[UsedResource], compute: bool) -> Vec<(u8, u32)> {
+    fn tables(
+        &mut self,
+        list: &HostList,
+        used: &[UsedResource],
+        compute: bool,
+    ) -> Option<Vec<(u8, u32)>> {
         let tables = |u: &&UsedResource| u.root == RootType::Table;
         let mut fresh: Vec<u8> = used
             .iter()
@@ -727,18 +734,16 @@ impl State {
         // host's limit, 1,000,000 views on NVIDIA) are made afresh too: the
         // title's slots there have no host slot of their own.
         for u in used.iter().filter(tables) {
-            if fresh.contains(&u.slot) {
-                continue;
-            }
             let Some(&Root::Table(table)) = self.roots_ref(compute).get(usize::from(u.slot)) else {
                 continue;
             };
-            let end = table + u64::from(u.table_offset_dwords) * 4;
+            let end = table.checked_add(u64::from(u.table_offset_dwords) * 4)?;
             let Some(heap) = self.heap_of(table) else {
                 continue;
             };
             let (Some(host), Some(index)) = (heap.host(), heap.index(end)) else {
-                continue;
+                once!(slot = u.slot, "a descriptor table exceeds its heap");
+                return None;
             };
             if index >= host.count() {
                 fresh.push(u.slot);
@@ -761,12 +766,8 @@ impl State {
                 .filter(tables)
                 .filter(|u| u.slot == slot)
                 .collect();
-            let Some(heap) = self.heap_of(table) else {
-                continue;
-            };
-            let Some(host) = heap.host() else {
-                continue;
-            };
+            let heap = self.heap_of(table)?;
+            let host = heap.host()?;
             let n = entries
                 .iter()
                 .map(|u| u.table_offset_dwords / 8 + 1)
@@ -793,10 +794,9 @@ impl State {
                 made.push((slot, first * 32));
                 continue;
             }
-            let Some(first) = host.dynamic(n) else {
-                continue;
-            };
-            self.fresh_tables.insert(key, first);
+            // A CBV table has no usable copy at its original title offset.
+            // Binding that offset after allocation fails can name an SRV.
+            let first = host.dynamic(n)?;
             self.dynamic
                 .push((std::ptr::from_ref(heap) as usize, first, n));
             // The whole range: a shader may index past the entries its
@@ -806,10 +806,7 @@ impl State {
                 let used = entries.iter().find(|u| u.table_offset_dwords / 8 == k);
                 match crate::descriptor::view(table + u64::from(k) * 32) {
                     Some(View::Constant(address, size)) if address != 0 && size != 0 => {
-                        let Some((gpu, to)) = list.scratch(u64::from(size)) else {
-                            host.make_null(index);
-                            continue;
-                        };
+                        let (gpu, to) = list.scratch(u64::from(size))?;
                         list.defer_fill(to, address as *const u8, size as usize);
                         host.constant_at(index, gpu, size);
                     }
@@ -820,16 +817,21 @@ impl State {
                         }
                     }
                     None => {
-                        host.make_null(index);
+                        if used.is_some_and(|u| u.kind == ResourceType::Cbv) {
+                            host.make_at(index, &View::Constant(0, 0));
+                        } else {
+                            host.make_null(index);
+                        }
                         if used.is_some() {
                             once!(slot, "a table entry without a view");
                         }
                     }
                 }
             }
+            self.fresh_tables.insert(key, first);
             made.push((slot, first * 32));
         }
-        made
+        Some(made)
     }
 
     /// The first draws, at debug level: what they bind and read

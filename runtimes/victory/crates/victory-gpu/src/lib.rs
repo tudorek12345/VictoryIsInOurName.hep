@@ -31,6 +31,8 @@ pub mod frame;
 mod host;
 #[cfg(windows)]
 mod indirect;
+#[cfg(windows)]
+mod present;
 pub mod list;
 #[cfg(all(windows, feature = "diagnostics"))]
 mod memstat;

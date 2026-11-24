@@ -166,6 +166,35 @@
       "references": ["https://github.com/Marvisak/VIctory/pull/431"]
     },
     {
+      "purpose": "Find contiguous dynamic descriptor space across the cursor and guard tables whose heap range or dynamic allocation is unavailable.",
+      "paths": ["crates/victory-gpu/src/descriptor/host.rs", "crates/victory-gpu/src/draw.rs"],
+      "references": [
+        "https://github.com/Marvisak/VIctory/pull/251",
+        "https://github.com/Marvisak/VIctory/pull/336",
+        "https://github.com/Marvisak/VIctory/pull/550"
+      ]
+    },
+    {
+      "purpose": "Compose the Series S SDR scene and UI planes and support a 720p host output for diagnostics.",
+      "paths": [
+        "crates/victory-gpu/src/host.rs",
+        "crates/victory-gpu/src/lib.rs",
+        "crates/victory-gpu/src/present.rs",
+        "crates/victory-gpu/src/queue.rs",
+        "crates/victory-gpu/src/resource.rs"
+      ],
+      "references": ["https://github.com/Marvisak/VIctory/pull/211"]
+    },
+    {
+      "purpose": "Route the verified Xbox build's Bink audio through Windows XAudio2 while preserving the title mixer's no-op volume callback.",
+      "paths": [
+        "apps/victory/src/main.rs",
+        "apps/victory/src/movie_audio.rs",
+        "apps/victory/src/run.rs",
+        "crates/victory-game/src/lib.rs"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",
@@ -180,9 +209,13 @@
   "modifiedFiles": [
     ".gitignore",
     "Cargo.lock",
+    "apps/victory/src/main.rs",
+    "apps/victory/src/movie_audio.rs",
+    "apps/victory/src/run.rs",
     "crates/victory-formats/Cargo.toml",
     "crates/victory-formats/src/bcpack.rs",
     "crates/victory-formats/src/xma/tables.rs",
+    "crates/victory-game/src/lib.rs",
     "crates/victory-gpu/src/capture.rs",
     "crates/victory-gpu/src/descriptor.rs",
     "crates/victory-gpu/src/descriptor/host.rs",
@@ -191,6 +224,7 @@
     "crates/victory-gpu/src/lib.rs",
     "crates/victory-gpu/src/memstat.rs",
     "crates/victory-gpu/src/pipeline/host.rs",
+    "crates/victory-gpu/src/present.rs",
     "crates/victory-gpu/src/queue.rs",
     "crates/victory-gpu/src/resource.rs",
     "crates/victory-gpu/src/shadow.rs",

@@ -1512,6 +1512,7 @@ struct Presenter {
     hwnd: HWND,
     meter: Meter,
     last_present_error: Option<i32>,
+    compositor: Option<crate::present::Compositor>,
     #[cfg(feature = "diagnostics")]
     probe_buffer: Option<ID3D12Resource>,
 }
@@ -1634,17 +1635,24 @@ impl Meter {
 }
 
 impl Host {
-    /// Shows `texture`, which is in `state` (a host state) and stays in it,
-    /// as frame `frame` (saved if captures are on). `None` if nothing was
-    /// shown; else, in diagnostics builds, whether the frame was black.
-    pub(crate) fn present(&self, texture: &ID3D12Resource, state: u32, frame: u64) -> Option<bool> {
+    /// Shows the scene and any SDR overlays, restoring each source's state.
+    /// Returns whether the diagnostic probe read a black frame.
+    pub(crate) fn present(&self, planes: &[(&ID3D12Resource, u32)], frame: u64) -> Option<bool> {
+        let &(texture, state) = planes.first()?;
         // SAFETY: a live resource.
         let desc = unsafe { texture.GetDesc() };
         let Some(format) = swap_format(desc.Format) else {
             tracing::warn!(format = desc.Format.0, "cannot present this format");
             return None;
         };
-        let (width, height) = (desc.Width as u32, desc.Height);
+        let source_size = (desc.Width as u32, desc.Height);
+        let can_sample = crate::present::sampleable(&desc);
+        let (width, height) = if can_sample {
+            crate::present::output_size(source_size.0, source_size.1)
+        } else {
+            source_size
+        };
+        let compose = can_sample && (planes.len() > 1 || (width, height) != source_size);
         let mut presenter = self.presenter.lock().unwrap_or_else(|e| e.into_inner());
         if presenter.is_none() {
             *presenter = match self.presenter(width, height, format) {
@@ -1663,9 +1671,22 @@ impl Host {
                     .ResizeBuffers(BUFFERS, width, height, format, DXGI_SWAP_CHAIN_FLAG(0))
             };
             match resized {
-                Ok(()) => (p.width, p.height, p.format) = (width, height, format),
+                Ok(()) => {
+                    (p.width, p.height, p.format) = (width, height, format);
+                    tracing::info!(width, height, format = format.0, "host swap chain resized");
+                }
                 Err(e) => {
                     tracing::warn!(error = %e, width, height, "swap chain not resized");
+                    return None;
+                }
+            }
+        }
+        if compose && p.compositor.as_ref().is_none_or(|c| c.format != format) {
+            match crate::present::Compositor::new(&self.device, format) {
+                Ok(compositor) => p.compositor = Some(compositor),
+                Err(error) => {
+                    static REPORTED: std::sync::Once = std::sync::Once::new();
+                    REPORTED.call_once(|| tracing::warn!(%error, "could not create the present compositor"));
                     return None;
                 }
             }
@@ -1680,29 +1701,43 @@ impl Host {
             p.copy.reset();
             let list = &p.copy.list;
             let copy_source = D3D12_RESOURCE_STATE_COPY_SOURCE;
-            if state != copy_source {
-                list.ResourceBarrier(&[transition(texture, state, copy_source)]);
-            }
-            list.ResourceBarrier(&[transition(
-                &back,
-                D3D12_RESOURCE_STATE_PRESENT,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-            )]);
-            list.CopyResource(&back, texture);
+            let target_state = if compose {
+                let target = D3D12_RESOURCE_STATE_RENDER_TARGET;
+                list.ResourceBarrier(&[transition(&back, D3D12_RESOURCE_STATE_PRESENT, target)]);
+                p.compositor.as_ref()?.record(&self.device, list, &back, planes, width, height);
+                target
+            } else {
+                let target = D3D12_RESOURCE_STATE_COPY_DEST;
+                if state != copy_source {
+                    list.ResourceBarrier(&[transition(texture, state, copy_source)]);
+                }
+                list.ResourceBarrier(&[transition(&back, D3D12_RESOURCE_STATE_PRESENT, target)]);
+                list.CopyResource(&back, texture);
+                target
+            };
+            #[cfg(feature = "diagnostics")]
+            let capture_source = if compose {
+                list.ResourceBarrier(&[transition(&back, target_state, copy_source)]);
+                &back
+            } else {
+                texture
+            };
             #[cfg(feature = "diagnostics")]
             let capture = crate::capture::wanted(frame)
-                .then(|| crate::capture::read_back(&self.device, list, texture))
+                .then(|| crate::capture::read_back(&self.device, list, capture_source))
                 .flatten();
             #[cfg(feature = "diagnostics")]
-            let probe = crate::capture::probe(&self.device, list, texture, &mut p.probe_buffer);
+            let probe = crate::capture::probe(&self.device, list, capture_source, &mut p.probe_buffer);
             #[cfg(not(feature = "diagnostics"))]
             let _ = frame;
-            if state != copy_source {
+            if !compose && state != copy_source {
                 list.ResourceBarrier(&[transition(texture, copy_source, state)]);
             }
+            #[cfg(feature = "diagnostics")]
+            let target_state = if compose { copy_source } else { target_state };
             list.ResourceBarrier(&[transition(
                 &back,
-                D3D12_RESOURCE_STATE_COPY_DEST,
+                target_state,
                 D3D12_RESOURCE_STATE_PRESENT,
             )]);
             p.copy.close();
@@ -1774,6 +1809,7 @@ impl Host {
                 hwnd,
                 meter: Meter::new(),
                 last_present_error: None,
+                compositor: None,
                 #[cfg(feature = "diagnostics")]
                 probe_buffer: None,
             })

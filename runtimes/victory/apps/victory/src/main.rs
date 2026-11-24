@@ -5,6 +5,8 @@
 
 mod census;
 mod inspect;
+#[cfg(windows)]
+mod movie_audio;
 mod run;
 mod shader;
 mod translate;
