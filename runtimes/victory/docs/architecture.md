@@ -97,3 +97,8 @@ The host translation uses a structured SRV for a scalar buffer load when
 the native buffer metadata supplies a multi-dword element stride. It
 divides each byte address into an element index and an offset. A synthetic
 WARP test reads two dwords across a 12-byte element boundary.
+
+Compute pipeline variants use the formats of the bound R32 integer image
+UAVs. The variant reuses the original root signature and emits integer
+loads and stores for those table slots. A synthetic WARP dispatch verifies
+that an unsigned texture store preserves the source dword.

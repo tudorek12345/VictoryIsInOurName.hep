@@ -97,6 +97,18 @@
       ]
     },
     {
+      "purpose": "Specialize compute image operations for bound R32 integer UAV views while preserving root signature bindings. Verify exact integer texture writes with a synthetic WARP dispatch.",
+      "paths": [
+        "crates/victory-gpu/src/descriptor/host.rs",
+        "crates/victory-gpu/src/draw.rs",
+        "crates/victory-gpu/src/pipeline/host.rs",
+        "crates/victory-shader/src/emit/lower.rs",
+        "crates/victory-shader/src/emit/mod.rs",
+        "crates/victory-shader/src/emit/valu_tests.rs",
+        "docs/architecture.md"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",
@@ -114,10 +126,12 @@
     "crates/victory-formats/Cargo.toml",
     "crates/victory-formats/src/bcpack.rs",
     "crates/victory-formats/src/xma/tables.rs",
+    "crates/victory-gpu/src/descriptor/host.rs",
     "crates/victory-gpu/src/draw.rs",
     "crates/victory-gpu/src/host.rs",
     "crates/victory-gpu/src/lib.rs",
     "crates/victory-gpu/src/memstat.rs",
+    "crates/victory-gpu/src/pipeline/host.rs",
     "crates/victory-gpu/src/queue.rs",
     "crates/victory-gpu/src/resource.rs",
     "crates/victory-gpu/src/shadow.rs",

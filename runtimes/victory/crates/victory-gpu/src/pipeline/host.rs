@@ -6,9 +6,13 @@
 //! the immediate samplers, and directly indexed heaps.
 
 use std::ffi::{CStr, CString};
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-use victory_shader::emit::{ROOT_CBV_SPACE, SAMPLER_SPACE, USER_DATA_SPACE};
+use victory_shader::emit::{
+    IntegerImageUav, ROOT_CBV_SPACE, SAMPLER_SPACE, USER_DATA_SPACE,
+    translate_with_integer_image_uavs,
+};
 use windows::Win32::Graphics::Direct3D::ID3DBlob;
 use windows::Win32::Graphics::Direct3D12::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
@@ -267,6 +271,7 @@ pub(crate) struct HostPipeline {
     /// A mesh pipeline (graphics without vertex input).
     pub(crate) mesh: bool,
     pub(crate) pso: ID3D12PipelineState,
+    integer_image_variants: Mutex<HashMap<Vec<IntegerImageUav>, Option<ID3D12PipelineState>>>,
     pub(crate) root: ID3D12RootSignature,
     /// Vertex, then pixel stage, or the compute stage.
     pub(crate) stages: Vec<Stage>,
@@ -289,6 +294,57 @@ fn refuse(reason: &'static str, shaders: &[Arc<Shader>]) -> Option<HostPipeline>
 }
 
 impl HostPipeline {
+    /// The compute shader is specialized to the formats bound for this dispatch.
+    pub(crate) fn for_integer_image_uavs(
+        &self,
+        views: Vec<IntegerImageUav>,
+    ) -> Option<ID3D12PipelineState> {
+        let stage = self.stages.first()?;
+        let mut variants = self
+            .integer_image_variants
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(pso) = variants.get(&views) {
+            return pso.clone();
+        }
+        let made = (|| {
+            let shader = translate_with_integer_image_uavs(&stage.shader.container, &views)
+                .map_err(|error| error.to_string())?;
+            let original = &stage.translated().host;
+            if shader.user_data != original.user_data
+                || shader.root_cbvs != original.root_cbvs
+                || shader.root_srvs != original.root_srvs
+                || shader.samplers != original.samplers
+                || shader.static_samplers != original.static_samplers
+            {
+                return Err("integer image specialization changed the root bindings".to_owned());
+            }
+            let host = host().ok_or_else(|| "no host device".to_owned())?;
+            let desc = compute_desc(
+                &self.root,
+                D3D12_SHADER_BYTECODE {
+                    pShaderBytecode: shader.dxil.as_ptr().cast(),
+                    BytecodeLength: shader.dxil.len(),
+                },
+            );
+            // SAFETY: the description points to a live root signature and shader.
+            unsafe { host.device.CreateComputePipelineState(&desc) }.map_err(|error| error.to_string())
+        })();
+        let pso = match made {
+            Ok(pso) => {
+                tracing::info!(shader = %stage.shader.hash, ?views, "integer image compute pipeline");
+                crate::host::name(&pso, || format!("{} integer image UAVs", self.name));
+                Some(pso)
+            }
+            Err(error) => {
+                tracing::warn!(shader = %stage.shader.hash, %error, ?views, "integer image compute pipeline refused");
+                None
+            }
+        };
+        variants.insert(views, pso.clone());
+        pso
+    }
+
     /// A host pipeline for vertex and pixel shaders with the graphics
     /// state `g`, or for one compute shader.
     pub(crate) fn new(shaders: &[Arc<Shader>], g: Option<&GraphicsState>) -> Option<HostPipeline> {
@@ -418,12 +474,7 @@ impl HostPipeline {
             )
         };
         if compute.is_some() {
-            let desc = D3D12_COMPUTE_PIPELINE_STATE_DESC {
-                // SAFETY: a borrowed pointer the description never releases.
-                pRootSignature: unsafe { std::mem::transmute_copy(&root) },
-                CS: code(0),
-                ..Default::default()
-            };
+            let desc = compute_desc(&root, code(0));
             let name = super::library::name("compute", &root_blob, &[&code_bytes(&code(0))], "");
             let made = super::library::pipeline(
                 &name,
@@ -446,6 +497,7 @@ impl HostPipeline {
                 compute: true,
                 mesh: false,
                 pso,
+                integer_image_variants: Mutex::default(),
                 root,
                 stages: bound,
                 name: format!("{shaders:?}"),
@@ -478,6 +530,7 @@ impl HostPipeline {
                 compute: false,
                 mesh: true,
                 pso,
+                integer_image_variants: Mutex::default(),
                 root,
                 stages: bound,
                 name: format!("{shaders:?}"),
@@ -548,12 +601,25 @@ impl HostPipeline {
             compute: false,
             mesh: false,
             pso,
+            integer_image_variants: Mutex::default(),
             root,
             stages: bound,
             name: format!("{shaders:?}"),
             slots: g.slots(),
             inputs: g.elements(),
         })
+    }
+}
+
+fn compute_desc(
+    root: &ID3D12RootSignature,
+    code: D3D12_SHADER_BYTECODE,
+) -> D3D12_COMPUTE_PIPELINE_STATE_DESC {
+    D3D12_COMPUTE_PIPELINE_STATE_DESC {
+        // SAFETY: a borrowed pointer the description never releases.
+        pRootSignature: unsafe { std::mem::transmute_copy(root) },
+        CS: code,
+        ..Default::default()
     }
 }
 

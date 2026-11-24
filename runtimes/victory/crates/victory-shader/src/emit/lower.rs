@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use super::UserData;
+use super::{IntegerImageUav, UserData};
 use super::bitcode::{Attr, Bin, Cast, Term, V, pred};
 use super::container::SigElement;
 use super::shader::{Shader, flags};
@@ -58,10 +58,18 @@ enum Stop {
     Fail(ShaderError),
 }
 
+#[cfg(test)]
 pub(crate) fn lower(parts: &Parts) -> Result<Lowered, ShaderError> {
+    lower_for_views(parts, &[])
+}
+
+pub(crate) fn lower_for_views(
+    parts: &Parts,
+    integer_image_uavs: &[IntegerImageUav],
+) -> Result<Lowered, ShaderError> {
     let mut bad = HashMap::new();
     loop {
-        match Lower::new(parts, &bad).run() {
+        match Lower::new(parts, &bad, integer_image_uavs).run() {
             Ok(l) => return Ok(l),
             Err(Stop::Retry(v, why)) => {
                 if bad.insert(v, why).is_some() {
@@ -132,6 +140,7 @@ struct Lower<'a> {
     s: Shader,
     x: &'a Parts<'a>,
     bad: &'a HashMap<Value, Why>,
+    integer_image_uavs: &'a [IntegerImageUav],
     lane_fail: HashMap<Value, Why>,
     vals: HashMap<Value, Val>,
     floats: HashMap<Value, V>,
@@ -324,7 +333,11 @@ fn unsupported(offset: usize, what: Why) -> Stop {
 }
 
 impl<'a> Lower<'a> {
-    fn new(x: &'a Parts<'a>, bad: &'a HashMap<Value, Why>) -> Self {
+    fn new(
+        x: &'a Parts<'a>,
+        bad: &'a HashMap<Value, Why>,
+        integer_image_uavs: &'a [IntegerImageUav],
+    ) -> Self {
         let p = x.p;
         let mut phi_at = HashMap::new();
         for (b, block) in p.blocks.iter().enumerate() {
@@ -434,6 +447,7 @@ impl<'a> Lower<'a> {
             s,
             x,
             bad,
+            integer_image_uavs,
             lane_fail: HashMap::new(),
             vals: HashMap::new(),
             floats: HashMap::new(),
@@ -5307,11 +5321,21 @@ impl<'a> Lower<'a> {
             .copied()
             .ok_or("an untracked image")?;
         let store = name.starts_with("image_store");
-        let uav = store
-            || self
-                .used_kind(src)
-                .is_some_and(|u| u.kind == ResourceType::Uav);
-        let props = (kind | if uav { 0x1000 } else { 0 }, 0x409);
+        let used = self.used_kind(src);
+        let uav = store || used.is_some_and(|u| u.kind == ResourceType::Uav);
+        let integer = used
+            .filter(|u| u.kind == ResourceType::Uav && u.root == RootType::Table)
+            .and_then(|u| {
+                self.integer_image_uavs.iter().find(|view| {
+                    view.slot == u.slot && view.table_offset_dwords == u.table_offset_dwords
+                })
+            });
+        let component = integer.map_or(0x409, |view| if view.signed { 0x104 } else { 0x105 });
+        let integer = integer.is_some();
+        let props = (kind | if uav { 0x1000 } else { 0 }, component);
+        if integer && *d16 {
+            return Err("a 16-bit read or write of a 32-bit integer image");
+        }
         if let Some(op) = name.strip_prefix("image_atomic_") {
             // DXIL's atomic operations on a 32-bit integer texture UAV; the
             // old value returns with glc. Sub is the add of the negation.
@@ -5358,7 +5382,12 @@ impl<'a> Lower<'a> {
                 Some(v) if cache.glc => self.i32_of(v)?,
                 _ => self.s.m.i32(0),
             };
-            let h = self.handle(site, src, false, (kind | 0x1000, 0x105))?;
+            let h = self.handle(
+                site,
+                src,
+                false,
+                (kind | 0x1000, if integer { component } else { 0x105 }),
+            )?;
             let at = self.begin_guarded(guard);
             let i32t = self.s.t.i32;
             let mut args = vec![h];
@@ -5391,9 +5420,9 @@ impl<'a> Lower<'a> {
             if name != "image_store" {
                 return Err("an image store to a mip level");
             }
-            // shortcut: stores are taken to write all four channels of a
-            // float format (the console converts by the view's format).
-            if *dmask != 0xF {
+            // Float views still use the general four-channel lowering.
+            // A single-channel integer view consumes only the first dword.
+            if (!integer && *dmask != 0xF) || (integer && *dmask & 1 == 0) {
                 return Err("an image store of some channels");
             }
             let iu = self.s.m.undef(self.s.t.i32);
@@ -5405,11 +5434,14 @@ impl<'a> Lower<'a> {
                 return Err("image store data");
             };
             let mut vals = Vec::new();
-            for k in 0..4u8 {
+            let channels = if integer { 1 } else { 4 };
+            for k in 0..channels {
                 // d16: two f16 channels per VGPR, low half first.
                 let r = if *d16 { k / 2 } else { k };
                 let v = inst.read(Reg::V(reg + r)).ok_or("image store data")?;
-                vals.push(if *d16 {
+                vals.push(if integer {
+                    self.i32_of(v)?
+                } else if *d16 {
                     let mut x = self.i32_of(v)?;
                     if k % 2 == 1 {
                         let k16 = self.s.m.i32(16);
@@ -5422,6 +5454,10 @@ impl<'a> Lower<'a> {
                     self.float_of(v)?
                 });
             }
+            if integer {
+                // DXIL's typed store takes four values even for R32 views.
+                vals.resize(4, self.s.m.i32(0));
+            }
             let h = self.handle(site, src, false, props)?;
             let at = self.begin_guarded(guard);
             let mut args = vec![h];
@@ -5431,7 +5467,7 @@ impl<'a> Lower<'a> {
             let void = self.s.t.void;
             self.s.op(
                 self.cur,
-                "textureStore.f32",
+                if integer { "textureStore.i32" } else { "textureStore.f32" },
                 Attr::NoUnwind,
                 void,
                 67,
@@ -5454,6 +5490,9 @@ impl<'a> Lower<'a> {
             "image_get_resinfo" => (72, false),
             _ => return Err(name),
         };
+        if integer && sample {
+            return Err("sampling an integer image UAV");
+        }
         if op == 72 {
             // Width, height, depth or layers, levels (per dmask) of the level
             // in the first address: DXIL's dimensions; a channel DXIL leaves
@@ -5694,8 +5733,10 @@ impl<'a> Lower<'a> {
             let mip = if name == "image_load_mip" {
                 addr_val(self, coords)?
             } else if uav {
-                // Our declarations have four channels.
-                self.s.flags |= flags::TYPED_UAV_LOADS;
+                // The one-channel 32-bit formats have baseline typed loads.
+                if !integer {
+                    self.s.flags |= flags::TYPED_UAV_LOADS;
+                }
                 iu
             } else {
                 self.s.m.i32(0)
@@ -5703,11 +5744,17 @@ impl<'a> Lower<'a> {
             let mut args = vec![h, mip];
             args.extend(&cs);
             args.extend([iu, iu, iu]);
+            let (operation, result) = if integer {
+                let ret = self.s.m.named_struct("dx.types.ResRet.i32", vec![self.s.t.i32; 5]);
+                ("textureLoad.i32", ret)
+            } else {
+                ("textureLoad.f32", self.s.t.res_ret)
+            };
             self.s.op(
                 c,
-                "textureLoad.f32",
+                operation,
                 Attr::ReadOnly,
-                self.s.t.res_ret,
+                result,
                 66,
                 &args,
             )
@@ -5723,7 +5770,9 @@ impl<'a> Lower<'a> {
         let mut xs = Vec::new();
         for ch in channels {
             let x = self.s.m.extract(c, r, ch);
-            xs.push(if *d16 {
+            xs.push(if integer {
+                x
+            } else if *d16 {
                 // shortcut: d16 results are taken as floats (rounded to
                 // nearest even); integer formats would keep 16 bits.
                 let i32t = self.s.t.i32;

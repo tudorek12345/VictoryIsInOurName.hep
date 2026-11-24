@@ -201,6 +201,22 @@ pub struct UserData {
 /// Translates the vertex, pixel, compute or mesh program of a console
 /// shader container.
 pub fn translate(container: &[u8]) -> Result<HostShader, ShaderError> {
+    translate_with_integer_image_uavs(container, &[])
+}
+
+/// A one-channel 32-bit integer image UAV identified by its table position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct IntegerImageUav {
+    pub slot: u8,
+    pub table_offset_dwords: u32,
+    pub signed: bool,
+}
+
+/// Specializes image UAV operations to the formats of the bound views.
+pub fn translate_with_integer_image_uavs(
+    container: &[u8],
+    integer_image_uavs: &[IntegerImageUav],
+) -> Result<HostShader, ShaderError> {
     let c = Container::parse(container)?;
     let dxil = c
         .part(FourCC::DXIL)
@@ -221,7 +237,7 @@ pub fn translate(container: &[u8]) -> Result<HostShader, ShaderError> {
     let res = resource::track(&p, &native.layout, native.stage)?;
     let io = io::raise(&p, &native)?;
     let st = structure::structure(&p)?;
-    emit(&c, &native, &p, &st, &io, &res)
+    emit_for_views(&c, &native, &p, &st, &io, &res, integer_image_uavs)
 }
 
 /// Emits a program whose earlier stages already ran.
@@ -232,6 +248,18 @@ pub fn emit(
     st: &structure::Structured,
     io: &io::Io,
     res: &resource::Resources,
+) -> Result<HostShader, ShaderError> {
+    emit_for_views(c, native, p, st, io, res, &[])
+}
+
+fn emit_for_views(
+    c: &Container,
+    native: &NativeProgram,
+    p: &ir::Program,
+    st: &structure::Structured,
+    io: &io::Io,
+    res: &resource::Resources,
+    integer_image_uavs: &[IntegerImageUav],
 ) -> Result<HostShader, ShaderError> {
     let sig = |fourcc| -> Result<Vec<container::SigElement>, ShaderError> {
         match c.part(fourcc) {
@@ -281,17 +309,20 @@ pub fn emit(
         }
         _ => 0,
     };
-    let l = lower::lower(&lower::Parts {
-        native,
-        p,
-        st,
-        io,
-        res,
-        inputs,
-        outputs,
-        prims,
-        mesh_stride,
-    })?;
+    let l = lower::lower_for_views(
+        &lower::Parts {
+            native,
+            p,
+            st,
+            io,
+            res,
+            inputs,
+            outputs,
+            prims,
+            mesh_stride,
+        },
+        integer_image_uavs,
+    )?;
     Ok(HostShader {
         stage: native.stage,
         dxil: l.dxil,

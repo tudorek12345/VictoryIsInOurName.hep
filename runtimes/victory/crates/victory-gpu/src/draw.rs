@@ -344,7 +344,9 @@ impl State {
             once!(mesh, "a draw or mesh dispatch with another kind of pipeline");
             return false;
         }
-        self.bind(list, p, false);
+        if !self.bind(list, p, false) {
+            return false;
+        }
         let l = &list.list;
         // Vertex buffers the input layout reads.
         let mut views = [D3D12_VERTEX_BUFFER_VIEW::default(); 32];
@@ -403,7 +405,21 @@ impl State {
     /// What draws and dispatches share: heaps, our root signature, the
     /// pipeline, and per stage the user data, root views and the
     /// descriptors its tables hold.
-    fn bind(&mut self, list: &HostList, p: &HostPipeline, compute: bool) {
+    fn bind(&mut self, list: &HostList, p: &HostPipeline, compute: bool) -> bool {
+        let typed = if compute {
+            let views = self.integer_image_uavs(p);
+            if views.is_empty() {
+                None
+            } else {
+                let Some(pso) = p.for_integer_image_uavs(views) else {
+                    return false;
+                };
+                Some(pso)
+            }
+        } else {
+            None
+        };
+        let pso = typed.as_ref().unwrap_or(&p.pso);
         let l = &list.list;
         // Heaps first: a root signature with directly indexed heaps must be
         // set after them.
@@ -435,13 +451,13 @@ impl State {
         }
         // By host object: a title pipeline released and another made at its
         // address is another host pipeline (the list keeps the old one).
-        if self.host_pipeline != p.pso.as_raw() as usize {
+        if self.host_pipeline != pso.as_raw() as usize {
             // SAFETY: an open list and a live pipeline.
-            unsafe { l.SetPipelineState(&p.pso) };
-            self.host_pipeline = p.pso.as_raw() as usize;
+            unsafe { l.SetPipelineState(pso) };
+            self.host_pipeline = pso.as_raw() as usize;
             list.used_pipeline(&p.name);
             // The title may release the pipeline before it submits the list.
-            list.keep(&p.pso);
+            list.keep(pso);
             list.keep(&p.root);
         }
         for stage in &p.stages {
@@ -489,6 +505,33 @@ impl State {
                 }
             }
         }
+        true
+    }
+
+    fn integer_image_uavs(&self, p: &HostPipeline) -> Vec<victory_shader::emit::IntegerImageUav> {
+        let [stage] = p.stages.as_slice() else {
+            return Vec::new();
+        };
+        stage
+            .translated()
+            .used
+            .iter()
+            .filter(|u| u.kind == ResourceType::Uav && u.root == RootType::Table && u.dwords == 8)
+            .filter_map(|u| {
+                let Root::Table(table) = self.compute.get(usize::from(u.slot))? else {
+                    return None;
+                };
+                let handle = table.checked_add(u64::from(u.table_offset_dwords) * 4)?;
+                self.heap_of(handle)?;
+                let view = crate::descriptor::view(handle)?;
+                let signed = crate::descriptor::host::integer_image_uav(&view)?;
+                Some(victory_shader::emit::IntegerImageUav {
+                    slot: u.slot,
+                    table_offset_dwords: u.table_offset_dwords,
+                    signed,
+                })
+            })
+            .collect()
     }
 
     /// Runs a dispatch on the host.
@@ -513,7 +556,10 @@ impl State {
             once!("a dispatch with a graphics pipeline");
             return;
         }
-        self.bind(list, p, true);
+        if !self.bind(list, p, true) {
+            DROPPED.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
         #[cfg(feature = "diagnostics")]
         list.note_op(|| self.op_text(format!("dispatch {x}x{y}x{z}"), true));
         // SAFETY: an open list with everything set.
@@ -996,10 +1042,7 @@ impl State {
             DRAW | INDEXED => self.topology != RECTANGLES && self.prepare(list, kind == INDEXED),
             MESH => self.prepare_for(list, false, true),
             DISPATCH => match crate::pipeline::host_pipeline(self.pipeline as This) {
-                Some(p) if p.compute => {
-                    self.bind(list, p, true);
-                    true
-                }
+                Some(p) if p.compute => self.bind(list, p, true),
                 _ => false,
             },
             _ => false,

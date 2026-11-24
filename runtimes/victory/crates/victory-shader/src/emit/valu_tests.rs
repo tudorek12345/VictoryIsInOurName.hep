@@ -6,7 +6,7 @@
 //! near `1.0`, and turn-range reduction for `v_sin_*`/`v_cos_*`.
 
 use super::host::{Dispatch, Host, Root, Stride, View};
-use super::{HostShader, lower, validator};
+use super::{HostShader, IntegerImageUav, lower, validator};
 use crate::native::{
     ComputeIo, HwStage, NativeProgram, ResourceType, RootParam, RootType, StageIo, UsedResource,
 };
@@ -73,6 +73,14 @@ fn build_valu_cs(body: &[u32]) -> HostShader {
 }
 
 fn build_cs_with_inputs(body: &[u32], inputs: &[UsedResource]) -> HostShader {
+    build_cs_for_views(body, inputs, &[])
+}
+
+fn build_cs_for_views(
+    body: &[u32],
+    inputs: &[UsedResource],
+    integer_image_uavs: &[IntegerImageUav],
+) -> HostShader {
     let mut words = Vec::new();
     // s[4:5] = descriptor table address (heap index 0 -> byte offset 0).
     words.push(s_mov_b32(5, 0x80)); // inline constant 0
@@ -133,17 +141,20 @@ fn build_cs_with_inputs(body: &[u32], inputs: &[UsedResource]) -> HostShader {
     let res = resource::track(&p, &native.layout, native.stage).expect("resource::track");
     let io = io::raise(&p, &native).expect("io::raise");
     let st = structure::structure(&p).expect("structure");
-    let lowered = lower::lower(&lower::Parts {
-        native: &native,
-        p: &p,
-        st: &st,
-        io: &io,
-        res: &res,
-        inputs: Vec::new(),
-        outputs: Vec::new(),
-        prims: Vec::new(),
-        mesh_stride: 0,
-    })
+    let lowered = lower::lower_for_views(
+        &lower::Parts {
+            native: &native,
+            p: &p,
+            st: &st,
+            io: &io,
+            res: &res,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            prims: Vec::new(),
+            mesh_stride: 0,
+        },
+        integer_image_uavs,
+    )
     .expect("lower");
 
     let shader = HostShader {
@@ -211,6 +222,58 @@ fn scalar_load_crosses_a_structured_buffer_element_boundary() {
         )
         .unwrap();
     assert_eq!(result[0], [0x33, 0x44]);
+}
+
+#[test]
+fn integer_image_store_preserves_the_dword() {
+    let _native_test_guard = super::native_test_guard();
+    let body = [
+        // s_load_dwordx8 s[16:23], s[4:5], 32
+        0x3D << 26 | 3 << 18 | 16 << 6 | 2,
+        125 << 25 | 32,
+        vop1(1, 0, sgpr(0)),
+        vop1(1, 4, 128), // v4 and v5: texel coordinates (0, 0)
+        vop1(1, 5, 128),
+        // image_store v[0:3], v[4:5], s[16:23] dmask:0xf dim:2d unorm
+        0x3C << 26 | 8 << 18 | 1 << 12 | 0xF << 8 | 1 << 3,
+        4 << 16 | 4,
+    ];
+    let shader = build_cs_for_views(
+        &body,
+        &[UsedResource {
+            kind: ResourceType::Uav,
+            root: RootType::Table,
+            table_offset_dwords: 8,
+            lower_bound: 1,
+            stride: 4,
+            dwords: 8,
+            user_data: 4,
+            slot: 1,
+        }],
+        &[IntegerImageUav { slot: 1, table_offset_dwords: 8, signed: false }],
+    );
+    let Ok(host) = Host::new(true) else {
+        eprintln!("no SM 6.6 WARP device; skipped");
+        return;
+    };
+    let (root, pipeline) = host.compute_pipeline(&shader).unwrap();
+    let value = 0xF123_4567;
+    let mut user_data = vec![0; shader.user_data_dwords() as usize];
+    user_data[0] = value;
+    let result = host
+        .dispatch(
+            &root,
+            &pipeline,
+            &Dispatch {
+                roots: vec![(0, Root::Constants(user_data))],
+                views: &[View::RawUav(1), View::UintTextureUav(1, 1)],
+                samplers: &[],
+                groups: [1, 1, 1],
+            },
+        )
+        .unwrap();
+    assert_eq!(result[0][0], value);
+    assert_eq!(result[1][0], value);
 }
 
 /// Runs `shader` on every available SM 6.6 host (hardware GPU and WARP) for

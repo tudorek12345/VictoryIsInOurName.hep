@@ -598,6 +598,33 @@ fn fits(texture: &ID3D12Resource, mut format: Option<&mut DXGI_FORMAT>, unordere
     true
 }
 
+/// The format actually bound when this view is a one-channel integer image UAV.
+pub(crate) fn integer_image_uav(view: &View) -> Option<bool> {
+    let View::Unordered(resource, _, words) = view else {
+        return None;
+    };
+    let texture = crate::resource::host_resource(*resource as crate::object::This)?;
+    let desc = image_uav_desc(texture, words.as_ref())?;
+    let format = desc
+        .map(|d| d.Format)
+        .filter(|&f| f != DXGI_FORMAT_UNKNOWN)
+        // SAFETY: the view names a live texture.
+        .unwrap_or_else(|| unsafe { texture.GetDesc().Format });
+    match format {
+        DXGI_FORMAT_R32_UINT => Some(false),
+        DXGI_FORMAT_R32_SINT => Some(true),
+        _ => None,
+    }
+}
+
+fn image_uav_desc(
+    texture: &ID3D12Resource,
+    words: Option<&[u32; 10]>,
+) -> Option<Option<D3D12_UNORDERED_ACCESS_VIEW_DESC>> {
+    let mut desc = words.map(uav_desc);
+    fits(texture, desc.as_mut().map(|d| &mut d.Format), true).then_some(desc)
+}
+
 /// Makes the host descriptor for `view` at `at`: the host resource it
 /// views, or `None` if it cannot.
 fn make(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<Kept> {
@@ -656,10 +683,7 @@ fn make(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<Kept> {
                     _ => None,
                 };
             };
-            let mut desc = desc.as_ref().map(uav_desc);
-            if !fits(texture, desc.as_mut().map(|d| &mut d.Format), true) {
-                return None;
-            }
+            let desc = image_uav_desc(texture, desc.as_ref())?;
             // SAFETY: a live texture and a slot of our heap.
             unsafe {
                 device.CreateUnorderedAccessView(
