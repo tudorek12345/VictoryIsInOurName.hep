@@ -1,6 +1,21 @@
 # PortWatch registration packet
 
-## Latest follow-up packet — 24 November 2026, 03:00 EST (UTC−05:00)
+## Reviewer handoff · 24 November 2026
+
+**Review one effort under the canonical repository, [Heperkoo’s Leonida](https://github.com/tudorek12345/Leonida).** [VictoryIsInOurName.hep](https://github.com/tudorek12345/VictoryIsInOurName.hep) mirrors the runtime. At the [canonical revision](https://github.com/tudorek12345/Leonida/tree/6f5b35fd81a2c0e1e77449691f061d1bf1446a9e) and [mirror revision](https://github.com/tudorek12345/VictoryIsInOurName.hep/tree/bb3c64c92477db1db907857093ac217b12c00a16), both `runtimes/` trees have Git object `948b5c005b94336cdc0a14a7eaf15273c9e93a3b`. Their website content and root READMEs differ. Credit for Leonida and VIctory remains with the upstream contributors.
+
+| Evidence | What reviewers can check |
+| --- | --- |
+| [Fork implementation](https://github.com/tudorek12345/Leonida/commit/298042a3388e400464824d246ed3ec265c238345) | Shader buffer-view fixes, compositor and shader-cache work, and device-loss diagnostics in the integrated D3D12 backend. |
+| [First showcase recording](https://github.com/tudorek12345/Leonida/blob/6f5b35fd81a2c0e1e77449691f061d1bf1446a9e/website/public/media/first-boot-rx9060xt.mp4) · [provenance](https://github.com/tudorek12345/Leonida/blob/6f5b35fd81a2c0e1e77449691f061d1bf1446a9e/website/public/media/README.md) | The maintainer’s 93-second RX 9060 XT capture shows Windows launch and illustrated loading screens. The reported runtime cap was 30 FPS. |
+| [Run results and remaining work](https://github.com/tudorek12345/Leonida/blob/6f5b35fd81a2c0e1e77449691f061d1bf1446a9e/tracking/runtime-progress.json) | A separate short hardware intro test measured 30 FPS / 33.3 ms. A WARP world-transition attempt ended with device removal. Controllable gameplay and independent reproduction remain open. |
+| [Native Windows CI for the implementation](https://github.com/tudorek12345/Leonida/actions/runs/45352873288) | Release and diagnostics builds passed. The parallel shader test exited with an access violation. The separately reported local serial diagnostics suite passed 303 tests with five ignored. |
+
+The [registry snapshot updated at 10:32 UTC](https://github.com/4lwayz/portwatch-vi/blob/b195f1bbc265b697144359d8622c1f762ba13174/data/tracker.json) on 24 November contains neither repository in its efforts, candidates, flagged or ignored lists. [Issue #17](https://github.com/4lwayz/portwatch-vi/issues/17) records the registration request. The [maintainer’s follow-up](https://github.com/4lwayz/portwatch-vi/issues/17#issuecomment-7125717267) links the recording and marks controllable gameplay and the world-entry reproduction as pending. Listing, verification and scoring belong to PortWatch’s editors.
+
+The [candidate proposal](../tracking/portwatch-candidate.json) uses the display name **Heperkoo’s Leonida** and the canonical GitHub repository ID. At the time of this review the repository had 19 stars and its most recent push was 09:22:18 UTC. These values describe a snapshot. PortWatch refreshes its own metadata.
+
+## Earlier follow-up packet — 24 November 2026, 03:00 EST (UTC−05:00)
 
 The [current README](../README.md), [sanitized runtime results](../tracking/runtime-progress.json) and [public handoff](../website/public/handoff.md) supersede the older validation checkpoint below. Recent work adds bindless raw SRV consistency, fixed compute UINT16 UAV variants, compositor/cache optimizations and caller/fence/Present diagnostics. Local serial diagnostics tests: **303 passed, 5 ignored**; optimized build passed. Latest website tests: **24 passed**; Python backend tests: **26 passed**. These are synthetic/source checks, not gameplay validation.
 
@@ -11,7 +26,7 @@ On RX 9060 XT 16 GB / Ryzen 7 5700X / 32 GB DDR4, a short hardware **intro-only*
 - [ ] **In progress:** complete effective bounded debug/world reproduction; build/tests and original-file protection checks passed.
 - [ ] Fix a demonstrated remaining defect and verify controllable hardware gameplay.
 
-[tudorek12345/VictoryIsInOurName.hep](https://github.com/tudorek12345/VictoryIsInOurName.hep) is the requested **identical source mirror**, not a second effort or independent result. Keep the existing review thread for this effort. PortWatch push/admin permissions are unavailable to this account; the submission requires the site's maintainer to accept and deploy it. No score or deployed listing is asserted. Raw game captures, shaders, traces and package files are not part of the update.
+[tudorek12345/VictoryIsInOurName.hep](https://github.com/tudorek12345/VictoryIsInOurName.hep) was submitted as a companion mirror of the same implementation checkpoint. Keep the existing review thread for this effort. PortWatch push/admin permissions are unavailable to this account; the submission requires the site's maintainer to accept and deploy it. No score or deployed listing is asserted. Raw game captures, shaders, traces and package files are not part of the update.
 
 ## Historical registration record
 
@@ -21,7 +36,7 @@ Publication receipt: the recent checklist was [submitted as a follow-up comment]
 
 PortWatch's current scout does **not** ingest JSON from this repository. The adjacent [customized candidate proposal](../tracking/portwatch-candidate.json) follows its real `candidates[]` record shape so a reviewer can inspect or reuse it. Its factual description is proposed review wording, rather than a verbatim copy of the repository description. Registration requires a human-reviewed change to [PortWatch's registry](https://github.com/4lwayz/portwatch-vi/blob/main/data/tracker.json), normally requested through an issue or pull request.
 
-## Source and validation evidence
+## Source and validation evidence at the earlier registration checkpoint
 
 | Evidence | Reference and scope |
 | --- | --- |
@@ -67,9 +82,9 @@ Original discovery snapshot: **24 November 2026, 01:33:49 CET (00:33:49 UTC)**. 
 
 The last result is a **local evaluation of the public scout code**, not a claim that the live tracker has already flagged this fork. It means automatic discovery cannot be relied upon. Ask for manual review of the actual source changes. PortWatch's [editorial instructions](https://github.com/4lwayz/portwatch-vi/blob/main/EDITOR.md) explicitly treat surviving Leonida contributor forks as separate candidate efforts.
 
-The JSON is a customized proposal. Its repository metadata was refreshed from GitHub on **24 November 2026 at 02:25:23 CET (01:25:23 UTC)**: `stars` is **17** and `pushedAt` is **2026-11-24T01:23:10Z**. GitHub still reports `Python` and default branch `main`. The original `foundAt`, discovery `substance: 73` and `signals` are retained from the historical screening snapshot above; the discovery score is not a gameplay percentage. Current source, provenance, workflow and CI references appear in `links`.
+At that earlier checkpoint, candidate metadata was refreshed from GitHub on **24 November 2026 at 02:25:23 CET (01:25:23 UTC)**: `stars` was **17** and `pushedAt` was **2026-11-24T01:23:10Z**. GitHub still reports `Python` and default branch `main`. The original `foundAt`, discovery `substance: 73` and `signals` are retained from the historical screening snapshot above; the discovery score is not a gameplay percentage. Current source, provenance, workflow and CI references appear in `links`.
 
-The description summarizes the integration and explicitly leaves GTA VI behavior unverified. The proposal contains no `gta`, `groundwork`, `tier`, `verification` or leaderboard score fields. Its `status: "new"` is the candidate schema's proposed review state. The proposal was linked in [registration issue #17](https://github.com/4lwayz/portwatch-vi/issues/17); it has not been added to PortWatch's registry. Updating this local packet does not edit the submitted issue. The original submitted text is retained verbatim below.
+The candidate description now identifies the maintainer-reported startup and loading screens. Gameplay and independent reproduction remain open. The proposal contains no `gta`, `groundwork`, `tier`, `verification` or leaderboard score fields. Its `status: "new"` is the candidate schema's proposed review state. The proposal was linked in [registration issue #17](https://github.com/4lwayz/portwatch-vi/issues/17); it has not been added to PortWatch's registry. Updating this local packet does not edit the submitted issue. The original submitted text is retained verbatim below.
 
 ## Registration and subsequent updates
 

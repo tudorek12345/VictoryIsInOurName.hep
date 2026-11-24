@@ -1,14 +1,14 @@
 <div align="center">
   <img src="assets/logo.png" alt="Leonida" width="160">
 
-# VictoryIsOurName.hep · Heperkoo
+# VictoryIsInOurName.hep · Heperkoo
 
 **An experimental project working toward GTA VI running natively on PC.**
 
 Fast, focused experiments. Reproducible progress. Clear developer handoffs.
 
 [**Project website**](https://leonida-heperkoo.meshedgoby9.chatgpt.site/) ·
-[**Identical source mirror**](https://github.com/tudorek12345/VictoryIsInOurName.hep) ·
+[**Canonical project · Heperkoo’s Leonida**](https://github.com/tudorek12345/Leonida) ·
 [**PortWatch review request**](https://github.com/4lwayz/portwatch-vi/issues/17) ·
 [**My Discord**](https://discord.gg/ufXqPcVdVj) ·
 [**Developer handoff**](website/public/handoff.md) ·
@@ -70,7 +70,7 @@ One local Windows system: **Radeon RX 9060 XT 16 GB · Ryzen 7 5700X · 32 GB DD
 
 The [public handoff](website/public/handoff.md), [brief progress report](website/public/progress-update.md) and [sanitized results/checklist](tracking/runtime-progress.json) are source-only references. Full raw traces, captures, extracted shaders, game files, caches and saves stay local. The newly created workstation `handoff.md` and `currenstatus.md` are intentionally ignored; no blanket Markdown ignore hides project documentation.
 
-**PortWatch VI:** [issue #17](https://github.com/4lwayz/portwatch-vi/issues/17) is the maintainer-review channel. This fork and its identical source mirror are **one effort, not two independent projects**. A repository push or submitted update is not a live-site listing, score, approval or deployment.
+**PortWatch VI:** [issue #17](https://github.com/4lwayz/portwatch-vi/issues/17) is the maintainer-review channel. Heperkoo’s Leonida and its VictoryIsInOurName.hep companion mirror represent one runtime integration. The canonical source and showcase are maintained in [tudorek12345/Leonida](https://github.com/tudorek12345/Leonida). PortWatch’s editors determine listing and milestones.
 
 ### Publication verification — 24 November 2026, 03:17 EST
 
@@ -195,7 +195,7 @@ Bring a commit, a specific question, the commands you ran, the result and the ne
 | [Project website](https://leonida-heperkoo.meshedgoby9.chatgpt.site/) | Overview, development priorities, repository activity and collaboration |
 | [Latest progress report](website/public/progress-update.md) | Maintainer-reported first-boot, intro, menu and world-loading progress; remaining rendering failure |
 | [Sanitized runtime results](tracking/runtime-progress.json) | Latest synthetic checks, intro-only measurements, incomplete repro and checked/unchecked tasks; no raw game content |
-| [Identical source mirror](https://github.com/tudorek12345/VictoryIsInOurName.hep) | Same source tree and README; not a second effort or independently verified result |
+| [Canonical project](https://github.com/tudorek12345/Leonida) | Follow the integration, showcase and PortWatch review through Heperkoo’s Leonida. This repository mirrors its runtime. |
 | [GTA VI port progress showcase](https://discord.com/events/1459617753907331094/1574557419596677260) | Discord event on 25 November 2026; open it for the start time in your timezone |
 | [Fork notes](FORK.md) | Scope, ongoing work and attribution |
 | [Developer handoff](website/public/handoff.md) | End-to-end brief for the next runtime investigation |
