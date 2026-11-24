@@ -117,6 +117,18 @@ class RuntimeBackendTests(unittest.TestCase):
             with self.subTest(words=words), self.assertRaises(bridge.BridgeError):
                 self.args(*words, "--series-s-menu-picture")
 
+    def test_capture_paths_are_generated_in_external_state(self):
+        self.env["VICTORY_CAPTURE"] = str(self.root)
+        self.env["VICTORY_AUDIO_CAPTURE"] = str(self.image)
+        plan = self.runtime_plan("run", "--diagnostics", "--capture")
+        capture = self.state / "victory" / "captures"
+        self.assertEqual(Path(plan.overrides["VICTORY_CAPTURE"]).parent, capture)
+        self.assertEqual(Path(plan.overrides["VICTORY_AUDIO_CAPTURE"]).parent, plan.directories[-1])
+        self.assertEqual(plan.overrides["VICTORY_D3D12_DRED"], "1")
+        self.assertNotEqual(plan.directories[-1], self.runtime_plan("run", "--diagnostics", "--capture").directories[-1])
+        with self.assertRaises(bridge.BridgeError):
+            self.args("run", "--diagnostics", "--capture", "--bind-only")
+
     def test_leonida_retains_explicit_vulkan_and_cli_can_override_it(self):
         initial = self.runtime_plan("run", "--backend", "leonida")
         self.assertNotIn("LEONIDA_D3D12", initial.environment)

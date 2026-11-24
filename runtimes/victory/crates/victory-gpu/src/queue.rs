@@ -320,6 +320,13 @@ extern "system" fn present(
     _parameters: *const u8,
 ) -> HRESULT {
     let frame = FRAMES.fetch_add(1, Ordering::Relaxed) + 1;
+    #[cfg(feature = "diagnostics")]
+    {
+        static LAST_PLANES: AtomicU64 = AtomicU64::new(u64::MAX);
+        if LAST_PLANES.swap(u64::from(planes), Ordering::Relaxed) != u64::from(planes) {
+            tracing::info!(frame, planes, "title present plane count changed");
+        }
+    }
     #[cfg(all(windows, feature = "diagnostics"))]
     let menu_picture = menu_picture::take();
     if frame.is_power_of_two() {

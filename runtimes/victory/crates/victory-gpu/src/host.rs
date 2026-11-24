@@ -184,6 +184,20 @@ fn create() -> windows::core::Result<Host> {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_12_0, &mut device)?;
         }
         let device = device.ok_or_else(windows::core::Error::empty)?;
+        if let Ok(factory) =
+            CreateDXGIFactory2::<IDXGIFactory4>(DXGI_CREATE_FACTORY_FLAGS(0))
+            && let Ok(adapter) = factory.EnumAdapterByLuid::<IDXGIAdapter1>(device.GetAdapterLuid())
+            && let Ok(desc) = adapter.GetDesc1()
+        {
+            let len = desc.Description.iter().position(|&c| c == 0).unwrap_or(desc.Description.len());
+            let adapter = String::from_utf16_lossy(&desc.Description[..len]);
+            tracing::info!(
+                adapter,
+                software = desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0,
+                vram_mib = desc.DedicatedVideoMemory >> 20,
+                "host D3D12 adapter"
+            );
+        }
         let messages = debug
             .then(|| device.cast::<ID3D12InfoQueue>().ok())
             .flatten();
@@ -1459,6 +1473,7 @@ struct Presenter {
     copy: HostList,
     hwnd: HWND,
     meter: Meter,
+    last_present_error: Option<i32>,
 }
 
 /// The frame rate, shown in the window's caption every second and logged
@@ -1651,7 +1666,16 @@ impl Host {
             if let Some((buffer, footprint)) = capture {
                 crate::capture::save_read_back(frame, &buffer, &footprint);
             }
-            let _ = p.swap_chain.Present(0, DXGI_PRESENT(0));
+            let status = p.swap_chain.Present(0, DXGI_PRESENT(0));
+            if status.is_err() {
+                if p.last_present_error != Some(status.0) {
+                    tracing::warn!(frame, status = format_args!("{:#010x}", status.0 as u32),
+                        width, height, format = format.0, "host swap chain present failed");
+                    p.last_present_error = Some(status.0);
+                }
+                return None;
+            }
+            p.last_present_error = None;
             p.meter.frame(p.hwnd);
             #[cfg(feature = "diagnostics")]
             return Some(probe.is_some_and(|b| crate::capture::black(&b)));
@@ -1700,6 +1724,7 @@ impl Host {
                 copy,
                 hwnd,
                 meter: Meter::new(),
+                last_present_error: None,
             })
         }
     }
