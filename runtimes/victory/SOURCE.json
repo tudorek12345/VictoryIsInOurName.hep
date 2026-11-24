@@ -109,6 +109,13 @@
       ]
     },
     {
+      "purpose": "Preserve explicit null SRV and UAV types and bind null CBVs without allocating empty scratch buffers.",
+      "paths": [
+        "crates/victory-gpu/src/descriptor/host.rs",
+        "crates/victory-gpu/src/draw.rs"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",

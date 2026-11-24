@@ -632,6 +632,11 @@ fn make(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<Kept> {
     let device = &host.device;
     match view {
         &View::Constant(address, size) => {
+            if address == 0 || size == 0 {
+                // SAFETY: this slot is a null CBV in a CBV/SRV/UAV heap.
+                unsafe { device.CreateConstantBufferView(None, at) };
+                return Some(None);
+            }
             let shadow = crate::shadow::find(address, u64::from(size))?;
             let gpu = shadow.gpu(address);
             if gpu % 256 != 0 {
@@ -651,6 +656,12 @@ fn make(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<Kept> {
         }
         View::Shader(resource, desc) => {
             let resource = *resource as crate::object::This;
+            if resource.is_null() {
+                let desc = null_srv_desc(desc.as_ref()?)?;
+                // SAFETY: a null resource uses the supplied descriptor's type.
+                unsafe { device.CreateShaderResourceView(None::<&ID3D12Resource>, Some(&desc), at) };
+                return Some(None);
+            }
             if let Some(texture) = crate::resource::host_resource(resource) {
                 let mut desc = desc.as_ref().map(srv_desc);
                 if !fits(texture, desc.as_mut().map(|d| &mut d.Format), false) {
@@ -675,6 +686,19 @@ fn make(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) -> Option<Kept> {
         }
         View::Unordered(resource, _counter, desc) => {
             let resource = *resource as crate::object::This;
+            if resource.is_null() {
+                let desc = null_uav_desc(desc.as_ref()?)?;
+                // SAFETY: a null resource uses the supplied descriptor's type.
+                unsafe {
+                    device.CreateUnorderedAccessView(
+                        None::<&ID3D12Resource>,
+                        None::<&ID3D12Resource>,
+                        Some(&desc),
+                        at,
+                    )
+                };
+                return Some(None);
+            }
             let Some(texture) = crate::resource::host_resource(resource) else {
                 return match (crate::resource::buffer_bytes(resource), desc) {
                     (Some((data, len)), Some(desc)) => {
@@ -776,9 +800,8 @@ fn null_for(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) {
             return null_like(desc[..10].try_into().unwrap_or(&[0; 10]), at);
         }
         View::Constant(..) => {
-            let desc = D3D12_CONSTANT_BUFFER_VIEW_DESC::default();
-            // SAFETY: a slot of our heap; a zero location makes a null view.
-            return unsafe { host.device.CreateConstantBufferView(Some(&desc), at) };
+            // SAFETY: a null CBV in a slot of our heap.
+            return unsafe { host.device.CreateConstantBufferView(None, at) };
         }
         _ => return null_view(at),
     };
@@ -825,26 +848,55 @@ fn null_buffer_view(at: D3D12_CPU_DESCRIPTOR_HANDLE) {
     };
 }
 
-/// A texture view that reads zeros with the dimension (and mip and array
-/// counts) of the title's description `words`; 2D if it names none.
-fn null_like(words: &[u32; 10], at: D3D12_CPU_DESCRIPTOR_HANDLE) {
-    const TEXTURES: std::ops::RangeInclusive<u32> = 2..=10;
-    if !TEXTURES.contains(&words[1]) {
-        return null_view(at);
-    }
-    let Some(host) = host() else { return };
-    // One mip, one slice or cube, plane 0: fields a null view still checks.
+/// A minimal view of the supplied type. D3D12 validates the description
+/// even for a null resource, which may arrive with empty console bounds.
+fn null_srv_desc(words: &[u32; 10]) -> Option<D3D12_SHADER_RESOURCE_VIEW_DESC> {
     let mut w = [0u32; 10];
-    w[1] = words[1];
+    w[..2].copy_from_slice(&words[..2]);
+    w[2] = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     match words[1] {
+        // Buffer: one element, preserving structured stride or raw flag.
+        1 => {
+            w[6] = 1;
+            w[7..=8].copy_from_slice(&words[7..=8]);
+        }
         6 => {}
         7 => w[5] = 1,
         3 | 5 | 10 => (w[5], w[7]) = (1, 1),
-        _ => w[5] = 1,
+        2 | 4 | 8 | 9 => w[5] = 1,
+        _ => return None,
     }
-    let mut desc = srv_desc(&w);
+    Some(srv_desc(&w))
+}
+
+fn null_uav_desc(words: &[u32; 10]) -> Option<D3D12_UNORDERED_ACCESS_VIEW_DESC> {
+    let mut w = [0u32; 10];
+    w[..2].copy_from_slice(&words[..2]);
+    match words[1] {
+        // A null UAV never has a counter resource or counter offset.
+        1 => {
+            w[4] = 1;
+            w[5] = words[5];
+            w[8] = words[8];
+        }
+        2 | 4 => {}
+        3 | 5 | 8 => w[4] = 1,
+        _ => return None,
+    }
+    Some(uav_desc(&w))
+}
+
+/// A texture view that reads zeros with the dimension of the unavailable
+/// texture; 2D if it names none.
+fn null_like(words: &[u32; 10], at: D3D12_CPU_DESCRIPTOR_HANDLE) {
+    if words[1] == D3D12_SRV_DIMENSION_BUFFER.0 as u32 {
+        return null_view(at);
+    }
+    let Some(mut desc) = null_srv_desc(words) else {
+        return null_view(at);
+    };
+    let Some(host) = host() else { return };
     desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     // SAFETY: a slot of our heap; a null resource is allowed with a desc.
     unsafe {
         host.device
@@ -879,6 +931,43 @@ fn null_view(at: D3D12_CPU_DESCRIPTOR_HANDLE) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_null_views_keep_their_descriptor_class() {
+        let Some(heap) = HostHeap::new(false, 4) else {
+            return;
+        };
+        let mut srv = [0; 10];
+        srv[0] = DXGI_FORMAT_R32_UINT.0 as u32;
+        srv[1] = D3D12_SRV_DIMENSION_TEXTURE2D.0 as u32;
+        srv[2] = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        let mut uav = [0; 10];
+        uav[0] = DXGI_FORMAT_R32_UINT.0 as u32;
+        uav[1] = D3D12_UAV_DIMENSION_TEXTURE2DARRAY.0 as u32;
+        let srv_desc = null_srv_desc(&srv).unwrap();
+        assert_eq!(srv_desc.Format, DXGI_FORMAT_R32_UINT);
+        assert_eq!(srv_desc.ViewDimension, D3D12_SRV_DIMENSION_TEXTURE2D);
+        // SAFETY: this descriptor names a 2D view.
+        assert_eq!(unsafe { srv_desc.Anonymous.Texture2D.MipLevels }, 1);
+        let uav_desc = null_uav_desc(&uav).unwrap();
+        assert_eq!(uav_desc.Format, DXGI_FORMAT_R32_UINT);
+        assert_eq!(uav_desc.ViewDimension, D3D12_UAV_DIMENSION_TEXTURE2DARRAY);
+        assert_eq!(
+            // SAFETY: the descriptor names a 2D array view.
+            unsafe { uav_desc.Anonymous.Texture2DArray.ArraySize },
+            1
+        );
+        assert!(matches!(
+            make(&View::Shader(0, Some(srv)), heap.cpu(0)),
+            Some(None)
+        ));
+        assert!(matches!(
+            make(&View::Unordered(0, 0, Some(uav)), heap.cpu(1)),
+            Some(None)
+        ));
+        assert!(matches!(make(&View::Constant(0, 0), heap.cpu(2)), Some(None)));
+        assert_eq!(host().unwrap().log_messages(), None);
+    }
 
     /// Dynamic slots stay taken until given back, and runs do not wrap.
     #[test]
