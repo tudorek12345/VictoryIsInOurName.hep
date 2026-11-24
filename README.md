@@ -7,12 +7,12 @@
 
 Fast, focused experiments. Reproducible progress. Clear developer handoffs.
 
-[**Project website**](https://leonida-heperkoo.meshedgoby9.chatgpt.site/) ·
-[**Canonical project · Heperkoo’s Leonida**](https://github.com/tudorek12345/Leonida) ·
+
+
 [**PortWatch review request**](https://github.com/4lwayz/portwatch-vi/issues/17) ·
 [**My Discord**](https://discord.gg/ufXqPcVdVj) ·
 [**Developer handoff**](website/public/handoff.md) ·
-[**Upstream Leonida**](https://github.com/ItsNotRexed/Leonida)
+)
 <img width="2375" height="1327" alt="image" src="https://github.com/user-attachments/assets/b97e2714-9e49-445f-9bfe-1087a73cb9a5" />
 
 </div>
@@ -103,7 +103,7 @@ The original Leonida runtime executes the game’s existing x86-64 CPU code thro
 
 | Area | Status |
 | --- | --- |
-| Fork website, frontend and backend | Published · [open the site](https://leonida-heperkoo.meshedgoby9.chatgpt.site/) |
+
 | Developer handoff and experiment workflow | Available · [handoff](website/public/handoff.md) · [experiment notes](docs/FORK_EXPERIMENTS.md) |
 | Runtime work in this fork | Integrated VIctory shader/UAV fixes, compositor/cache changes and device-loss diagnostics; serial synthetic tests pass |
 | Stable world rendering and gameplay in this fork | **Not yet verified**; the remaining world-entry device removal is unresolved |
@@ -135,16 +135,12 @@ I work in **VS Code with Codex**, using AI assistance for investigation, impleme
 5. **Parallelize independent questions.** Loader/memory, graphics/ABI and reproduction can move together when ownership and interfaces are clear.
 6. **Keep only demonstrated progress.** Compare before and after, preserve useful negative results, then hand off the exact next experiment.
 
-A passing synthetic test, a skipped assertion or a successful API return is a different milestone from a real game frame. The [experiment workflow](docs/FORK_EXPERIMENTS.md) keeps those distinctions explicit.
 
-## Get the fork
 
-```powershell
-git clone --recursive https://github.com/tudorek12345/Leonida.git
-cd Leonida
-```
 
-Read the [build prerequisites and full technical guide](README.upstream.md#how-to-build) before starting. For a runtime-focused pass with the required local inputs and toolchain already available:
+
+
+
 
 ```powershell
 python -I make_game.py --game "D:\Games\GTA-VI-package" --stages check,shaders,runtime --out "D:\Leonida\runtime" --work "D:\Leonida\work"
@@ -188,23 +184,6 @@ For changes that need to stay traceable, use this fork’s [pull requests](https
 
 Bring a commit, a specific question, the commands you ran, the result and the next blocker. Check [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md) and current upstream coordination before overlapping runtime work.
 
-## Project links
-
-| Resource | What it contains |
-| --- | --- |
-| [Project website](https://leonida-heperkoo.meshedgoby9.chatgpt.site/) | Overview, development priorities, repository activity and collaboration |
-| [Latest progress report](website/public/progress-update.md) | Maintainer-reported first-boot, intro, menu and world-loading progress; remaining rendering failure |
-| [Sanitized runtime results](tracking/runtime-progress.json) | Latest synthetic checks, intro-only measurements, incomplete repro and checked/unchecked tasks; no raw game content |
-| [Canonical project](https://github.com/tudorek12345/Leonida) | Follow the integration, showcase and PortWatch review through Heperkoo’s Leonida. This repository mirrors its runtime. |
-| [GTA VI port progress showcase](https://discord.com/events/1459617753907331094/1574557419596677260) | Discord event on 25 November 2026; open it for the start time in your timezone |
-| [Fork notes](FORK.md) | Scope, ongoing work and attribution |
-| [Developer handoff](website/public/handoff.md) | End-to-end brief for the next runtime investigation |
-| [Experiment workflow](docs/FORK_EXPERIMENTS.md) | Fast iteration loop and a reusable handoff record |
-| [Website source](website/README.md) | Frontend, backend, local development and deployment notes |
-| [Discord announcement](website/DISCORD_ANNOUNCEMENT.md) | Copy-ready community update |
-| [Reddit announcement](website/REDDIT_ANNOUNCEMENT.md) | Copy-ready public introduction |
-| [Technical documentation](docs/README.md) | Runtime, formats, graphics and validation |
-| [Inherited technical guide](README.upstream.md) | Preserved upstream build/platform details and historical status notes |
 
 ## Credits and license
 
