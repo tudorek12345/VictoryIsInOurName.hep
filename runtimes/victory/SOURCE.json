@@ -89,6 +89,14 @@
       ]
     },
     {
+      "purpose": "Preserve structured SRV stride and element offsets when lowering scalar byte-addressed loads to DXIL. Exercise a load straddling two elements with a synthetic WARP fixture.",
+      "paths": [
+        "crates/victory-shader/src/emit/lower.rs",
+        "crates/victory-shader/src/emit/valu_tests.rs",
+        "docs/architecture.md"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",
@@ -118,8 +126,10 @@
     "crates/victory-hle/src/modules/gameinput.rs",
     "crates/victory-pe/src/image.rs",
     "crates/victory-shader/src/emit/diff_tests.rs",
+    "crates/victory-shader/src/emit/lower.rs",
     "crates/victory-shader/src/emit/mod.rs",
     "crates/victory-shader/src/emit/valu_tests.rs",
+    "docs/architecture.md",
     "docs/asset-policy.md",
     "xtask/Cargo.toml",
     "xtask/src/main.rs",

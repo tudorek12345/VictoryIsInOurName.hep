@@ -5,7 +5,7 @@
 //! `v_med3_f32`/`v_med3_f16` with NaN operands, `v_fract_f32`/`v_fract_f16`
 //! near `1.0`, and turn-range reduction for `v_sin_*`/`v_cos_*`.
 
-use super::host::{Dispatch, Host, Root, View};
+use super::host::{Dispatch, Host, Root, Stride, View};
 use super::{HostShader, lower, validator};
 use crate::native::{
     ComputeIo, HwStage, NativeProgram, ResourceType, RootParam, RootType, StageIo, UsedResource,
@@ -28,11 +28,11 @@ const fn sop2(op: u8, sdst: u8, src0: u8, src1: u8) -> u32 {
         | src0 as u32
 }
 
-/// SMEM `s_load_dwordx4 s[dst:dst+3], s[base:base+1], 0` (soffset = null).
-const fn s_load_dwordx4(dst: u8, base: u8) -> [u32; 2] {
+/// SMEM `s_load_dwordx4 s[dst:dst+3], s[base:base+1], offset`.
+const fn s_load_dwordx4(dst: u8, base: u8, offset: u32) -> [u32; 2] {
     [
         0x3D << 26 | 0x02 << 18 | (dst as u32) << 6 | (base as u32 >> 1),
-        125 << 25,
+        125 << 25 | offset,
     ]
 }
 
@@ -69,10 +69,14 @@ const fn vgpr(n: u8) -> u16 {
 /// 4 dwords of root constants in `s0..s3`, runs `body` (leaving its result in
 /// `v0`), and stores `v0` to dword 0 of the raw UAV at heap index 0.
 fn build_valu_cs(body: &[u32]) -> HostShader {
+    build_cs_with_inputs(body, &[])
+}
+
+fn build_cs_with_inputs(body: &[u32], inputs: &[UsedResource]) -> HostShader {
     let mut words = Vec::new();
     // s[4:5] = descriptor table address (heap index 0 -> byte offset 0).
     words.push(s_mov_b32(5, 0x80)); // inline constant 0
-    words.extend_from_slice(&s_load_dwordx4(8, 4));
+    words.extend_from_slice(&s_load_dwordx4(8, 4, 0));
     // Copy root constants s0..s3 into v1..v4 so VALU instructions operate on
     // VGPRs just as they do in real shaders.
     for i in 0..4u8 {
@@ -105,7 +109,7 @@ fn build_valu_cs(body: &[u32]) -> HostShader {
                 slot: 1,
             },
         ],
-        used: vec![UsedResource {
+        used: [UsedResource {
             kind: ResourceType::Uav,
             root: RootType::Table,
             table_offset_dwords: 0,
@@ -114,7 +118,10 @@ fn build_valu_cs(body: &[u32]) -> HostShader {
             dwords: 4,
             user_data: 4,
             slot: 1,
-        }],
+        }]
+        .into_iter()
+        .chain(inputs.iter().copied())
+        .collect(),
         io: StageIo::Cs(ComputeIo {
             rsrc2: 5 << 1, // 5 user SGPRs: s0..s4
             threads: [1, 1, 1],
@@ -157,6 +164,53 @@ fn build_valu_cs(body: &[u32]) -> HostShader {
     }
 
     shader
+}
+
+#[test]
+fn scalar_load_crosses_a_structured_buffer_element_boundary() {
+    let _native_test_guard = super::native_test_guard();
+    let mut body = s_load_dwordx4(12, 4, 32).to_vec();
+    // s_buffer_load_dwordx2 s[16:17], s[12:15], 8
+    body.extend([0x3D << 26 | 0x09 << 18 | 16 << 6 | 6, 125 << 25 | 8]);
+    body.extend([vop1(1, 0, sgpr(16)), vop1(1, 1, sgpr(17))]);
+    body.extend(buffer_store_dword(1, 8, 4));
+    let shader = build_cs_with_inputs(
+        &body,
+        &[UsedResource {
+            kind: ResourceType::Srv,
+            root: RootType::Table,
+            table_offset_dwords: 8,
+            lower_bound: 0,
+            stride: 12,
+            dwords: 4,
+            user_data: 4,
+            slot: 1,
+        }],
+    );
+    let Ok(host) = Host::new(true) else {
+        eprintln!("no SM 6.6 WARP device; skipped");
+        return;
+    };
+    let (root, pipeline) = host.compute_pipeline(&shader).unwrap();
+    let result = host
+        .dispatch(
+            &root,
+            &pipeline,
+            &Dispatch {
+                roots: vec![(0, Root::Constants(vec![0; shader.user_data_dwords() as usize]))],
+                views: &[
+                    View::RawUav(2),
+                    View::Buffer {
+                        data: &[0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+                        stride: Stride::Structured(12),
+                    },
+                ],
+                samplers: &[],
+                groups: [1, 1, 1],
+            },
+        )
+        .unwrap();
+    assert_eq!(result[0], [0x33, 0x44]);
 }
 
 /// Runs `shader` on every available SM 6.6 host (hardware GPU and WARP) for

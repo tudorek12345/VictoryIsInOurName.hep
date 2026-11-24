@@ -92,3 +92,8 @@ traces each descriptor and scalar memory address to the root parameter it
 comes from (table, heap, root descriptor or constant). `victory translate`
 runs every shader it finds (containers, SGD5 files) through these and
 lists what they cannot handle yet.
+
+The host translation uses a structured SRV for a scalar buffer load when
+the native buffer metadata supplies a multi-dword element stride. It
+divides each byte address into an element index and an offset. A synthetic
+WARP test reads two dwords across a 12-byte element boundary.

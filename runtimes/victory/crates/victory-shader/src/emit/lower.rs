@@ -2764,20 +2764,36 @@ impl<'a> Lower<'a> {
             }
             return Ok(());
         }
-        if matches!(kind, Some(u) if u.kind == ResourceType::Srv) {
-            let h = self.handle(site, src, false, (11, 0))?;
+        if let Some(srv) = kind.filter(|u| u.kind == ResourceType::Srv) {
+            // A scalar load takes a byte offset even when the table holds a
+            // structured SRV. DXIL must use that view's stride and split the
+            // address into an element index and an offset within it.
+            let structured = srv.dwords == 4
+                && (8..=2048).contains(&srv.stride)
+                && srv.stride.is_multiple_of(4);
+            let props = if structured { (12, srv.stride) } else { (11, 0) };
+            let h = self.handle(site, src, false, props)?;
             for k in 0..count {
                 let off = self.s.m.i32(4 * k);
                 let a = self.s.m.bin(c, Bin::Add, addr, off);
                 let mask = self.s.m.i8(1);
                 let (u, al) = (self.s.m.undef(self.s.t.i32), self.s.m.i32(4));
+                let (index, within) = if structured {
+                    let stride = self.s.m.i32(srv.stride);
+                    (
+                        self.s.m.bin(c, Bin::UDiv, a, stride),
+                        self.s.m.bin(c, Bin::URem, a, stride),
+                    )
+                } else {
+                    (a, u)
+                };
                 let r = self.s.op(
                     c,
                     "rawBufferLoad.f32",
                     Attr::ReadOnly,
                     self.s.t.res_ret,
                     139,
-                    &[h, a, u, mask, al],
+                    &[h, index, within, mask, al],
                 );
                 let x = self.s.m.extract(c, r, 0);
                 let x = self.as_int(x);
