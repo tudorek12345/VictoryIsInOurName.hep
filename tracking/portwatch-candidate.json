@@ -1,41 +1,15 @@
 {
-  "repo": "tudorek12345/Leonida",
-  "name": "Heperkoo’s Leonida",
-  "description": "Heperkoo’s Leonida integration of the original Leonida and VIctory runtimes for native Windows research. The maintainer reports startup and loading screens on RX 9060 XT. Controllable gameplay and independent reproduction remain open. VictoryIsInOurName.hep is a companion runtime mirror.",
-  "language": "Python",
-  "stars": 19,
-  "createdAt": "2026-11-23T13:54:04Z",
-  "pushedAt": "2026-11-24T09:22:18Z",
-  "defaultBranch": "main",
-  "sources": [
-    "Maintainer registration request: https://github.com/4lwayz/portwatch-vi/issues/17"
-  ],
-  "links": [
-    "https://github.com/tudorek12345/Leonida/commit/298042a3388e400464824d246ed3ec265c238345",
-    "https://github.com/tudorek12345/Leonida/blob/6f5b35fd81a2c0e1e77449691f061d1bf1446a9e/website/public/media/first-boot-rx9060xt.mp4",
-    "https://github.com/tudorek12345/Leonida/blob/6f5b35fd81a2c0e1e77449691f061d1bf1446a9e/website/public/media/README.md",
-    "https://github.com/tudorek12345/Leonida/blob/6f5b35fd81a2c0e1e77449691f061d1bf1446a9e/tracking/runtime-progress.json",
-    "https://github.com/tudorek12345/Leonida/actions/runs/45352873288",
-    "https://github.com/4lwayz/portwatch-vi/issues/17#issuecomment-7125717267",
-    "https://github.com/tudorek12345/Leonida/commit/2b643c705ab3bd8e48560e5bab0f991274a32113",
-    "https://github.com/tudorek12345/Leonida/blob/2b643c705ab3bd8e48560e5bab0f991274a32113/runtimes/victory/SOURCE.json",
-    "https://github.com/tudorek12345/Leonida/blob/2b643c705ab3bd8e48560e5bab0f991274a32113/.github/workflows/victory-runtime.yml",
-    "https://github.com/tudorek12345/Leonida/actions/runs/45304650680",
-    "https://github.com/tudorek12345/Leonida/actions/runs/45304650622",
-    "https://github.com/tudorek12345/Leonida/actions/runs/45304650601",
-    "https://github.com/4lwayz/portwatch-vi/issues/17",
-    "https://github.com/tudorek12345/Leonida/blob/main/README.md",
-    "https://github.com/tudorek12345/Leonida/blob/main/tracking/runtime-progress.json",
-    "https://github.com/tudorek12345/VictoryIsInOurName.hep"
-  ],
-  "foundAt": "2026-11-24T00:33:49Z",
-  "substance": 73,
-  "signals": [
-    "Python",
-    "4 technical terms",
-    "status table",
-    "100+ commits/7d"
-  ],
+  "repo": "tudorek12345/VictoryIsInOurName.hep",
+  "name": "Windows D3D12 runtime integration",
   "kind": "effort",
-  "status": "new"
+  "description": "The maintainer reports a Rockstar Games Presents title card and a black picture at the world transition. Visible world geometry and input response remain unverified.",
+  "links": [
+    "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/tracking/runtime-progress.json",
+    "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/docs/portwatch-submission.md",
+    "https://github.com/tudorek12345/VictoryIsInOurName.hep/commit/298042a3388e400464824d246ed3ec265c238345",
+    "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/runtimes/victory/SOURCE.json"
+  ],
+  "sources": [
+    "Maintainer registration follow-up for https://github.com/4lwayz/portwatch-vi/issues/17"
+  ]
 }
