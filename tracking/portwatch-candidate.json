@@ -1,0 +1,30 @@
+{
+  "repo": "tudorek12345/Leonida",
+  "name": "Leonida",
+  "description": "Experimental Xbox Series compatibility work for native Windows execution, integrating VIctory alongside Leonida with separate runtime state and source-only validation. Integrated GTA VI behavior remains unverified.",
+  "language": "Python",
+  "stars": 13,
+  "createdAt": "2026-11-23T13:54:04Z",
+  "pushedAt": "2026-11-24T00:33:39Z",
+  "defaultBranch": "main",
+  "sources": [
+    "Maintainer submission prepared in the repository; not submitted to PortWatch"
+  ],
+  "links": [
+    "https://github.com/tudorek12345/Leonida/commit/367002ac15bf6efe6af0355afc3da4d257ce712c",
+    "https://github.com/tudorek12345/Leonida/blob/367002ac15bf6efe6af0355afc3da4d257ce712c/runtimes/victory/SOURCE.json",
+    "https://github.com/tudorek12345/Leonida/commit/97bb13714b2c6f1988578b0827fc19ebc3808847",
+    "https://github.com/tudorek12345/Leonida/commit/bd812d9f1fd779dc1c23d6e6fc7eea2606b40cce",
+    "https://github.com/tudorek12345/Leonida/actions/runs/45299795364"
+  ],
+  "foundAt": "2026-11-24T00:33:49Z",
+  "substance": 73,
+  "signals": [
+    "Python",
+    "4 technical terms",
+    "status table",
+    "100+ commits/7d"
+  ],
+  "kind": "effort",
+  "status": "new"
+}
