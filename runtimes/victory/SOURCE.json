@@ -54,6 +54,17 @@
       "paths": [
         "crates/victory-formats/src/xma/tables.rs"
       ]
+    },
+    {
+      "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
+      "paths": [
+        "crates/victory-shader/src/emit/mod.rs",
+        "crates/victory-shader/src/emit/diff_tests.rs",
+        "crates/victory-shader/src/emit/valu_tests.rs"
+      ],
+      "references": [
+        "https://github.com/Marvisak/VIctory/issues/181"
+      ]
     }
   ],
   "modifiedFiles": [
@@ -64,6 +75,9 @@
     "crates/victory-formats/src/xma/tables.rs",
     "crates/victory-hle/src/modules/dstorage.rs",
     "crates/victory-pe/src/image.rs",
+    "crates/victory-shader/src/emit/diff_tests.rs",
+    "crates/victory-shader/src/emit/mod.rs",
+    "crates/victory-shader/src/emit/valu_tests.rs",
     "docs/asset-policy.md",
     "xtask/Cargo.toml",
     "xtask/src/main.rs",
@@ -71,7 +85,7 @@
   ],
   "parentSourceMarker": "../../.victory-root",
   "previousCommit": "35b054ec038c11bc8a0de66b1eee764b1ad4f101",
-  "updatedAt": "2026-11-24T01:07:14.877867Z",
+  "updatedAt": "2026-11-24T01:21:45.140314Z",
   "upstreamRefresh": {
     "fromCommit": "35b054ec038c11bc8a0de66b1eee764b1ad4f101",
     "toCommit": "d2a4bae1f49533ef5cb512fd1b1ba1513f2e1989",

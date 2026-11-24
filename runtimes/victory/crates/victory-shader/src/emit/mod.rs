@@ -90,6 +90,21 @@ pub mod validator;
 mod valu_tests;
 mod wave;
 
+/// Serializes native GPU/DXIL unit tests for their full host/validator lifetime.
+/// Concurrent runs can crash in native code (upstream issue 181); the underlying
+/// cause is not established: https://github.com/Marvisak/VIctory/issues/181.
+/// Acquire before creating a validator or host and keep the guard until both
+/// have been dropped. Pure shader tests and production code do not use this lock.
+#[cfg(all(test, windows))]
+fn native_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static NATIVE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // Keep later tests runnable after an assertion failure, without hiding the
+    // original failure behind cascading poisoned-lock panics.
+    NATIVE_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 use crate::dxbc::{Container, FourCC};
 use crate::native::{HwStage, NativeProgram, RootType};
 use crate::{ShaderError, io, ir, resource, structure};
@@ -478,6 +493,7 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn stub_pipeline_is_created() {
+        let _native_test_guard = super::native_test_guard();
         let Ok(host) = super::host::Host::new(false) else {
             eprintln!("no SM 6.6 device; skipped");
             return;
@@ -529,6 +545,7 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn constant_color_validates() {
+        let _native_test_guard = super::native_test_guard();
         let mut c = constant_color();
         let path = super::validator::Validator::default_path();
         let Ok(mut v) = super::validator::Validator::load(path.as_deref()) else {

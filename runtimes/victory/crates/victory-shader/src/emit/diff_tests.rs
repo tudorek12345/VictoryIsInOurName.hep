@@ -714,6 +714,7 @@ fn user_data(s: &HostShader, k: &[u32; 4]) -> Vec<u32> {
 
 #[test]
 fn translated_shaders_draw_as_pc_ones() {
+    let _native_test_guard = super::native_test_guard();
     let Some((console, pc)) = tools() else {
         eprintln!("no console or PC compiler; skipped");
         return;
@@ -870,6 +871,7 @@ fn translated_shaders_draw_as_pc_ones() {
 
 #[test]
 fn translated_mesh_shaders_draw_as_pc_ones() {
+    let _native_test_guard = super::native_test_guard();
     let Some((console, pc)) = tools() else {
         eprintln!("no console or PC compiler; skipped");
         return;
@@ -986,6 +988,7 @@ fn translated_mesh_shaders_draw_as_pc_ones() {
 /// angles cannot be tried from here.
 #[test]
 fn float_semantics_are_the_consoles() {
+    let _native_test_guard = super::native_test_guard();
     use super::host::{Dispatch, View};
     let Some((console, _)) = tools() else {
         eprintln!("no console compiler; skipped");
@@ -1075,6 +1078,7 @@ fn close(a: u32, b: u32) -> bool {
 
 #[test]
 fn translated_compute_matches_pc() {
+    let _native_test_guard = super::native_test_guard();
     use super::host::{Dispatch, Stride, View};
     let Some((console, pc)) = tools() else {
         eprintln!("no console or PC compiler; skipped");

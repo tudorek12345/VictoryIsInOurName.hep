@@ -233,6 +233,7 @@ fn f16_to_f32(bits: u16) -> f32 {
 
 #[test]
 fn v_med3_f32_matches_rdna2_with_nan() {
+    let _native_test_guard = super::native_test_guard();
     // v_med3_f32 v0, v1, v2, v3 (VOP3 opcode 0x157)
     let shader = build_valu_cs(&vop3(0x157, 0, vgpr(1), vgpr(2), vgpr(3)));
     let nan = f32::NAN.to_bits();
@@ -281,6 +282,7 @@ fn v_med3_f32_matches_rdna2_with_nan() {
 
 #[test]
 fn v_med3_f16_matches_rdna2_with_nan() {
+    let _native_test_guard = super::native_test_guard();
     // v_med3_f16 v0, v1, v2, v3 (VOP3 opcode 0x357)
     let shader = build_valu_cs(&vop3(0x357, 0, vgpr(1), vgpr(2), vgpr(3)));
     let h0 = 0x0000u32; // 0.0
@@ -322,6 +324,7 @@ fn v_med3_f16_matches_rdna2_with_nan() {
 
 #[test]
 fn v_fract_f32_never_returns_one() {
+    let _native_test_guard = super::native_test_guard();
     // v_fract_f32 v0, v1 (VOP1 opcode 0x020)
     let shader = build_valu_cs(&[vop1(0x020, 0, vgpr(1))]);
     let f = f32::to_bits;
@@ -371,6 +374,7 @@ fn v_fract_f32_never_returns_one() {
 
 #[test]
 fn v_fract_f16_never_returns_one() {
+    let _native_test_guard = super::native_test_guard();
     // v_fract_f16 v0, v1 (VOP1 opcode 0x05f)
     let shader = build_valu_cs(&[vop1(0x05f, 0, vgpr(1))]);
     let below_one = 0x3BFFu16; // 1.0 - 2^-11
@@ -422,6 +426,7 @@ fn v_fract_f16_never_returns_one() {
 
 #[test]
 fn v_sin_and_v_cos_f32_reduce_large_turns() {
+    let _native_test_guard = super::native_test_guard();
     let sin_shader = build_valu_cs(&[vop1(0x035, 0, vgpr(1))]);
     let cos_shader = build_valu_cs(&[vop1(0x036, 0, vgpr(1))]);
     let f = f32::to_bits;
@@ -522,6 +527,7 @@ fn v_sin_and_v_cos_f32_reduce_large_turns() {
 
 #[test]
 fn v_sin_and_v_cos_f16_reduce_large_turns() {
+    let _native_test_guard = super::native_test_guard();
     let sin_shader = build_valu_cs(&[vop1(0x060, 0, vgpr(1))]);
     let cos_shader = build_valu_cs(&[vop1(0x061, 0, vgpr(1))]);
 
@@ -603,6 +609,7 @@ fn v_sin_and_v_cos_f16_reduce_large_turns() {
 
 #[test]
 fn bfe_signed_and_unsigned_match_rdna2() {
+    let _native_test_guard = super::native_test_guard();
     // v_bfe_i32 v0, v1, v2, v3 (VOP3 opcode 0x149)
     let v_signed = build_valu_cs(&vop3(0x149, 0, vgpr(1), vgpr(2), vgpr(3)));
     // v_bfe_u32 v0, v1, v2, v3 (VOP3 opcode 0x148)
