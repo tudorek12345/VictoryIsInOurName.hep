@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/logo.png" alt="Leonida" width="160">
 
-# Leonida · Heperkoo
+# VictoryIsOurName.hep · Heperkoo
 
 **An experimental project working toward GTA VI running natively on PC.**
 
