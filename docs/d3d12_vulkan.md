@@ -3722,7 +3722,7 @@ minimum. The trace decides, not the milestone labels.
 
 ## 7. Prior art and measured Xbox ABI
 
-A GPL-2.0-only fork of AnyPS5 (`americas-recomp`, branch `xbox-series`) recompiles the same GTA VI Xbox Series
+A GPL-2.0-only derivative of AnyPS5 (`americas-recomp`, branch `xbox-series`) recompiles the same GTA VI Xbox Series
 shaders and has run the package's DLLs against a PC D3D12 device behind an Xbox-ABI proxy. Its measurements are
 prior art for this design. The findings below are paraphrased; no code or long passages are copied. They were
 verified there by running the package DLLs (`XS_TRACE=1`, per-slot hit counters) or by static import analysis, not

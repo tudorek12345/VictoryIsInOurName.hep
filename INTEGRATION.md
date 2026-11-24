@@ -1,6 +1,6 @@
-# Fork and integration notes
+# Runtime integration notes
 
-This repository is the requested tracking source for the Windows D3D12 runtime integration. See the [latest maintainer observations](README.md#latest-run-on-24-november-2026) and the [PortWatch submission](docs/portwatch-submission.md) for the status and scope of this single effort.
+This repository is the requested tracking source for the Windows D3D12 runtime integration. See the [latest maintainer observations](README.md#reported-boot-progress) and the [PortWatch submission](docs/portwatch-submission.md) for the status and scope of this single effort.
 
 ## Runtime history
 
@@ -10,4 +10,4 @@ The separate VIctory backend by Marvisak and its contributors uses native D3D12.
 
 ## Development handoff
 
-Start with the [sanitized runtime report](tracking/runtime-progress.json) and [reproduction checklist](docs/FORK_EXPERIMENTS.md). Record the backend, exact build, GPU and driver, observed output and next unresolved failure. Keep runtime measurements tied to the run that produced them. Use the [contribution guide](CONTRIBUTING.md) and [repository instructions](AGENTS.md) before changing shared code.
+Start with the [sanitized runtime report](tracking/runtime-progress.json) and [reproduction checklist](docs/EXPERIMENTS.md). Record the backend, exact build, GPU and driver, observed output and next unresolved failure. Keep runtime measurements tied to the run that produced them. Use the [contribution guide](CONTRIBUTING.md) and [repository instructions](AGENTS.md) before changing shared code.

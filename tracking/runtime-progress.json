@@ -12,17 +12,117 @@
     },
     {
       "stage": "world-transition",
-      "result": "The maintainer describes reaching an in-game stage with a black picture. World geometry, player movement and response to input have not been demonstrated."
+      "result": "The reported load reaches the first mission’s intro. The picture stays black and the host GPU fails within seconds. The cause is unresolved."
     }
   ],
   "testedCommit": null,
-  "hardwareForThisRun": null,
+  "hardwareForThisRun": {
+    "gpu": "AMD Radeon RX 9060 XT",
+    "vramGB": 16,
+    "cpu": "AMD Ryzen 7 5700X",
+    "systemRamGB": 32,
+    "scope": "Machine identified by the maintainer for the five-stage report."
+  },
   "captureForThisRun": null,
   "independentReproduction": false,
   "limitations": [
-    "The maintainer did not identify the exact runtime revision, GPU or driver for this observation.",
-    "There is no matching public capture or diagnostic trace attached to this report.",
-    "No frame rate or completion of the world-loading process was measured for this observation."
+    "The five-stage count describes the scope of this report. PortWatch assigns its own milestones.",
+    "The exact tested commit and GPU driver are unspecified. The title-card observation and stage summary have no matching public run capture.",
+    "The supplied status-panel image summarizes observations. It is not a capture of the game rendering the world.",
+    "The exact cause of the black picture and GPU failure is unknown. The debug attempt ended before world entry, and gameplay frame rate and player control remain unverified."
   ],
-  "nextEvidence": "Identify the tested commit and capture one uninterrupted run through the title card and black picture, including an input attempt and the observed response."
+  "nextEvidence": "Identify the tested commit and driver and capture one uninterrupted run through the title card and world transition, including an input attempt and the observed response.",
+  "reportedStageCount": {
+    "working": 4,
+    "total": 5,
+    "unit": "stages in this report"
+  },
+  "stages": [
+    {
+      "id": "first-boot",
+      "stage": "Boot and first-boot screens",
+      "status": "reported-working",
+      "detail": "Accessibility, language, settings and legal screens work.",
+      "reportedFps": 30
+    },
+    {
+      "id": "intro-video",
+      "stage": "Intro video with sound",
+      "status": "reported-working",
+      "detail": "Video and audio play."
+    },
+    {
+      "id": "profile-saves",
+      "stage": "Start screen, profile and saves",
+      "status": "reported-working",
+      "detail": "Start screen, profile and save flow work."
+    },
+    {
+      "id": "world-loading",
+      "stage": "Loading into the world",
+      "status": "reported-working",
+      "detail": "The load reaches the first mission’s intro.",
+      "approximateSeconds": 50
+    },
+    {
+      "id": "world-rendering",
+      "stage": "World / first mission’s intro",
+      "status": "reported-blocked",
+      "detail": "The picture stays black. The host GPU fails within seconds. World geometry and controllable gameplay remain unverified."
+    }
+  ],
+  "shortIntroMeasurements": {
+    "scope": "Separate bounded intro measurements, before gameplay.",
+    "hardware": {
+      "fps": 30,
+      "frameTimeMs": 33.3
+    },
+    "warp": {
+      "approximateFps": 10,
+      "approximateFrameTimeMs": 100
+    }
+  },
+  "reportedImplementation": [
+    "Raw bindless SRV consistency",
+    "Typed UINT16 UAV support",
+    "Exact 3:1 compositor downscaling",
+    "Coalescing of concurrent shader-cache fills",
+    "Diagnostics for the submission caller, fence phase and Present path"
+  ],
+  "engineeringTasks": [
+    {
+      "id": "trace-single-list",
+      "status": "completed",
+      "result": "Single-list device removal traced. The remaining defect has not been attributed."
+    },
+    {
+      "id": "distinguish-failure-paths",
+      "status": "completed",
+      "result": "Caller, fence and Present diagnostics distinguish failure paths and retain the fence phase. Fault attribution remains pending."
+    },
+    {
+      "id": "serial-validation",
+      "status": "in-progress",
+      "result": "Serial build and original-file protection checks passed. The latest debug request could not enable the debug layer and reached lifecycle exit before world entry.",
+      "workspaceTests": {
+        "passed": 303,
+        "ignored": 5
+      },
+      "focusedGpuCrateRerun": {
+        "passed": 62,
+        "ignored": 2
+      },
+      "debugAttempt": {
+        "elapsedSeconds": 28.42,
+        "exitCode": 0,
+        "debugLayerAvailable": false,
+        "worldEntered": false
+      }
+    },
+    {
+      "id": "fix-and-verify-gameplay",
+      "status": "pending",
+      "result": "Fix the remaining defect once identified and verify controllable gameplay on hardware."
+    }
+  ]
 }

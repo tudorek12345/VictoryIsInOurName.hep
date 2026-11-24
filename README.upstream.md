@@ -1,8 +1,8 @@
 # Inherited upstream technical guide
 
-This preserves the inherited Leonida README from [fork commit 43d2f4d8](https://github.com/tudorek12345/Leonida/blob/43d2f4d858e9ce7dff2b92fa0f6faec2a239c64f/README.md), excluding the fork banner added above it.
+This preserves the inherited Leonida README from [source revision 43d2f4d8](https://github.com/tudorek12345/Leonida/blob/43d2f4d858e9ce7dff2b92fa0f6faec2a239c64f/README.md).
 
-**Some status statements below are historical.** Use the [fork README](README.md#current-status), the current checkout and the linked evidence for the fork's present status. The build/platform reference and original credits remain available here; confirm toolchain details against current code.
+**Some status statements below are historical.** Use the [current runtime report](README.md#reported-boot-progress), the current checkout and the linked evidence for the integration’s present status. The build/platform reference and original credits remain available here; confirm toolchain details against current code.
 
 ---
 

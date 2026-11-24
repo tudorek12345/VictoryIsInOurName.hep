@@ -1,0 +1,38 @@
+BOOT PROGRESS · 2026-11-24
+Maintainer-authored status summary | GTA VI / Windows D3D12
+Verification: self-reported on one machine. Independent reproduction pending.
+Test system: AMD Radeon RX 9060 XT 16 GB, AMD Ryzen 7 5700X, 32 GB RAM.
+
+STAGES · 4 of 5 reported working
+01  WORKING   First boot: accessibility, language, settings and legal screens. Reported at 30 FPS.
+02  WORKING   Intro video and sound play.
+03  WORKING   Start screen, profile and save flow work.
+04  WORKING   World loading reaches the first mission’s intro in about 50 seconds.
+05  BLOCKED   At the first mission’s intro the picture stays black. The host GPU fails within seconds.
+
+The maintainer also reports seeing “Rockstar Games Presents”. The exact build and
+driver and a recording of the new sequence are pending. Visible world geometry,
+responsive input and controllable hardware gameplay remain unverified.
+
+BOUNDED INTRO MEASUREMENTS
+Hardware: 30 FPS / 33.3 ms. WARP: approximately 10 FPS / 100 ms.
+These figures describe short intro runs. There is no gameplay FPS measurement.
+The four working stages are a count of this report’s stages. PortWatch assigns
+its own compatibility score.
+
+IMPLEMENTATION
+Raw bindless SRV consistency and typed UINT16 UAV support.
+Exact 3:1 compositor downscaling and coalesced concurrent shader-cache fills.
+Caller, fence and Present diagnostics.
+
+ENGINEERING TASKS
+01  COMPLETED     Single-list device removal traced. The remaining defect has no established cause.
+02  COMPLETED     Caller, fence and Present diagnostics distinguish failure paths and retain the fence phase.
+03  IN PROGRESS   Serial build and original-file protection checks passed.
+                  Workspace: 303 passed, 5 ignored. Focused GPU crate: 62 passed, 2 ignored.
+                  The debug layer was unavailable. The debug attempt exited with code 0
+                  after 28.42 seconds, before world entry.
+04  PENDING       Fix the demonstrated remaining defect and verify controllable gameplay on hardware.
+
+Report type: manually supplied observations and prior test summaries. No raw runtime
+telemetry is attached. Stage 05 and the separate debug attempt are different observations.

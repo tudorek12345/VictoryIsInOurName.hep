@@ -40,7 +40,7 @@ specification. Do not paste even a small function "to save time".
 
 <https://github.com/realdody/americas-recomp>
 
-A **GPL-2.0-only** fork of [boykopovar/AnyPS5](https://github.com/boykopovar/AnyPS5), on its `xbox-series` branch. It
+A **GPL-2.0-only** derivative of [boykopovar/AnyPS5](https://github.com/boykopovar/AnyPS5), on its `xbox-series` branch. It
 recompiles the same Xbox Series shaders and has run the package's DLLs against a PC D3D12 device behind an Xbox-ABI
 proxy. Since 2026-11-22 its pull requests are limited to collaborators and its README points contributors here.
 

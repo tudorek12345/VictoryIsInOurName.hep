@@ -93,7 +93,7 @@ artifact of its own commit. It holds Windows executables, so use them on Windows
 section below; GitHub expires the artifact after 7 days. Not every commit on `main` has one: the workflow runs
 only when a commit touches what it builds or reads (the `paths` list in `.github/workflows/runtime.yml`), so a
 commit that changes only docs, tests or other tools has no Runtime run. Take the most recent run under
-Actions -> Runtime, and check out the commit it built, or start a run of the commit you want on your own fork with
+Actions -> Runtime, and check out the commit it built, or start a run of the commit you want in a repository where you can run Actions with
 "Run workflow" (`workflow_dispatch`). Download and unzip `runtime-windows`, and pass the unzipped folder to `--build`:
 
 ```sh

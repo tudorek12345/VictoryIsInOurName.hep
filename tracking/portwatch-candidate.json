@@ -2,8 +2,11 @@
   "repo": "tudorek12345/VictoryIsInOurName.hep",
   "name": "Windows D3D12 runtime integration",
   "kind": "effort",
-  "description": "The maintainer reports a Rockstar Games Presents title card and a black picture at the world transition. Visible world geometry and input response remain unverified.",
+  "description": "The maintainer reports working boot, intro audio/video, profile/saves and world loading. At the first mission’s intro the picture stays black and the host GPU fails. Player control and gameplay FPS remain unverified.",
   "links": [
+    "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/README.md#reported-boot-progress",
+    "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/boot-progress.log",
+    "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/docs/images/boot-progress.png",
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/tracking/runtime-progress.json",
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/docs/portwatch-submission.md",
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/commit/298042a3388e400464824d246ed3ec265c238345",

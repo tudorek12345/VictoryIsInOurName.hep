@@ -465,7 +465,7 @@ transform (§4a).
 ## 4a. Rehydration and source geometry (measured)
 
 **Status: measured on 10 BLAS** of the first nested pack in `core_bvh4.rpf` (one interior cell), on Windows 11 with
-no GPU involved. The tools that did it live in a fork of another project (`americas-recomp`, GPL-2.0-only,
+no GPU involved. The tools that did it live in a derivative of another project (`americas-recomp`, GPL-2.0-only,
 `wildheathen/americas-recomp`, branch `feat/bvh-rehydrate-tools`); none of their code is in this repository. Only
 layouts, offsets and counts are reproduced here.
 

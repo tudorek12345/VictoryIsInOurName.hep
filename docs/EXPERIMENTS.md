@@ -4,7 +4,7 @@ The aim is to reduce time between a concrete question and a trustworthy result. 
 
 ## One experiment, one question
 
-1. **Pin the baseline.** Record the fork/upstream commit, local changes, submodules, toolchain, GPU and driver. Reproduce the failure before changing behavior.
+1. **Pin the baseline.** Record the tested commit and upstream revision, local changes, submodules, toolchain, GPU and driver. Reproduce the failure before changing behavior.
 2. **Choose the smallest useful probe.** A loader fixture, ABI call probe, descriptor check or memory-visibility test should answer the specific question. Use real executable traces where the local inputs and runner are available.
 3. **Write down the hypothesis.** Identify the expected behavior and an observation that would disprove it. A guessed COM slot or address relationship remains a hypothesis until measured.
 4. **Make a reversible change.** Keep instrumentation separate from compatibility changes. Use an isolated branch or worktree for competing approaches.
