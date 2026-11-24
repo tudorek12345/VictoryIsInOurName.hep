@@ -3,7 +3,7 @@
 
 # Leonida · Heperkoo
 
-**An experimental fork working toward GTA VI running natively on PC.**
+**An experimental project working toward GTA VI running natively on PC.**
 
 Fast, focused experiments. Reproducible progress. Clear developer handoffs.
 
