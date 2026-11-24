@@ -83,7 +83,7 @@ pub(crate) struct HeapDesc {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct ResourceDesc {
     dimension: u32,
     alignment: u64,
@@ -1192,21 +1192,22 @@ pub(crate) extern "system" fn create_at_address(
 /// description viewed); release them when the title unmaps or reuses the
 /// memory once streaming grows VRAM use.
 #[cfg(windows)]
-static PLACED_TEXTURES: std::sync::Mutex<std::collections::BTreeMap<(u64, [u32; 14]), usize>> =
+static PLACED_TEXTURES: std::sync::Mutex<std::collections::BTreeMap<(u64, ResourceDesc), usize>> =
     std::sync::Mutex::new(std::collections::BTreeMap::new());
 
 /// The resource for a texture placed at `address` with the resource
 /// description `desc` (as words), made on first use.
 #[cfg(windows)]
 pub(crate) fn texture_at(address: u64, desc: &[u32; 14]) -> Option<This> {
-    let mut map = PLACED_TEXTURES.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(&r) = map.get(&(address, *desc)) {
-        return Some(r as This);
-    }
     // SAFETY: 56 bytes in the description's layout.
     let d = unsafe { desc.as_ptr().cast::<ResourceDesc>().read_unaligned() };
     if d.dimension == BUFFER {
         return None;
+    }
+    // The two padding words can differ between otherwise identical views.
+    let mut map = PLACED_TEXTURES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(&r) = map.get(&(address, d)) {
+        return Some(r as This);
     }
     let mut out = std::ptr::null();
     let made = create_at_address(
@@ -1221,8 +1222,13 @@ pub(crate) fn texture_at(address: u64, desc: &[u32; 14]) -> Option<This> {
     if made != S_OK {
         return None;
     }
-    map.insert((address, *desc), out as usize);
-    resource(out).host.is_some().then_some(out)
+    if resource(out).host.is_none() {
+        drop(map);
+        resource_release(out);
+        return None;
+    }
+    map.insert((address, d), out as usize);
+    Some(out)
 }
 
 pub(crate) extern "system" fn create_placed(
@@ -1440,6 +1446,23 @@ mod tests {
             layout: 0,
             ..buffer(0)
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn identical_placed_textures_share_one_host_copy() {
+        if crate::host::host().is_none() {
+            return;
+        }
+        let mut words = [3, 0, 0, 0, 32, 0, 16, 0x10001, 28, 1, 0, 0, 0, 0];
+        // Texture allocation does not access these guest bytes until upload.
+        let address = 0x1_1234_0000;
+        let first = texture_at(address, &words).unwrap();
+        words[1] = 9;
+        words[13] = u32::MAX;
+        assert_eq!(texture_at(address, &words), Some(first));
+        words[4] = 64;
+        assert_ne!(texture_at(address, &words).unwrap(), first);
     }
 
     fn heap(size: u64) -> This {

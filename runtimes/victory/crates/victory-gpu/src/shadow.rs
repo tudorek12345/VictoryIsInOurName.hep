@@ -67,14 +67,25 @@ fn pooled(n: usize) -> Vec<u8> {
     v
 }
 
-/// Returns a snapshot buffer to the pool (at most 8 kept, the largest).
+/// Returns a snapshot buffer to the pool, with room to reuse two of the
+/// roughly 174 MiB snapshots used by world submissions.
 fn give_back(v: Vec<u8>) {
     let mut pool = POOL.lock().unwrap_or_else(|e| e.into_inner());
     pool.push(v);
-    if pool.len() > 8 {
-        pool.sort_by_key(|v| std::cmp::Reverse(v.capacity()));
-        pool.truncate(8);
+    const MAX_IDLE_BYTES: usize = 384 << 20;
+    if pool.len() <= 8 && pool.iter().map(Vec::capacity).sum::<usize>() <= MAX_IDLE_BYTES {
+        return;
     }
+    pool.sort_unstable_by_key(|v| std::cmp::Reverse(v.capacity()));
+    let mut remaining = MAX_IDLE_BYTES;
+    pool.retain(|v| {
+        let Some(left) = remaining.checked_sub(v.capacity()) else {
+            return false;
+        };
+        remaining = left;
+        true
+    });
+    pool.truncate(8);
 }
 
 const NOT_WATCHED: u8 = 2;
@@ -454,10 +465,17 @@ static LOOSE: Mutex<BTreeMap<(u64, u64), Arc<Shadow>>> = Mutex::new(BTreeMap::ne
 
 fn loose(address: u64, end: u64) -> Option<Arc<Shadow>> {
     let start = address & !(WINDOW - 1);
-    let len = end.next_multiple_of(WINDOW) - start;
+    let len = end.checked_next_multiple_of(WINDOW)? - start;
     let mut map = LOOSE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(shadow) = map.get(&(start, len)) {
         return Some(shadow.clone());
+    }
+    // Keep the same start for structured buffer element offsets, and a
+    // stable choice for views already bound to this exact range.
+    if let Some((_, shadow)) = map.range((start, len)..=(start, u64::MAX)).next() {
+        let shadow = shadow.clone();
+        map.insert((start, len), shadow.clone());
+        return Some(shadow);
     }
     let (buffer, data) = host()?.shared_buffer(len)?;
     crate::host::name(&buffer, || format!("title memory {start:#x}+{len:#x}"));
@@ -471,6 +489,26 @@ fn loose(address: u64, end: u64) -> Option<Arc<Shadow>> {
     let shadow = Arc::new(Shadow::new(buffer, data, gpu, start, len));
     map.insert((start, len), shadow.clone());
     Some(shadow)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smaller_loose_views_share_existing_storage() {
+        if host().is_none() {
+            return;
+        }
+        // Only creating shadows; the guest addresses are never read.
+        let start = 0x2_1000_0000;
+        let large = loose(start + 48, start + WINDOW + 1).unwrap();
+        let small = loose(start + 48, start + 256).unwrap();
+        assert!(Arc::ptr_eq(&large, &small));
+        let larger = loose(start + 48, start + 2 * WINDOW + 1).unwrap();
+        assert!(!Arc::ptr_eq(&large, &larger));
+        assert!(Arc::ptr_eq(&small, &loose(start + 64, start + 512).unwrap()));
+    }
 }
 
 /// For device-removed reports: the copy of title memory whose host range
@@ -487,6 +525,8 @@ pub(crate) fn near(va: u64) -> String {
             .values()
             .map(|s| (s.gpu, s.start, s.len)),
     );
+    all.sort_unstable();
+    all.dedup();
     let below = all.iter().filter(|c| c.0 <= va).max();
     let above = all.iter().filter(|c| c.0 > va).min();
     let mut text = match below {

@@ -116,6 +116,13 @@
       ]
     },
     {
+      "purpose": "Reuse matching placed textures and covering shadow buffers. Cap idle snapshots so copies used by world rendering do not accumulate after submissions finish.",
+      "paths": [
+        "crates/victory-gpu/src/resource.rs",
+        "crates/victory-gpu/src/shadow.rs"
+      ]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",
