@@ -40,7 +40,7 @@ pub(crate) struct Host {
     queue: ID3D12CommandQueue,
     fence: ID3D12Fence,
     /// The last value signalled on `fence`, behind the submission lock.
-    submitted: Mutex<u64>,
+    submitted: Mutex<Submission>,
     event: HANDLE,
     rtvs: ID3D12DescriptorHeap,
     rtv_size: u32,
@@ -53,6 +53,13 @@ pub(crate) struct Host {
     messages: Option<ID3D12InfoQueue>,
     next_rtv: AtomicU32,
     presenter: Mutex<Option<Presenter>>,
+}
+
+#[derive(Default)]
+struct Submission {
+    fence_value: u64,
+    /// Temporary title-memory read shared by all texture uploads.
+    texture_read: Vec<u8>,
 }
 
 // SAFETY: D3D12 devices, queues, fences and descriptor heaps are
@@ -226,7 +233,7 @@ fn create() -> windows::core::Result<Host> {
             device,
             queue,
             fence,
-            submitted: Mutex::new(0),
+            submitted: Mutex::default(),
             event,
             rtvs,
             rtv_size,
@@ -514,7 +521,7 @@ impl Host {
         let mut firsts = Vec::with_capacity(runs.len());
         let mut batch = Batch::default();
         for list in runs {
-            list.run_deferred(&mut batch);
+            list.run_deferred(&mut batch, &mut submitted.texture_read);
             firsts.push(lists.len());
             if let Some(prelude) = list.prelude() {
                 lists.push(Some(prelude));
@@ -537,15 +544,16 @@ impl Host {
         #[cfg(not(feature = "diagnostics"))]
         let groups = [&lists[..]];
         for (i, group) in groups.iter().enumerate() {
-            *submitted += 1;
+            submitted.fence_value += 1;
+            let fence_value = submitted.fence_value;
             let started = std::time::Instant::now();
             // SAFETY: closed lists; the fence and event are ours.
             unsafe {
                 self.queue.ExecuteCommandLists(group);
                 let waited = self
                     .queue
-                    .Signal(&self.fence, *submitted)
-                    .and_then(|()| self.fence.SetEventOnCompletion(*submitted, self.event));
+                    .Signal(&self.fence, fence_value)
+                    .and_then(|()| self.fence.SetEventOnCompletion(fence_value, self.event));
                 match waited {
                     Ok(()) => {
                         WaitForSingleObject(self.event, INFINITE);
@@ -1176,7 +1184,7 @@ impl HostList {
     /// Runs the list's submission-time steps; refreshes go into `batch`
     /// (the title's big buffers, a 174 MB one among them, are read by most
     /// lists of a submission, through many ranges).
-    fn run_deferred(&self, batch: &mut Batch) {
+    fn run_deferred(&self, batch: &mut Batch, texture_read: &mut Vec<u8>) {
         #[cfg(feature = "diagnostics")]
         use crate::copystat::{C, add};
         for step in &self.deferred().copies {
@@ -1230,7 +1238,7 @@ impl HostList {
                 }
                 Step::Texture(staging) => {
                     if batch.texture_due(staging) {
-                        staging.refresh();
+                        staging.refresh(texture_read);
                     }
                     continue;
                 }
