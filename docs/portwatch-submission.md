@@ -1,5 +1,7 @@
 # Windows D3D12 runtime integration
 
+**Active request:** [PortWatch #38](https://github.com/4lwayz/portwatch-vi/issues/38), submitted on 24 November 2026 at 11:29 UTC. The maintainer closed the earlier request after filing this replacement.
+
 **Tracking source:** [tudorek12345/VictoryIsInOurName.hep](https://github.com/tudorek12345/VictoryIsInOurName.hep). This repository is the requested source for one existing integration effort. [Earlier registration #17](https://github.com/4lwayz/portwatch-vi/issues/17) records the shared history.
 
 ## Maintainer report · 24 November 2026

@@ -11,7 +11,7 @@ This repository tracks work on running the Xbox Series build of GTA VI on Window
 
 The [dated run report](tracking/runtime-progress.json) records these observations. The exact tested commit, a recording of this sequence and an independent reproduction are pending. It gives no frame-rate measurement for this run.
 
-For PortWatch, the requested tracking source is this repository, **`tudorek12345/VictoryIsInOurName.hep`**. The [tracking request](docs/portwatch-submission.md) links the previous registration for the same implementation and requests a single entry.
+For PortWatch, the requested tracking source is this repository, **`tudorek12345/VictoryIsInOurName.hep`**. [PortWatch issue #38](https://github.com/4lwayz/portwatch-vi/issues/38) requests one entry. The [review notes](docs/portwatch-submission.md) link the evidence and previous registration.
 
 ## Implementation and open work
 
