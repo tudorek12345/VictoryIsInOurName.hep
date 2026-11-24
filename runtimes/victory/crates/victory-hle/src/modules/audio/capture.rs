@@ -185,6 +185,8 @@ fn record(pid: u32, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
         let (mut written, mut first) = (0u64, None);
         let mut patched = Instant::now();
+        let mut report = Instant::now();
+        let mut peak = 0u16;
         loop {
             std::thread::sleep(Duration::from_millis(10));
             let ended = WaitForSingleObject(target, 0) == WAIT_OBJECT_0;
@@ -192,7 +194,8 @@ fn record(pid: u32, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 let (mut data, mut frames, mut flags, mut qpc) = (std::ptr::null_mut(), 0, 0, 0);
                 capture.GetBuffer(&mut data, &mut frames, &mut flags, None, Some(&mut qpc))?;
                 // Where this packet belongs, from its time stamp (100 ns).
-                let at = (qpc - *first.get_or_insert(qpc)) * u64::from(RATE) / 10_000_000;
+                let at = qpc.saturating_sub(*first.get_or_insert(qpc)) * u64::from(RATE)
+                    / 10_000_000;
                 if at > written + u64::from(RATE / 500) {
                     tracing::debug!(
                         ms = (at - written) * 1000 / u64::from(RATE),
@@ -205,14 +208,23 @@ fn record(pid: u32, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 let bytes = frames as usize * FRAME_BYTES;
                 if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                     file.write_all(&vec![0u8; bytes])?;
-                } else {
-                    file.write_all(std::slice::from_raw_parts(data, bytes))?;
+                } else if bytes != 0 {
+                    let pcm = std::slice::from_raw_parts(data, bytes);
+                    peak = pcm.chunks_exact(2).fold(peak, |peak, sample| {
+                        peak.max(i16::from_le_bytes([sample[0], sample[1]]).unsigned_abs())
+                    });
+                    file.write_all(pcm)?;
                 }
                 if flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32 != 0 && written > 0 {
                     tracing::debug!("audio capture: discontinuity");
                 }
                 written += u64::from(frames);
                 capture.ReleaseBuffer(frames)?;
+            }
+            if ended || report.elapsed() >= Duration::from_secs(5) {
+                tracing::info!(frames = written, peak, "process audio capture sample");
+                peak = 0;
+                report = Instant::now();
             }
             if ended || patched.elapsed() >= Duration::from_secs(1) {
                 // Valid sizes at any time: runs end by being killed.

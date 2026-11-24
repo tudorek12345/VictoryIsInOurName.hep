@@ -131,6 +131,19 @@
       ]
     },
     {
+      "purpose": "Bind translated raw root SRVs through descriptor tables with buffer bounds, including null bindings for missing root addresses.",
+      "paths": [
+        "crates/victory-gpu/src/descriptor.rs",
+        "crates/victory-gpu/src/descriptor/host.rs",
+        "crates/victory-gpu/src/draw.rs",
+        "crates/victory-gpu/src/pipeline/host.rs"
+      ]
+    },
+    {
+      "purpose": "Report process-loopback PCM peaks so audio routing and silent gameplay can be distinguished in diagnostic runs.",
+      "paths": ["crates/victory-hle/src/modules/audio/capture.rs"]
+    },
+    {
       "purpose": "Serialize native shader and DXIL-validator tests with one test-only lifetime guard after a parallel access violation in Windows CI, matching the pattern reported in Marvisak/VIctory issue 181. Keep every test and assertion; normal runtime behavior and concurrency are unchanged.",
       "paths": [
         "crates/victory-shader/src/emit/mod.rs",
@@ -149,6 +162,7 @@
     "crates/victory-formats/src/bcpack.rs",
     "crates/victory-formats/src/xma/tables.rs",
     "crates/victory-gpu/src/capture.rs",
+    "crates/victory-gpu/src/descriptor.rs",
     "crates/victory-gpu/src/descriptor/host.rs",
     "crates/victory-gpu/src/draw.rs",
     "crates/victory-gpu/src/host.rs",
@@ -159,6 +173,7 @@
     "crates/victory-gpu/src/resource.rs",
     "crates/victory-gpu/src/shadow.rs",
     "crates/victory-gpu/src/texture.rs",
+    "crates/victory-hle/src/modules/audio/capture.rs",
     "crates/victory-hle/src/modules/dstorage.rs",
     "crates/victory-hle/src/modules/gameinput.rs",
     "crates/victory-pe/src/image.rs",

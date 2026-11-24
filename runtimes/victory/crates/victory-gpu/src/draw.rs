@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use victory_shader::{ResourceType, RootType, UsedResource};
 
 use crate::descriptor::View;
+use crate::descriptor::host::{HostHeap, fallback_views};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Direct3D::D3D_PRIMITIVE_TOPOLOGY;
 use windows::Win32::Graphics::Direct3D12::*;
@@ -71,9 +72,12 @@ pub(crate) struct State {
     /// Graphics, compute.
     host_roots: [usize; 2],
     host_heaps: [usize; 2],
+    host_fallback_views: bool,
     /// Tables made afresh in this list: (table, what it holds) → first
     /// dynamic slot.
     fresh_tables: std::collections::HashMap<(u64, u64), u32>,
+    /// Bounded root SRVs cached by heap, host address, and element count.
+    root_srv_tables: std::collections::HashMap<(usize, u64, u32), D3D12_GPU_DESCRIPTOR_HANDLE>,
     /// The dynamic slots the list holds: title heap, first, count; given
     /// back when the list is reset or released.
     dynamic: Vec<(usize, u32, u32)>,
@@ -129,18 +133,13 @@ pub(crate) fn dispatched() -> u64 {
     DISPATCHED.load(Ordering::Relaxed)
 }
 
-/// The host address of a root view: its buffer's host copy, or for a
-/// constant buffer not 256-byte aligned there (the console needs 16) a
-/// copy in upload memory.
-/// shortcut: a root view has no size; constant buffers are taken as 64 KiB,
-/// other views as 1 MiB (both cut at their buffer's end).
-fn root_view(list: &HostList, address: u64, srv: bool) -> Option<u64> {
+/// The host address of a root CBV. The console aligns them to 16 bytes,
+/// so a misaligned host address is copied into upload memory.
+fn root_cbv(list: &HostList, address: u64) -> Option<u64> {
     let shadow = crate::shadow::find(address, 1)?;
-    let len = shadow
-        .left(address)
-        .min(if srv { 1 << 20 } else { 1 << 16 });
+    let len = shadow.left(address).min(1 << 16);
     let gpu = shadow.gpu(address);
-    if srv || gpu % 256 == 0 {
+    if gpu % 256 == 0 {
         shadow.refresh(list, address, len);
         return Some(gpu);
     }
@@ -421,20 +420,31 @@ impl State {
         };
         let pso = typed.as_ref().unwrap_or(&p.pso);
         let l = &list.list;
+        let title_views = (self.heaps[0] != 0)
+            .then(|| crate::descriptor::heap(self.heaps[0] as This).host())
+            .flatten();
+        let use_fallback = title_views.is_none() && p.stages.iter().any(|s| !s.root_srvs.is_empty());
+        let (view_heap_id, view_heap) = if use_fallback {
+            (0, fallback_views())
+        } else {
+            (self.heaps[0], title_views)
+        };
         // Heaps first: a root signature with directly indexed heaps must be
         // set after them.
-        if self.host_heaps != self.heaps {
-            let heaps: Vec<Option<ID3D12DescriptorHeap>> = self
-                .heaps
-                .iter()
-                .filter(|&&h| h != 0)
-                .filter_map(|&h| crate::descriptor::heap(h as This).host())
+        if self.host_heaps != self.heaps || self.host_fallback_views != use_fallback {
+            let samplers = (self.heaps[1] != 0)
+                .then(|| crate::descriptor::heap(self.heaps[1] as This).host())
+                .flatten();
+            let heaps: Vec<_> = view_heap
+                .into_iter()
+                .chain(samplers)
                 .map(|h| Some(h.heap.clone()))
                 .collect();
             heaps.iter().flatten().for_each(|h| list.keep(h));
             // SAFETY: an open list and shader-visible heaps.
             unsafe { l.SetDescriptorHeaps(&heaps) };
             self.host_heaps = self.heaps;
+            self.host_fallback_views = use_fallback;
             self.host_roots = [0; 2];
         }
         let root = p.root.as_raw() as usize;
@@ -483,29 +493,71 @@ impl State {
                     }
                 }
             }
-            for (views, srv) in [(&stage.root_cbvs, false), (&stage.root_srvs, true)] {
-                for &(slot, param) in views {
-                    let Some(Root::View(address)) = self.roots_ref(compute).get(usize::from(slot))
-                    else {
-                        once!(slot, "a shader reads a root view the title did not set");
-                        continue;
-                    };
-                    let Some(gpu) = root_view(list, *address, srv) else {
-                        continue;
-                    };
-                    // SAFETY: an open list; the address is in live memory.
-                    unsafe {
-                        match (compute, srv) {
-                            (false, false) => l.SetGraphicsRootConstantBufferView(param, gpu),
-                            (false, true) => l.SetGraphicsRootShaderResourceView(param, gpu),
-                            (true, false) => l.SetComputeRootConstantBufferView(param, gpu),
-                            (true, true) => l.SetComputeRootShaderResourceView(param, gpu),
-                        }
+            for &(slot, param) in &stage.root_cbvs {
+                let Some(Root::View(address)) = self.roots_ref(compute).get(usize::from(slot)) else {
+                    once!(slot, "a shader reads a root view the title did not set");
+                    continue;
+                };
+                let Some(gpu) = root_cbv(list, *address) else {
+                    continue;
+                };
+                // SAFETY: an open list; the address is in live memory.
+                unsafe {
+                    if compute {
+                        l.SetComputeRootConstantBufferView(param, gpu);
+                    } else {
+                        l.SetGraphicsRootConstantBufferView(param, gpu);
+                    }
+                }
+            }
+            for &(slot, param) in &stage.root_srvs {
+                let address = match self.roots_ref(compute).get(usize::from(slot)) {
+                    Some(Root::View(address)) => *address,
+                    _ => 0,
+                };
+                let Some(table) = view_heap.and_then(|heap| self.root_srv(list, heap, view_heap_id, address)) else {
+                    return false;
+                };
+                // SAFETY: an open list and a reserved slot of its bound heap.
+                unsafe {
+                    if compute {
+                        l.SetComputeRootDescriptorTable(param, table);
+                    } else {
+                        l.SetGraphicsRootDescriptorTable(param, table);
                     }
                 }
             }
         }
         true
+    }
+
+    fn root_srv(
+        &mut self,
+        list: &HostList,
+        heap: &HostHeap,
+        heap_id: usize,
+        address: u64,
+    ) -> Option<D3D12_GPU_DESCRIPTOR_HANDLE> {
+        let view = (address != 0 && address.is_multiple_of(4))
+            .then(|| crate::shadow::find(address, 4))
+            .flatten()
+            .filter(|shadow| shadow.offset(address).is_multiple_of(4));
+        let (gpu, elements) = view.as_ref().map_or((0, 0), |shadow| {
+            let total = shadow.left(address) / 4;
+            let elements = total.min(1 << D3D12_REQ_BUFFER_RESOURCE_TEXEL_COUNT_2_TO_EXP) as u32;
+            shadow.refresh(list, address, u64::from(elements) * 4);
+            (shadow.gpu(address), elements)
+        });
+        let key = (heap_id, gpu, elements);
+        if let Some(&table) = self.root_srv_tables.get(&key) {
+            return Some(table);
+        }
+        let first = heap.dynamic(1)?;
+        self.dynamic.push((heap_id, first, 1));
+        let desc = view.as_ref().map(|s| (&s.buffer, s.offset(address) / 4, elements));
+        let table = heap.root_srv_at(first, desc);
+        self.root_srv_tables.insert(key, table);
+        Some(table)
     }
 
     fn integer_image_uavs(&self, p: &HostPipeline) -> Vec<victory_shader::emit::IntegerImageUav> {

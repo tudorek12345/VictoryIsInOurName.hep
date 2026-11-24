@@ -64,6 +64,12 @@ const PORTABLE_VIEWS: u32 = 1_000_000;
 /// took until it is reset (its submissions have run) or released.
 const DYNAMIC: u32 = 1 << 16;
 
+/// Host tables for root views when the title has not bound a view heap.
+pub(crate) fn fallback_views() -> Option<&'static HostHeap> {
+    static HEAP: std::sync::OnceLock<Option<HostHeap>> = std::sync::OnceLock::new();
+    HEAP.get_or_init(|| HostHeap::new(false, 1)).as_ref()
+}
+
 impl HostHeap {
     pub(crate) fn new(sampler: bool, count: u32) -> Option<Self> {
         let host = host()?;
@@ -297,6 +303,29 @@ impl HostHeap {
             host.device
                 .CreateConstantBufferView(Some(&desc), self.cpu(index))
         };
+    }
+
+    /// A bounded raw SRV for a title root address. The list holds the
+    /// buffer it views and reserves the descriptor slot until reset.
+    pub(crate) fn root_srv_at(
+        &self,
+        index: u32,
+        view: Option<(&ID3D12Resource, u64, u32)>,
+    ) -> D3D12_GPU_DESCRIPTOR_HANDLE {
+        let at = self.cpu(index);
+        self.keep(index, None);
+        if let Some((buffer, first_element, elements)) = view {
+            let desc = raw_srv_desc(first_element, elements);
+            // SAFETY: a live buffer and our reserved slot.
+            unsafe { host().unwrap().device.CreateShaderResourceView(buffer, Some(&desc), at) };
+        } else {
+            null_buffer_view(at);
+        }
+        // SAFETY: a live shader-visible heap and a slot in it.
+        let start = unsafe { self.heap.GetGPUDescriptorHandleForHeapStart() };
+        D3D12_GPU_DESCRIPTOR_HANDLE {
+            ptr: start.ptr + u64::from(index) * u64::from(self.step),
+        }
     }
 
     fn cpu(&self, index: u32) -> D3D12_CPU_DESCRIPTOR_HANDLE {
@@ -829,23 +858,28 @@ fn null_for(view: &View, at: D3D12_CPU_DESCRIPTOR_HANDLE) {
 /// buffers).
 fn null_buffer_view(at: D3D12_CPU_DESCRIPTOR_HANDLE) {
     let Some(host) = host() else { return };
-    let desc = D3D12_SHADER_RESOURCE_VIEW_DESC {
-        Format: DXGI_FORMAT_R32_TYPELESS,
-        ViewDimension: D3D12_SRV_DIMENSION_BUFFER,
-        Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-        Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
-            Buffer: D3D12_BUFFER_SRV {
-                NumElements: 1,
-                Flags: D3D12_BUFFER_SRV_FLAG_RAW,
-                ..Default::default()
-            },
-        },
-    };
+    let desc = raw_srv_desc(0, 1);
     // SAFETY: a slot of our heap; a null resource is allowed with a desc.
     unsafe {
         host.device
             .CreateShaderResourceView(None::<&ID3D12Resource>, Some(&desc), at)
     };
+}
+
+fn raw_srv_desc(first_element: u64, elements: u32) -> D3D12_SHADER_RESOURCE_VIEW_DESC {
+    D3D12_SHADER_RESOURCE_VIEW_DESC {
+        Format: DXGI_FORMAT_R32_TYPELESS,
+        ViewDimension: D3D12_SRV_DIMENSION_BUFFER,
+        Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
+            Buffer: D3D12_BUFFER_SRV {
+                FirstElement: first_element,
+                NumElements: elements,
+                Flags: D3D12_BUFFER_SRV_FLAG_RAW,
+                ..Default::default()
+            },
+        },
+    }
 }
 
 /// A minimal view of the supplied type. D3D12 validates the description

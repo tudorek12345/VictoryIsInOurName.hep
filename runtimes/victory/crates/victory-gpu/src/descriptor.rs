@@ -149,6 +149,12 @@ fn mirror(handle: u64) {
 /// `heap`, if that heap still exists.
 #[cfg(windows)]
 pub(crate) fn release_dynamic(heap: usize, first: u32, n: u32) {
+    if heap == 0 {
+        if let Some(host) = host::fallback_views() {
+            host.release(first, n);
+        }
+        return;
+    }
     let heaps = SHADER_HEAPS.lock().unwrap_or_else(|e| e.into_inner());
     if heaps.iter().any(|&(_, _, h)| h == heap)
         // SAFETY: registered heaps are live (removed when dropped).
