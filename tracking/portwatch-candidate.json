@@ -2,11 +2,10 @@
   "repo": "tudorek12345/VictoryIsInOurName.hep",
   "name": "Windows D3D12 runtime integration",
   "kind": "effort",
-  "description": "The maintainer reports working boot, intro audio/video, profile/saves and world loading. At the first mission’s intro the picture stays black and the host GPU fails. Player control and gameplay FPS remain unverified.",
+  "description": "Maintainer-reported GTA VI boot, intro and menu on Windows. The attempted world transition ends with a black picture and GPU failure; rendered world, player control and gameplay FPS remain unverified.",
   "links": [
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/README.md#reported-boot-progress",
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/boot-progress.log",
-    "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/docs/images/boot-progress.png",
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/tracking/runtime-progress.json",
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/blob/main/docs/portwatch-submission.md",
     "https://github.com/tudorek12345/VictoryIsInOurName.hep/commit/298042a3388e400464824d246ed3ec265c238345",
@@ -14,5 +13,16 @@
   ],
   "sources": [
     "https://github.com/4lwayz/portwatch-vi/issues/38"
+  ],
+  "verification": "self-reported",
+  "submissionStatus": "requested; editorial review pending",
+  "trackingRequest": "https://github.com/4lwayz/portwatch-vi/issues/38",
+  "singleEffort": true,
+  "scopeNote": "This is local submission metadata, not a PortWatch registry entry. One reporting source only; prior Leonida repository blocked under DMCA, with shared lineage disclosed. PortWatch determines link eligibility and scoring.",
+  "evidenceLimitations": [
+    "Hardware-tested commit and GPU driver unavailable",
+    "No continuous hardware-run capture or independent reproduction",
+    "World rendering, player control and gameplay FPS unverified",
+    "Native runtime CI test job failed; local results are maintainer-reported"
   ]
 }
