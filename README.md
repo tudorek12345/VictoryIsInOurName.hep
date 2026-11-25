@@ -1,3 +1,4 @@
+<img width="1562" height="842" alt="image lucia where we should go" src="https://github.com/user-attachments/assets/40907987-9d7e-4cba-afde-b8ab5f5a12f6" /> Latest Progress check. 11/25/2026 7AM EST
 # Windows D3D12 runtime integration
 
 This repository tracks work on running the Xbox Series build of GTA VI on Windows. It combines the original Leonida compatibility runtime with the separately selectable VIctory backend, which translates console shaders and presents through native D3D12. The two backends keep their runtime state separate.
