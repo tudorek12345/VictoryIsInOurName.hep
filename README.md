@@ -1,12 +1,15 @@
 # Windows D3D12 runtime integration
 
 This repository tracks work on running the Xbox Series build of GTA VI on Windows. It combines the original Leonida compatibility runtime with the separately selectable VIctory backend, which translates console shaders and presents through native D3D12. The two backends keep their runtime state separate.
-DISCORD: https://discord.gg/3qCnTarkPk
+**Tracking request:** [PortWatch issue #38](https://github.com/4lwayz/portwatch-vi/issues/38). This repository, `tudorek12345/VictoryIsInOurName.hep`, is the sole proposed reporting source for one integration effort. No separate entry is requested for the earlier Leonida repository. The previous request #17 was closed by its author, not rejected by PortWatch.
+
+**Evidence status:** Maintainer-reported; no independent reproduction, editorial acceptance, or PortWatch score is claimed. See the [review packet](docs/portwatch-submission.md) for source attribution, the known takedown context, implementation evidence and limitations.
+
 ## Reported boot progress
 
 24 November 2026
 
-**4 of 5 stages reported working on one machine. World reached · rendering blocked.** The count covers the five stages below. PortWatch assigns its own compatibility score. Independent reproduction and controllable hardware gameplay remain open.
+**Boot and menu reported working; attempted world transition ends in a black screen and GPU failure.** The historical report counted four of five local test stages, including the loading attempt. That count is not a compatibility percentage or confirmation that the game world rendered. The PortWatch rubric requires rendered world output and player control for its later milestones.
 
 **Test system** · AMD Radeon RX 9060 XT with 16 GB VRAM · AMD Ryzen 7 5700X · 32 GB system RAM
 
@@ -15,8 +18,8 @@ DISCORD: https://discord.gg/3qCnTarkPk
 | Boot and first-boot screens | **Working** | Accessibility, language, settings and legal screens displayed at a reported 30 FPS. |
 | Intro video with sound | **Working** | The intro video played with sound. |
 | Start screen, profile and saves | **Working** | The start screen, profile selection and save flow worked. |
-| Loading into the world | **Working** | Loading reached the first mission’s intro in about 50 seconds. |
-| World / first mission’s intro | **Reached · rendering blocked** | The picture stayed black and the host GPU failed within seconds. The cause is unresolved. |
+| Loading transition | **Reported** | The maintainer reports reaching the first mission’s intro after about 50 seconds; world entry and rendering are not verified. |
+| World rendering and player control | **Unverified · blocked** | The picture stayed black and the host GPU failed within seconds. The cause is unresolved. |
 
 In the latest local update, the maintainer also reports seeing the **“Rockstar Games Presents”** title card. The exact runtime commit and a recording of that sequence are pending. Visible world geometry, player movement and gameplay FPS remain unverified.
 
@@ -24,7 +27,9 @@ In the latest local update, the maintainer also reports seeing the **“Rockstar
 
 [Plain-text boot-progress.log](boot-progress.log) · [Machine-readable run report](tracking/runtime-progress.json) · [PortWatch review notes](docs/portwatch-submission.md) · [PortWatch tracking request #38](https://github.com/4lwayz/portwatch-vi/issues/38)
 
-![Maintainer’s status panel with four working stages. The fifth stage, world rendering, is blocked by a black picture and a host GPU failure.](docs/images/boot-progress.png)
+![Historical maintainer-authored status panel; not a game capture or independent proof.](docs/images/boot-progress.png)
+
+The panel and log summarize the same historical report, not additional reproductions.
 
 
 ## Implementation and open work
@@ -42,17 +47,9 @@ In the [Windows CI run for this implementation](https://github.com/tudorek12345/
 
 The next hardware run should record the exact build, GPU driver, title-card time, first black frame, last successful guest submission, host Present result and response to input. See the [experiment workflow](docs/EXPERIMENTS.md).
 
-## Build and check
+## Source-only validation
 
-Clone this repository with its submodules:
-
-```powershell
-git clone --recursive https://github.com/tudorek12345/VictoryIsInOurName.hep.git
-cd VictoryIsInOurName.hep
-.\run_runtime.cmd --help
-```
-
-To reproduce the source-only D3D12 build and serial diagnostics checks on Windows with the pinned Rust toolchain:
+For an existing authorized source checkout, the source-only D3D12 build and synthetic diagnostics tests do not require game files. With the pinned Windows Rust toolchain:
 
 ```powershell
 cd runtimes/victory
@@ -62,9 +59,13 @@ cargo build --locked --profile diag -p victory --features diagnostics
 cargo test --locked --workspace --features diagnostics -- --test-threads=1
 ```
 
-Keep local game inputs, saves, caches and generated artifacts outside Git. The [boot runbook](docs/boot.md) documents the original runtime. The [backend launcher](runtime_backend.py) and [Windows CI definition](.github/workflows/victory-runtime.yml) document backend selection and validation.
+Keep game files, saves, caches and generated artifacts outside Git. The [No Game Data workflow](.github/workflows/no-game-data.yml) checks tracked filenames and content signatures. It is a source-boundary check, not a legal determination. The [Windows CI definition](.github/workflows/victory-runtime.yml) documents source-only validation.
 
-For development discussion, [join the project Discord](https://discord.gg/ufXqPcVdVj).
+## Source boundary and review eligibility
+
+The earlier Leonida repository was blocked by GitHub under a DMCA notice on 24 November 2026. This integration shares that runtime's lineage and preserves upstream attribution. See the [published notice](https://github.com/github/dmca/blob/master/2026/11/2026-11-24-take-two.md) and [source provenance](runtimes/victory/SOURCE.json). The current repository's accessibility is not a finding that the underlying copyright concerns are resolved.
+
+No link to a removed repository, leaked executable, game files, keys, or alternative distribution location is requested for PortWatch. The submission is a request to review the reported technical observations only; eligibility and whether to publish a link are for PortWatch's maintainer to decide. If the source cannot be listed under its rules, a factual review without a distribution link may be considered at the maintainer's discretion. No attempt to circumvent a legal block is requested.
 
 ## Code and attribution
 
