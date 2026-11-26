@@ -82,6 +82,20 @@
       "approximateFrameTimeMs": 100
     }
   },
+  "localCandidateComparison": {
+    "date": "2026-11-26",
+    "hardware": {"gpu": "AMD Radeon RX 9060 XT", "driver": "32.0.32029.2010", "ramGiB": 32},
+    "integrationRevision": "9a0c530b7ceb09997b508cb3be7d8396b26bf472",
+    "serialSourceTests": {"passed": 307, "failed": 0, "ignored": 5},
+    "candidateRevision": "e2a28ec70632f5112be085abfa7d0a557b25e8d8",
+    "candidateSource": "https://github.com/avatarmanz/VIctory-7900XTX",
+    "seriesXWarp": {"loadingFpsRange": [12.9, 20.3], "elapsedSeconds": 155.45, "limitGiB": 16, "outcome": "Allocation failure at world transition"},
+    "seriesSWarp": {"elapsedSeconds": 240.98, "peakCommitGiB": 5.96, "outcome": "Timer expired. Captures stayed black."},
+    "seriesXRadeon": {"earlyFps": 30, "limitGiB": 16, "outcome": "Memory allocation failed at world entry in both runs"},
+    "prewarm": {"previouslyUsedPipelinesBuilt": 23, "elapsedSeconds": 2.69},
+    "guardedRadeon": {"elapsedSeconds": 98.73, "limitGiB": 24, "peakCommitGiB": 15.66, "physicalReserveGiB": 3, "systemCommitReserveGiB": 4, "outcome": "Physical memory guard stopped the job at world entry"},
+    "renderedGameplayVerified": false
+  },
   "reportedImplementation": [
     "Raw bindless SRV consistency",
     "Typed UINT16 UAV support",

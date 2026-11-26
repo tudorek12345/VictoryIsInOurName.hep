@@ -18,6 +18,23 @@
   "integrationStatement": "Vendored and integrated locally into tudorek12345/Leonida. This is not an upstream endorsement.",
   "localChanges": [
     {
+      "purpose": "Preserve shader liveness through joins, normalize integer render-target blend states, order DirectStorage page reads, fill mapped host upload memory, and isolate diagnostics submissions on the selected physical adapter.",
+      "sources": [
+        "https://github.com/Marvisak/VIctory/pull/612",
+        "https://github.com/fxceless/victory-fork/commit/025b042af227d5b9a69379cdd3bcfee406ea9412",
+        "https://github.com/Marvisak/VIctory/commit/eddde73437a721aa7523adf05fece68099f17b28",
+        "https://github.com/Marvisak/VIctory/pull/680"
+      ],
+      "paths": [
+        "crates/victory-gpu/src/host.rs",
+        "crates/victory-gpu/src/list.rs",
+        "crates/victory-gpu/src/pipeline.rs",
+        "crates/victory-gpu/src/pipeline/host.rs",
+        "crates/victory-hle/src/modules/dstorage.rs",
+        "crates/victory-shader/src/emit/lower.rs"
+      ]
+    },
+    {
       "purpose": "Load user-supplied BCPack format tables without redistributing the upstream non-licensed blob. Preserve the builtin() call API, validate the external source boundary and bound file reads; test missing, malformed and synthetic valid files.",
       "paths": [
         "crates/victory-formats/src/bcpack.rs",

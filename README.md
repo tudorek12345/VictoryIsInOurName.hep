@@ -38,6 +38,14 @@ The panel and log summarize the same historical report, not additional reproduct
 
 ## Implementation and open work
 
+### 26 November candidate comparison
+
+The 7900 XTX fork held 30 FPS through the original intro and early loading on the RX 9060 XT. Its Series X runs reached world loading and exhausted a 16 GiB job limit. The Series S software test stayed under 6 GiB for four minutes with black captures. Warming 23 previously used pipelines succeeded, and a measured loading interval still spent 371 ms preparing textures in a 385 ms frame. Controllable gameplay remains unverified. [Candidate source](https://github.com/avatarmanz/VIctory-7900XTX/tree/e2a28ec70632f5112be085abfa7d0a557b25e8d8)
+
+A subsequent Series X trial allowed up to 24 GiB of job commit. It stopped at 15.66 GiB when available physical RAM fell below the 3 GiB guard. The runtime restored the package access rules after the stop.
+
+The integration now selects the physical AMD adapter, records resource operations in isolated GPU list traces, and fixes integer render-target blending, shader liveness through successive joins, and DirectStorage page-read ordering. The serial source suite passed 307 tests with five ignored. [Validation and run summary](tracking/runtime-progress.json)
+
 The [integration checkpoint](https://github.com/tudorek12345/VictoryIsInOurName.hep/commit/298042a3388e400464824d246ed3ec265c238345) adds consistent raw bindless shader resource views (SRVs), typed UINT16 unordered access views (UAVs), exact 3:1 compositor downscaling and coalescing of concurrent shader-cache fills. D3D12 diagnostics record the submission caller, fence phase and Present result.
 
 | Investigation | State | Result or outstanding question |
