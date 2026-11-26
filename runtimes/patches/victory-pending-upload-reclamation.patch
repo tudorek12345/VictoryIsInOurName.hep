@@ -1,0 +1,315 @@
+From 8f6f742cfcd324501d7a11f9926d5ff40dcacdec Mon Sep 17 00:00:00 2001
+From: tudorek12345 <44846825+tudorek12345@users.noreply.github.com>
+Date: Thu, 26 Nov 2026 02:44:27 -0800
+Subject: [PATCH] Reclaim upload allocations discarded before thin-list handoff
+
+---
+ crates/victory-gpu/src/list/thin.rs           |  53 ++++++-
+ .../src/list/thin/pending_upload_tests.rs     | 145 ++++++++++++++++++
+ crates/victory-gpu/src/upload.rs              |  23 ++-
+ 3 files changed, 213 insertions(+), 8 deletions(-)
+ create mode 100644 crates/victory-gpu/src/list/thin/pending_upload_tests.rs
+
+diff --git a/crates/victory-gpu/src/list/thin.rs b/crates/victory-gpu/src/list/thin.rs
+index fe9277d..613537f 100644
+--- a/crates/victory-gpu/src/list/thin.rs
++++ b/crates/victory-gpu/src/list/thin.rs
+@@ -83,7 +83,7 @@ impl Front {
+         {
+             recording.abandoned.store(true, Release);
+         }
+-        self.words.clear();
++        discard_pending_uploads(&mut self.words);
+     }
+ 
+     /// Begins a recording, with `pipeline` bound.
+@@ -168,9 +168,48 @@ static WORK: Condvar = Condvar::new();
+ static BACKS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+ /// Since the last line of the log: streams handed over; calls translated and
+ /// the microseconds that took (all threads), recordings translated, and
+-/// recordings let go of in the middle.
++/// recordings let go of in the middle, and pending uploads reclaimed.
+ static CHUNKS: AtomicU64 = AtomicU64::new(0);
+-static STATS: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
++static STATS: [AtomicU64; 5] = [const { AtomicU64::new(0) }; 5];
++
++/// Discards only words still owned by a Front, never handed to a worker.
++/// UPLOAD transfers a boxed allocation through the stream; simply clearing
++/// these words loses its owner and leaves its arena blocks permanently taken.
++fn discard_pending_uploads(words: &mut Vec<u64>) {
++    let reclaimed = drain_pending_uploads(words, |raw| {
++        // SAFETY: allocate_upload made this box, and these pending words
++        // were never handed over or translated. Each UPLOAD owns one box.
++        drop(unsafe { Box::from_raw(raw as *mut Upload) });
++    });
++    if reclaimed != 0 {
++        STATS[4].fetch_add(reclaimed, Relaxed);
++    }
++}
++
++/// Walk packet boundaries, not payload words: variable-sized blobs may
++/// contain anything, including the numeric value of an UPLOAD header.
++/// Stop at malformed bounds/UPLOAD arity rather than interpreting payload
++/// as ownership. The stream is internal; malformed tails have no trusted
++/// ownership information. Clearing also makes a repeated discard a no-op.
++fn drain_pending_uploads(words: &mut Vec<u64>, mut release: impl FnMut(u64)) -> u64 {
++    let (mut at, mut reclaimed) = (0usize, 0u64);
++    while let Some(&header) = words.get(at) {
++        let Ok(len) = usize::try_from(header >> 16) else { break };
++        let Some(end) = at.checked_add(1).and_then(|start| start.checked_add(len))
++            .filter(|&end| end <= words.len()) else { break };
++        if header & 0xffff == UPLOAD {
++            if len != 1 { break; }
++            let raw = std::mem::take(&mut words[at + 1]);
++            if raw != 0 {
++                release(raw);
++                reclaimed += 1;
++            }
++        }
++        at = end;
++    }
++    words.clear();
++    reclaimed
++}
+ 
+ fn held<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+     m.lock().unwrap_or_else(|e| e.into_inner())
+@@ -350,12 +389,13 @@ pub(crate) fn line(frames: f64) {
+     }
+     let s: Vec<f64> = STATS.iter().map(|s| s.swap(0, Relaxed) as f64 / frames).collect();
+     tracing::info!(
+-        "list calls translated by threads of ours per frame (VICTORY_THIN): {:.0} in {:.1} ms (all threads), {:.1} lists, {:.1} pieces; left in the middle {:.2}",
++        "list calls translated by threads of ours per frame (VICTORY_THIN): {:.0} in {:.1} ms (all threads), {:.1} lists, {:.1} pieces; left in the middle {:.2}; pending uploads reclaimed {:.2}",
+         s[0],
+         s[1] / 1000.0,
+         s[2],
+         CHUNKS.swap(0, Relaxed) as f64 / frames,
+-        s[3]
++        s[3],
++        s[4]
+     );
+ }
+ 
+@@ -855,6 +895,9 @@ const MINE: [(usize, *const ()); 50] = [
+     (137, list_reset_x as *const ()),
+ ];
+ 
++#[cfg(test)]
++mod pending_upload_tests;
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/crates/victory-gpu/src/list/thin/pending_upload_tests.rs b/crates/victory-gpu/src/list/thin/pending_upload_tests.rs
+new file mode 100644
+index 0000000..951eec9
+--- /dev/null
++++ b/crates/victory-gpu/src/list/thin/pending_upload_tests.rs
+@@ -0,0 +1,145 @@
++//! Real upload ownership tests. Per-object drop observers are independent
++//! of global arena reuse and parallel test order. No GPU work is submitted.
++
++use super::*;
++
++fn recording_list() -> Box<List> {
++    let mut list = super::super::boxed(0, std::ptr::null(), true);
++    list.thin.begin(0, std::ptr::null());
++    list
++}
++
++fn this(list: &mut Box<List>) -> This {
++    std::ptr::from_mut(&mut **list).cast_const().cast()
++}
++
++fn pending_upload(list: &mut Box<List>) -> Arc<std::sync::atomic::AtomicUsize> {
++    let at = allocate_upload(this(list), 80, 16) as usize;
++    assert_ne!(at, 0);
++    assert_eq!(at % 16, 0);
++    let words = &list.thin.words;
++    assert_eq!(words[words.len() - 2], UPLOAD | (1 << 16));
++    // SAFETY: the real allocator just placed this Box in the unhanded
++    // Front tail. It is still exclusively owned here and has not been
++    // translated. Observe it before any ownership transfer or discard.
++    unsafe { (&mut *(words[words.len() - 1] as *mut Upload)).observe_drop() }
++}
++
++#[test]
++fn pending_upload_is_reclaimed_by_leave_exactly_once() {
++    let mut list = recording_list();
++    let dropped = pending_upload(&mut list);
++    list.thin.leave();
++    assert_eq!(dropped.load(SeqCst), 1);
++    // A second allocation may reuse the block, but its identity is its own
++    // observer, never inferred from a globally reusable address.
++    let mut next = Upload::new(96).unwrap();
++    let next_dropped = next.observe_drop();
++    list.thin.leave();
++    drop(list);
++    assert_eq!(dropped.load(SeqCst), 1);
++    assert_eq!(next_dropped.load(SeqCst), 0);
++    drop(next);
++    assert_eq!(next_dropped.load(SeqCst), 1);
++}
++
++#[test]
++fn pending_upload_is_reclaimed_by_actual_reset() {
++    let mut list = recording_list();
++    let dropped = pending_upload(&mut list);
++    let allocator = std::ptr::NonNull::<u64>::dangling()
++        .as_ptr()
++        .cast_const()
++        .cast();
++    assert_eq!(
++        list_reset(this(&mut list), allocator, std::ptr::null()),
++        S_OK
++    );
++    assert_eq!(dropped.load(SeqCst), 1);
++    assert_eq!(list.thin.words, [RESET | (1 << 16), 0]);
++    drop(list);
++    assert_eq!(dropped.load(SeqCst), 1);
++}
++
++#[test]
++fn pending_upload_is_reclaimed_by_actual_list_drop() {
++    let mut list = recording_list();
++    let dropped = pending_upload(&mut list);
++    drop(list);
++    assert_eq!(dropped.load(SeqCst), 1);
++}
++
++#[test]
++fn pending_upload_handed_to_worker_stays_owned_until_translated_list_drops() {
++    let mut list = recording_list();
++    let dropped = pending_upload(&mut list);
++    let recording = list.thin.recording.as_ref().unwrap().clone();
++    // Simulate a worker already owning this Recording. The real hand_over
++    // transfers the chunk but does not enqueue an additional global worker.
++    held(&recording.inner).scheduled = true;
++    list.thin.hand_over();
++    assert!(list.thin.words.is_empty());
++    list.thin.leave();
++    assert_eq!(dropped.load(SeqCst), 0);
++
++    let chunk = held(&recording.inner).chunks.pop_front().unwrap();
++    let mut back = super::super::boxed(0, std::ptr::null(), false);
++    assert_eq!(super::super::close(this(&mut back)), S_OK);
++    // The production translator must keep owning UPLOAD even after the
++    // title abandoned its Front; it can still be finishing earlier work.
++    let _ = translate(this(&mut back), &chunk, || true);
++    assert_eq!(held(&back.uploads).len(), 1);
++    assert_eq!(dropped.load(SeqCst), 0);
++    drop(chunk); // Translated words no longer own their raw UPLOAD pointer.
++    drop(list);
++    drop(recording);
++    assert_eq!(dropped.load(SeqCst), 0);
++    drop(back);
++    assert_eq!(dropped.load(SeqCst), 1);
++}
++
++#[test]
++fn pending_upload_parser_skips_payload_headers_and_is_idempotent() {
++    let mut words = vec![
++        RESET | (1 << 16),
++        0,
++        // A variable-sized packet contains a fake UPLOAD header/pointer.
++        TARGETS | (4 << 16),
++        9,
++        UPLOAD | (1 << 16),
++        0xaaaa,
++        7,
++        UPLOAD | (1 << 16),
++        0xbbbb,
++        GRAPHICS_CONSTANTS | (3 << 16),
++        UPLOAD | (1 << 16),
++        0xcccc,
++        0,
++        UPLOAD | (1 << 16),
++        0xdddd,
++    ];
++    let mut released = Vec::new();
++    assert_eq!(drain_pending_uploads(&mut words, |p| released.push(p)), 2);
++    assert_eq!(released, [0xbbbb, 0xdddd]);
++    assert!(words.is_empty());
++    assert_eq!(
++        drain_pending_uploads(&mut words, |_| panic!("double release")),
++        0
++    );
++}
++
++#[test]
++fn pending_upload_parser_rejects_truncated_or_wrong_arity_packets() {
++    for mut words in [
++        vec![UPLOAD],
++        vec![UPLOAD | (2 << 16), 0xaaaa, 0xbbbb],
++        vec![TARGETS | (8 << 16), UPLOAD | (1 << 16), 0xaaaa],
++        vec![u64::MAX, UPLOAD | (1 << 16), 0xaaaa],
++    ] {
++        assert_eq!(
++            drain_pending_uploads(&mut words, |_| panic!("invalid ownership")),
++            0
++        );
++        assert!(words.is_empty());
++    }
++}
+diff --git a/crates/victory-gpu/src/upload.rs b/crates/victory-gpu/src/upload.rs
+index d6f60e5..c2c3ead 100644
+--- a/crates/victory-gpu/src/upload.rs
++++ b/crates/victory-gpu/src/upload.rs
+@@ -29,7 +29,10 @@ struct Arena {
+ static ARENAS: Mutex<Vec<Arena>> = Mutex::new(Vec::new());
+ 
+ /// Upload memory of one request, zeroed, given back when dropped.
+-pub(crate) struct Upload(Kind);
++pub(crate) struct Upload(
++    Kind,
++    #[cfg(test)] Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
++);
+ 
+ enum Kind {
+     /// Address, bytes.
+@@ -90,7 +93,7 @@ pub(crate) fn reserve(len: usize) -> Option<usize> {
+ impl Upload {
+     pub(crate) fn new(len: usize) -> Option<Upload> {
+         if !low() {
+-            return Some(Upload(Kind::Heap(vec![0; len])));
++            return Some(Upload(Kind::Heap(vec![0; len]), #[cfg(test)] None));
+         }
+         let n = len.max(1).div_ceil(BLOCK);
+         let mut arenas = ARENAS.lock().unwrap_or_else(|e| e.into_inner());
+@@ -111,7 +114,7 @@ impl Upload {
+         let at = arena.at + first * BLOCK;
+         // SAFETY: the blocks are the arena's and nobody else's now.
+         unsafe { std::ptr::write_bytes(at as *mut u8, 0, len) };
+-        Some(Upload(Kind::Low(at, len)))
++        Some(Upload(Kind::Low(at, len), #[cfg(test)] None))
+     }
+ 
+     pub(crate) fn start(&mut self) -> *mut u8 {
+@@ -120,10 +123,24 @@ impl Upload {
+             Kind::Heap(block) => block.as_mut_ptr(),
+         }
+     }
++
++    /// Observe this allocation's ownership without inspecting freed memory
++    /// or mistaking another allocation reusing an arena address for it.
++    #[cfg(test)]
++    pub(crate) fn observe_drop(&mut self) -> std::sync::Arc<std::sync::atomic::AtomicUsize> {
++        assert!(self.1.is_none());
++        let count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
++        self.1 = Some(count.clone());
++        count
++    }
+ }
+ 
+ impl Drop for Upload {
+     fn drop(&mut self) {
++        #[cfg(test)]
++        if let Some(count) = &self.1 {
++            count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
++        }
+         let Kind::Low(at, len) = self.0 else { return };
+         let mut arenas = ARENAS.lock().unwrap_or_else(|e| e.into_inner());
+         if let Some(arena) = arenas.iter_mut().find(|a| (a.at..a.at + a.taken.len() * BLOCK).contains(&at)) {
+-- 
+2.56.0.windows.4
+

@@ -407,3 +407,17 @@ no failures or skips. These changes are not yet credited with reduced title RAM
 or higher FPS. In particular, finding additional legitimate textures can increase
 resource usage. [The upstream review](docs/upstream-rendering-review-20261126.md)
 records the exact four reviewed heads, selected changes and exclusions.
+
+[The pending-upload reclamation patch](runtimes/patches/victory-pending-upload-reclamation.patch)
+applies after sparse texture discovery, producing `8f6f742`. Clearing an unhanded
+thin command stream previously lost its boxed upload owners. Cleanup now walks
+packet boundaries and destroys only those owners; worker-owned and submitted
+resources retain their existing lifetimes. Three real discard-path regressions
+failed against the old code; all six new and five existing focused tests passed
+after correction. Test-only per-object drop observers avoid ambiguous reused
+addresses. A diagnostic reports reclaimed pending uploads per frame.
+
+The preceding title run used only 16 MiB of these upload arenas, so this fix is
+not presented as the cause or solution of its multi-gigabyte pressure. Arena
+reservations remain reusable, and unrelated command-list pool retention is still
+unquantified. See [the ownership report](docs/pending-upload-leak-20261126.md).
