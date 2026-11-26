@@ -357,5 +357,11 @@ cleanup. Seven focused regressions passed; descriptor tests passed 48 with one
 ignored hardware probe, draw tests passed eight with one existing ignore, and
 two ownership-sampler tests passed. Small WARP resources were used for ownership
 checks without submitting GPU commands. Independent review found no blocking
-lifetime or locking issue. A guarded title comparison is still needed to
-establish any reduction in peak memory or improvement in gameplay.
+lifetime or locking issue. The guarded comparison `a6c5ad4c` reached a visible
+world but stopped at the unchanged 22 GiB job guard after 82.812 seconds.
+The last census held 7,624 retired resource references, compared with 151,072
+previously; these are references, not bytes, and the sampled world phases differ.
+Peak job memory remained about 21.57 GiB, so a reduction in total peak memory
+is not established. The final world interval was 0.4 FPS with incorrect rendering;
+first-mission progress and responsive controls remain unverified. Cleanup restored
+all 151 package access paths. See the memory follow-up for the exact configuration.

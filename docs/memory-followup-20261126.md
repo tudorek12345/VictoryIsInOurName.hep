@@ -1,6 +1,62 @@
 # Memory ownership and Radeon follow-up, 26 November
 
-The latest completed run, `original-20261126-010757-50007ff0`, rendered a
+The latest completed run, `original-20261126-013552-a6c5ad4c`, tested completed-list
+reclamation from clean source `f09f18e` on the Radeon RX 9060 XT in Series X
+mode with light DRED diagnostics. Its private capture near 80 seconds shows a
+recognizable street, trees, lights and fence, but the dark foreground character
+has obvious malformed or occluding polygons. The caption reads 0 FPS,
+2,842.3 ms/frame and 2,924 draws/frame. The first mission remains unverified
+playable; visible world geometry is not evidence of working controls.
+
+The fix retains each completed flight's submission number and applies the
+existing 64-submission reuse quarantine by age, including synchronous
+submissions. A synchronous completion can wake reclamation. Once its fence,
+copyback/readbacks and quarantine have completed, a list releases its dynamic
+descriptor references without starting a second retirement quarantine. Ordinary
+and incomplete-resource release paths retain their lifetime protection.
+Seven lifetime checks, 48 descriptor tests, eight draw tests and two diagnostics
+tests passed; groups may overlap and existing ignored tests remained ignored.
+The optimized build passed and independent code review found no blockers. These
+checks do not establish whole-title correctness.
+
+The final census held 7,624 retired resource references versus 151,072 in the
+preceding run: about 95% fewer references. These are independently timed samples
+at different world-entry phases, not a controlled comparison of distinct
+resources or saved bytes. Both runs still reached the same 22 GiB job limit;
+this does not establish that overall memory leakage is fixed.
+
+The job guard stopped the runtime after 82.812 seconds, before the requested
+four-minute test. Peak job commit was 23,156,342,784 bytes; runtime and launcher
+both returned 126. All 151 package access paths were restored, and no cleanup
+failure was recorded. The scheduled W and D inputs occurred at 63-64 and 66-67
+seconds during the transition, without a verified control response.
+
+The final interval measured 0.4 FPS and 2,842.3 ms/frame: CPU preparation took
+1,545.8 ms, recorded GPU work 80.4 ms and one heap-buffer pass 391.8 ms.
+These timings overlap and are not additive. The run-wide median was 30 FPS,
+dominated by earlier intro/loading intervals; it is not gameplay performance.
+No allocation-failure or device-removal message was recorded. Windows System
+4101 and Victory Application 1000 had no matches from run start through
+09:40:56 UTC. Their absence does not prove driver stability.
+
+The final independent memory sample recorded 23,060,369,408 private bytes,
+18,522,374,144 working-set bytes and 1,379,696,640 free physical bytes. It held
+437 completed lists across 64 quarantined submissions, 48 idle lists and 30
+in-flight lists in one submission; 18 submissions were queued. DXGI separately
+reported 7,070 MiB local usage against a 15,419 MiB budget and 6,923 MiB shared
+usage. These counters overlap and must not be summed. Pressure remains high.
+
+The first 45 seconds of captured stereo PCM are non-silent: peak 9,799 and RMS
+1,008.94 at 48 kHz. This measures captured data, not speaker output, audio
+synchronization or gameplay sound. Raw images, logs and audio remain local.
+
+The isolated loose-window alias prototype remains withheld because it can
+change descriptor bounds and exact-copy decisions. No memory saving from that
+prototype is claimed.
+
+## Earlier light-DRED typed-buffer comparison
+
+The preceding completed run, `original-20261126-010757-50007ff0`, rendered a
 recognizable character and street, houses, fence, trees and power lines in the
 private capture near 65 seconds. The image remains very dark; its caption shows
 2 FPS, 521.7 ms/frame and 2,755 draws/frame. This is a rendering advance, but
@@ -58,8 +114,8 @@ An isolated loose-window sharing prototype was withheld. The earlier run had
 larger backing can change descriptor bounds and alignment-dependent exact-copy
 decisions. It is not a safe memory-only substitution without descriptor-aware
 validation. The prototype is not integrated or enabled, and no gameplay memory
-saving is claimed. Completed-list and retirement ownership remain the next
-diagnostic target.
+saving is claimed. Completed-list and retirement ownership were the next
+diagnostic target; the newer test above records that investigation.
 
 ## Earlier descriptor-lifetime comparison
 

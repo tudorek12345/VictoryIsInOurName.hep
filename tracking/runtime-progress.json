@@ -5539,5 +5539,369 @@
       "gameplaySavingsVerified": false
     },
     "memoryLeakResolved": false
+  },
+  "completedListReclamation20261126": {
+    "run": {
+      "runId": "original-20261126-013552-a6c5ad4c",
+      "checkout": "f09f18eda4e94be557fdbbc2106abf87c93ad998",
+      "checkoutDirty": false,
+      "runtimeSha256": "7AE5559201187DEEF493FB19100FCA526234F2E72F95058D039C498973F9A3BB",
+      "started": "2026-11-26T01:35:52.5915156-08:00",
+      "elapsedSeconds": 88.43,
+      "exitCode": 126,
+      "renderer": "hardware",
+      "console": "series-x",
+      "prewarmLibrary": false,
+      "prewarmIndices": [
+        null
+      ],
+      "hostPhysicalReserveMiB": 0,
+      "hostCommitReserveMiB": 4096,
+      "jobCommitLimitBytes": 23622320128,
+      "peakJobCommitBytes": 23156342784,
+      "warmCacheFrom": null,
+      "pipelineWorkers": 1,
+      "textureNoWait": true,
+      "stopReason": "job commit reserve",
+      "restoredPackagePaths": 151,
+      "precompile": {
+        "requested": false,
+        "known": null,
+        "previouslyProcessed": null,
+        "previouslyBad": null,
+        "selected": null,
+        "processes": null,
+        "completed": false,
+        "processed": null,
+        "refused": null,
+        "childFailures": null,
+        "elapsedSeconds": null
+      },
+      "pipelineCacheEvents": [
+        {
+          "timestamp": "2026-11-26T09:35:54.355838Z",
+          "event": "loaded",
+          "bytes": 228048
+        },
+        {
+          "timestamp": "2026-11-26T09:37:15.687894Z",
+          "event": "saved",
+          "bytes": 237100,
+          "early": 1771,
+          "made": 62,
+          "loaded": 1631,
+          "started_early": 1612
+        }
+      ],
+      "allSamples": {
+        "count": 13,
+        "firstTimestamp": "2026-11-26T09:35:59.885146Z",
+        "lastTimestamp": "2026-11-26T09:37:11.782180Z",
+        "fps": {
+          "count": 13,
+          "minimum": 0.4,
+          "median": 30,
+          "maximum": 30.3
+        },
+        "frameMs": {
+          "count": 13,
+          "minimum": 33,
+          "median": 33.3,
+          "maximum": 2842.3
+        },
+        "prepareMs": {
+          "count": 13,
+          "minimum": 0.6,
+          "median": 2.7,
+          "maximum": 1545.8
+        },
+        "copyMs": {
+          "count": 13,
+          "minimum": 0.1,
+          "median": 0.1,
+          "maximum": 111
+        },
+        "textureMs": {
+          "count": 13,
+          "minimum": 0.1,
+          "median": 1,
+          "maximum": 182
+        },
+        "gpuMs": {
+          "count": 13,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 80.4
+        },
+        "readbackMs": {
+          "count": 13,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 282.9
+        },
+        "drawsPerFrame": {
+          "count": 13,
+          "minimum": 3,
+          "median": 10,
+          "maximum": 2924
+        },
+        "droppedWithoutPipeline": {
+          "count": 13,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 5771
+        },
+        "pipelinesBeingMade": {
+          "count": 13,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 23
+        },
+        "droppedIndirect": {
+          "count": 13,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 951
+        }
+      },
+      "jobProcesses": [
+        {
+          "processId": 28300,
+          "sampledPeakPrivateBytes": 23144894464,
+          "sampledPeakWorkingSetBytes": 18604707840,
+          "lastSample": {
+            "elapsedMs": 82812,
+            "processId": 28300,
+            "privateBytes": 23144894464,
+            "workingSetBytes": 18604707840
+          }
+        },
+        {
+          "processId": 21840,
+          "sampledPeakPrivateBytes": 1224704,
+          "sampledPeakWorkingSetBytes": 7970816,
+          "lastSample": {
+            "elapsedMs": 82812,
+            "processId": 21840,
+            "privateBytes": 1187840,
+            "workingSetBytes": 7950336
+          }
+        },
+        {
+          "processId": 17464,
+          "sampledPeakPrivateBytes": 10293248,
+          "sampledPeakWorkingSetBytes": 15683584,
+          "lastSample": {
+            "elapsedMs": 82812,
+            "processId": 17464,
+            "privateBytes": 10260480,
+            "workingSetBytes": 15663104
+          }
+        }
+      ],
+      "availablePhysicalBytesAtStop": null,
+      "allocationFailureMessages": 0,
+      "deviceRemovalMessages": 0,
+      "directPipelineMeasurements": [],
+      "visibleGameplayVerified": false,
+      "playerInputResponseVerified": false,
+      "requestedSeconds": 240,
+      "adapter": "AMD Radeon RX 9060 XT",
+      "dredMode": "light",
+      "shadowWindowKiB": 256,
+      "shadowBarMiB": 0,
+      "jobCommitReserveMiB": 512,
+      "driver": "32.0.32029.2010",
+      "guardElapsedSeconds": 82.812,
+      "launcherElapsedSeconds": 88.43,
+      "runtimeResultBeforeCleanup": 126,
+      "cleanupFailure": false,
+      "jobCommitBytesAtStop": 23156342784,
+      "jobStopThresholdBytes": 23085449216,
+      "timedMemory": {
+        "count": 77,
+        "interpretation": "Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks.",
+        "sampledPeakPrivateBytes": 23060369408,
+        "lastSample": {
+          "timestamp": "2026-11-26T09:37:15.922368Z",
+          "elapsed_ms": 76037,
+          "frame": 1600,
+          "private_bytes": 23060369408,
+          "working_set_bytes": 18522374144,
+          "physical_free_bytes": 1379696640,
+          "commit_free_bytes": 13892972544,
+          "rust_bytes": 1397171125,
+          "host_lists": 1396,
+          "host_idle_lists": 48,
+          "host_inflight_flights": 1,
+          "host_inflight_lists": 30,
+          "host_landed_flights": 64,
+          "host_landed_lists": 437,
+          "host_landing_active": false,
+          "retired_objects": 8355,
+          "retired_resources": 7624,
+          "retired_any": 731,
+          "retired_front_submission": 6504,
+          "retired_back_submission": 6587,
+          "submissions_started": 6569,
+          "submissions_finished": 6567,
+          "submissions_queued": 18,
+          "list_scratch_bytes": 169345024,
+          "list_spare_bytes": 21757952,
+          "list_upload_bytes": 459264,
+          "host_texture_count": 26464,
+          "host_texture_bytes": 5447483392,
+          "shadow_count": 8685,
+          "shadow_bytes": 3854404810,
+          "shadow_card_bytes": 886571008,
+          "shadow_before_bytes": 142800,
+          "shadow_window_card_bytes": 84082688,
+          "shadow_window_mapped_card_bytes": 0,
+          "staging_count": 1493,
+          "staging_bytes": 165500674,
+          "texture_pool_bytes": 3556769792,
+          "staging_pool_bytes": 872415232,
+          "shader_container_bytes": 197809200,
+          "translated_shader_bytes": 126210917,
+          "pipeline_library_bytes": 228048,
+          "made_upload_count": 329,
+          "made_upload_bytes": 2972992608,
+          "made_shared_count": 8977,
+          "made_shared_bytes": 4200096256,
+          "made_card_count": 1209,
+          "made_card_bytes": 1293799600
+        }
+      },
+      "videoMemory": {
+        "count": 15,
+        "lastSample": {
+          "timestamp": "2026-11-26T09:37:11.807606Z",
+          "localBudgetMiB": 15419,
+          "localUsedMiB": 7070,
+          "sharedBudgetMiB": 15578,
+          "sharedUsedMiB": 6923
+        },
+        "interpretation": "DXGI process local/shared usage and changing budgets in MiB; not installed capacity or an additional amount to sum with private bytes. Shared usage does not by itself prove VRAM eviction."
+      },
+      "lastWorldIntervalSamples": [
+        {
+          "timestamp": "2026-11-26T09:37:05.390618Z",
+          "fps": 2.6,
+          "frameMs": 388.4,
+          "prepareMs": 77.4,
+          "copyMs": 24.4,
+          "textureMs": 4.3,
+          "gpuMs": 5.2,
+          "readbackMs": 2.4,
+          "drawsPerFrame": 43,
+          "droppedWithoutPipeline": 100,
+          "pipelinesBeingMade": 0,
+          "droppedIndirect": 0
+        },
+        {
+          "timestamp": "2026-11-26T09:37:11.782180Z",
+          "fps": 0.4,
+          "frameMs": 2842.3,
+          "prepareMs": 1545.8,
+          "copyMs": 111,
+          "textureMs": 182,
+          "gpuMs": 80.4,
+          "readbackMs": 282.9,
+          "drawsPerFrame": 2924,
+          "droppedWithoutPipeline": 5771,
+          "pipelinesBeingMade": 23,
+          "droppedIndirect": 951
+        }
+      ],
+      "captureObservation": "Private window capture near 80 seconds shows recognizable street, trees, lights and fence, but the foreground character is dark with obvious malformed or occluding polygons. Caption: 0 FPS, 2842.3 ms/frame, 2924 draws/frame. Stable gameplay, control response and the first mission were not verified.",
+      "captureCaption": {
+        "approximateElapsedSeconds": 80,
+        "fps": 0,
+        "frameTimeMs": 2842.3,
+        "drawsPerFrame": 2924
+      },
+      "recognizableWorldGeometryObserved": true,
+      "stableGameplayVerified": false,
+      "firstMissionPlayableVerified": false,
+      "scheduledGameplayInputReached": true,
+      "inputSchedule": {
+        "W": "63-64 seconds",
+        "D": "66-67 seconds",
+        "interpretation": "Inputs occurred during the world transition. No observed movement can be causally attributed to these inputs; player control remains unverified."
+      },
+      "ownershipInterpretation": "Independently sampled owner buckets are not exhaustive or atomic. Null means unavailable, not zero. Retired resource references are not distinct resources or proven leaks. Fence completion, copyback/readback and the unchanged 64-submission quarantine precede completed-list reclamation.",
+      "lastWorldPreparationBreakdown": {
+        "timestamp": "2026-11-26T09:37:11.782180Z",
+        "cpuPreparationMsPerFrame": 1545.8,
+        "gpuMsPerFrame": 80.4,
+        "heapBufferPassesPerFrame": 1.0,
+        "heapBufferPassMsPerFrame": 391.8,
+        "interpretation": "Overlapping instrumented timings, not additive or a complete CPU/GPU-utilization measurement. The frame remains far slower than the 30 FPS target."
+      },
+      "audio": {
+        "measuredSeconds": 45.0,
+        "sampleRateHz": 48000,
+        "channels": 2,
+        "pcmPeak": 9799,
+        "pcmRms": 1008.9437672242204,
+        "channelPeaks": [
+          9799,
+          9715
+        ],
+        "speakerOutputVerified": false,
+        "gameplayAudioVerified": false,
+        "capturedNonSilentStereo": true
+      },
+      "eventLogCheck": {
+        "from": "2026-11-26T01:35:52.5915156-08:00",
+        "through": "2026-11-26T01:40:56.3007577-08:00",
+        "system4101Status": "read-no-matches",
+        "displayResetEventsObserved": 0,
+        "application1000Status": "read-no-matches",
+        "victoryApplicationCrashEventsObserved": 0,
+        "limitation": "No matching events were found in this interval; absence does not prove driver stability or identify every failure mode."
+      },
+      "interpretation": "Completed-list retirement references were much lower in the final sample, but both compared runs reached the unchanged job commit guard. World rendering remains malformed and very slow. Neither memory optimization end to end nor stable first-mission gameplay is established."
+    },
+    "localSourceCommit": "f09f18eda4e94be557fdbbc2106abf87c93ad998",
+    "changes": [
+      {
+        "revision": "f09f18eda4e94be557fdbbc2106abf87c93ad998",
+        "result": "Completed flights retain their submission numbers, so reuse eligibility counts completed submissions rather than newer flight containers. A synchronous completion can wake reclamation. Dynamic descriptor references from a flight that has completed fence work, copyback/readbacks and the existing 64-submission quarantine are released without entering a second retirement quarantine. Ordinary and incomplete resource release paths retain their quarantine."
+      }
+    ],
+    "retirementReferenceComparison": {
+      "baselineRunId": "original-20261126-010757-50007ff0",
+      "baselineSampleElapsedMs": 62026,
+      "baselineRetiredResourceReferences": 151072,
+      "candidateSampleElapsedMs": 76037,
+      "candidateRetiredResourceReferences": 7624,
+      "fewerReferencesPercent": 94.95339970345266,
+      "samePhaseControlledComparison": false,
+      "distinctResourceCountMeasured": false,
+      "bytesSavedMeasured": false,
+      "bothReachedSameJobCommitGuard": true,
+      "interpretation": "Final samples occur at different times and rendering workloads. Approximately 95 percent fewer retained references does not establish the same percentage reduction in memory, distinct objects or leaks."
+    },
+    "windowAliasPrototype": {
+      "integrated": false,
+      "enabled": false,
+      "reason": "Withheld because sharing a larger backing changes descriptor logical bounds and alignment-dependent exact-copy decisions; descriptor-aware validation is still required."
+    },
+    "memoryLeakResolved": false,
+    "tests": {
+      "lifetimePassed": 7,
+      "descriptorPassed": 48,
+      "drawPassed": 8,
+      "diagnosticsPassed": 2,
+      "interpretation": "Focused test groups reported by the implementation agent; groups may overlap and are not an aggregate unique-test count. Existing ignored tests remained ignored. These authored checks do not establish whole-title correctness.",
+      "descriptorIgnored": 1,
+      "drawIgnored": 1
+    },
+    "optimizedBuildPassed": true,
+    "independentCodeReview": {
+      "blockingFindings": 0,
+      "scope": "Completed-list descriptor release ownership and lifetime; read-only review, not a title runtime test."
+    }
   }
 }
