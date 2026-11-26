@@ -1,0 +1,324 @@
+diff --git a/crates/victory-gpu/src/copystat.rs b/crates/victory-gpu/src/copystat.rs
+index ea8de21..e3ea41b 100644
+--- a/crates/victory-gpu/src/copystat.rs
++++ b/crates/victory-gpu/src/copystat.rs
+@@ -526,7 +526,8 @@ fn system_memory() -> (u64, u64) {
+ 
+ /// Opt-in memory samples that continue while a frame is being recorded or
+ /// submitted. No GPU calls, virtual-memory walk, or waiting for resource
+-/// locks: retained counters are atomic and the two pools use try_lock.
++/// locks: retained counters are atomic, pools and owner queues use try_lock,
++/// and the owner-container traversal has a fixed upper bound.
+ /// Categories overlap (textures occupy pool blocks; shadows have card
+ /// copies), so the byte fields are not meant to be added together.
+ fn start_memory_sampler() {
+@@ -548,6 +549,9 @@ fn start_memory_sampler() {
+                 let staging = crate::texture::sampled_memory();
+                 let pools = crate::pool::sampled_memory();
+                 let kept = crate::pipeline::kept();
++                let ownership = crate::host::sampled_ownership();
++                let idle_lists = crate::list::sampled_idle_lists();
++                let (submissions_started, submissions_finished) = crate::host::submissions();
+                 tracing::info!(
+                     elapsed_ms = start.elapsed().as_millis() as u64,
+                     frame = crate::frame::current(),
+@@ -559,6 +563,20 @@ fn start_memory_sampler() {
+                     rust_class_bytes = ?&own[..4],
+                     rust_class_blocks = ?&own[4..],
+                     host_lists = alive[0],
++                    host_idle_lists = ?idle_lists,
++                    host_inflight_flights = ?ownership.inflight_flights,
++                    host_inflight_lists = ?ownership.inflight_lists,
++                    host_landed_flights = ?ownership.landed_flights,
++                    host_landed_lists = ?ownership.landed_lists,
++                    host_landing_active = ?ownership.landing_active,
++                    retired_objects = ?ownership.retired_objects,
++                    retired_resources = ?ownership.retired_resources,
++                    retired_any = ?ownership.retired_any,
++                    retired_front_submission = ?ownership.retired_front_submission,
++                    retired_back_submission = ?ownership.retired_back_submission,
++                    submissions_started,
++                    submissions_finished,
++                    submissions_queued = crate::queue::queued(),
+                     list_scratch_bytes = alive[2],
+                     list_spare_bytes = alive[4],
+                     list_upload_bytes = alive[7],
+@@ -583,7 +601,7 @@ fn start_memory_sampler() {
+                     made_shared_bytes = made[3],
+                     made_card_count = made[4],
+                     made_card_bytes = made[5],
+-                    "memory sample (retained except made_*; pool None means unavailable)"
++                    "memory sample (retained except made_*; owner/pool None means unknown; owner buckets are not exhaustive)"
+                 );
+                 std::thread::sleep(std::time::Duration::from_secs(1));
+             }
+diff --git a/crates/victory-gpu/src/host.rs b/crates/victory-gpu/src/host.rs
+index 804ab0a..df8cd38 100644
+--- a/crates/victory-gpu/src/host.rs
++++ b/crates/victory-gpu/src/host.rs
+@@ -72,6 +72,10 @@ unsafe impl Sync for Host {}
+ /// runs a submission: freeing there is a GPU page fault on the freed
+ /// texture (a device hang).
+ static RETIRED: Mutex<std::collections::VecDeque<(u64, Retired)>> = Mutex::new(std::collections::VecDeque::new());
++// Updated while RETIRED is locked. The sampler can classify its entries
++// without walking every retained object or asking the driver for metadata.
++#[cfg(feature = "diagnostics")]
++static RETIRED_RESOURCES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+ /// Submissions started and finished (waited for).
+ static STARTED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+ static FINISHED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+@@ -473,7 +477,10 @@ pub(crate) fn retire_resource(object: ID3D12Resource) {
+         return;
+     }
+     RETIREMENTS[1].fetch_add(1, Ordering::Relaxed);
+-    RETIRED.lock().unwrap_or_else(|e| e.into_inner()).push_back((started, Retired::Resource(object)));
++    let mut retired = RETIRED.lock().unwrap_or_else(|e| e.into_inner());
++    retired.push_back((started, Retired::Resource(object)));
++    #[cfg(feature = "diagnostics")]
++    RETIRED_RESOURCES.fetch_add(1, Ordering::Relaxed);
+ }
+ 
+ /// How many submissions later than it could (the last one that may use it
+@@ -498,7 +505,14 @@ fn bury(finished: u64) {
+         if n == 0 {
+             return;
+         }
+-        retired.drain(..n).collect()
++        retired.drain(..n).inspect(|(_, object)| {
++            #[cfg(feature = "diagnostics")]
++            if matches!(object, Retired::Resource(_)) {
++                RETIRED_RESOURCES.fetch_sub(1, Ordering::Relaxed);
++            }
++            #[cfg(not(feature = "diagnostics"))]
++            let _ = object;
++        }).collect()
+     };
+     drop(done);
+ }
+@@ -741,6 +755,109 @@ pub(crate) static MADE: [std::sync::atomic::AtomicU64; 6] = [const { std::sync::
+ /// their bytes.
+ pub(crate) static ALIVE: [std::sync::atomic::AtomicU64; 8] = [const { std::sync::atomic::AtomicU64::new(0) }; 8];
+ 
++/// A failed or poisoned try-lock is unknown, never a zero-sized owner.
++/// Called only by the independent memory sampler; no waiting or recovery.
++#[cfg(feature = "diagnostics")]
++pub(crate) fn try_memory_snapshot<T, R>(lock: &Mutex<T>, read: impl FnOnce(&T) -> R) -> Option<R> {
++    lock.try_lock().ok().map(|value| read(&value))
++}
++
++#[cfg(feature = "diagnostics")]
++#[derive(Debug, Default, PartialEq, Eq)]
++pub(crate) struct OwnershipSample {
++    pub(crate) inflight_flights: Option<u64>,
++    pub(crate) inflight_lists: Option<u64>,
++    pub(crate) landed_flights: Option<u64>,
++    pub(crate) landed_lists: Option<u64>,
++    pub(crate) landing_active: Option<bool>,
++    pub(crate) retired_objects: Option<u64>,
++    pub(crate) retired_resources: Option<u64>,
++    pub(crate) retired_any: Option<u64>,
++    pub(crate) retired_front_submission: Option<u64>,
++    pub(crate) retired_back_submission: Option<u64>,
++}
++
++/// Counts owning containers, not draw-order entries (which can name one
++/// list repeatedly). Limit the work done while the owner lock is held.
++#[cfg(feature = "diagnostics")]
++fn owner_counts(sizes: impl IntoIterator<Item = usize>) -> Option<(u64, u64)> {
++    let mut count = (0u64, 0u64);
++    for size in sizes.into_iter().take(4097) {
++        count.0 += 1;
++        if count.0 > 4096 {
++            return None;
++        }
++        count.1 = count.1.checked_add(size as u64)?;
++    }
++    Some(count)
++}
++
++/// Read-only ownership census. These buckets are not an exhaustive partition:
++/// recordings, queued CPU work and lists being recycled also own references.
++/// While flights are being landed outside LINE, in-flight totals are unknown.
++/// No GPU call, resource traversal, lifetime change or blocking lock occurs.
++#[cfg(feature = "diagnostics")]
++pub(crate) fn sampled_ownership() -> OwnershipSample {
++    let mut sample = OwnershipSample::default();
++    if let Some((pending, landed, settling)) = try_memory_snapshot(&LINE, |line| {
++        let pending = if !line.settling && line.line.len() <= 4096 {
++            owner_counts(line.line.iter().filter_map(|item| match item {
++                Late::Run(flight) => Some(flight.lists.len()),
++                _ => None,
++            }))
++        } else {
++            None
++        };
++        let landed = owner_counts(line.landed.iter().map(|(lists, _)| lists.len()));
++        (pending, landed, line.settling)
++    }) {
++        sample.inflight_flights = pending.map(|c| c.0);
++        sample.inflight_lists = pending.map(|c| c.1);
++        sample.landed_flights = landed.map(|c| c.0);
++        sample.landed_lists = landed.map(|c| c.1);
++        sample.landing_active = Some(settling);
++    }
++    if let Some((all, resources, front, back)) = try_memory_snapshot(&RETIRED, |retired| {
++        (retired.len() as u64, RETIRED_RESOURCES.load(Ordering::Relaxed),
++         retired.front().map(|(at, _)| *at), retired.back().map(|(at, _)| *at))
++    }) {
++        sample.retired_objects = Some(all);
++        sample.retired_resources = Some(resources);
++        sample.retired_any = all.checked_sub(resources);
++        sample.retired_front_submission = front;
++        sample.retired_back_submission = back;
++    }
++    sample
++}
++
++#[cfg(all(test, feature = "diagnostics"))]
++mod ownership_sample_tests {
++    use super::{owner_counts, try_memory_snapshot};
++    use std::sync::{Arc, Mutex};
++
++    #[test]
++    fn a_busy_owner_is_unknown_and_sampling_does_not_release_it() {
++        let resource = Arc::new(17);
++        let owner = Mutex::new(vec![resource.clone()]);
++        let held = owner.lock().unwrap();
++        assert_eq!(try_memory_snapshot(&owner, Vec::len), None);
++        assert_eq!(Arc::strong_count(&resource), 2);
++        drop(held);
++        assert_eq!(try_memory_snapshot(&owner, Vec::len), Some(1));
++        assert_eq!(Arc::strong_count(&resource), 2);
++        assert_eq!(**owner.lock().unwrap().first().unwrap(), 17);
++    }
++
++    #[test]
++    fn owner_counts_include_all_lists_in_each_flight_and_bound_sampling_work() {
++        assert_eq!(owner_counts([2, 0, 7]), Some((3, 9)));
++        assert_eq!(owner_counts([]), Some((0, 0)));
++        assert_eq!(owner_counts(std::iter::repeat(1).take(4096)), Some((4096, 4096)));
++        // An infinite source must not turn the sampler into a blocking walk.
++        assert_eq!(owner_counts(std::iter::repeat(1)), None);
++    }
++}
++
+ /// About host lists, for the memory line: lists made by the host since the
+ /// start; preludes made (a list's second allocator and list, made when it
+ /// first needs one, [`lazy_prelude`]); and, in diagnostics builds, the
+@@ -4311,6 +4428,7 @@ impl Host {
+                     // pass: a wait between each copy and its pass had the
+                     // card do them one after the other.
+                     let mut sent = Vec::new();
++                    let mut transitioned = Vec::new();
+                     if let Some(own) = &own {
+                         own.record(self, list, &dirty, |shadow| looks.as_ref().is_some_and(|l| l.hold(shadow)));
+                     }
+@@ -4329,11 +4447,9 @@ impl Host {
+                         #[cfg(feature = "diagnostics")]
+                         traffic::moved(traffic::UP, shadow.span(), ranges.iter().copied());
+                         if own.is_none() && before.is_some() && !ranges.is_empty() {
+-                            sent.push(transition(
+-                                &shadow.buffer,
+-                                D3D12_RESOURCE_STATE_COPY_DEST,
+-                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+-                            ));
++                            if let Some(barrier) = copied_buffer_transition(&shadow.buffer, &mut transitioned) {
++                                sent.push(barrier);
++                            }
+                         }
+                     }
+                     if !sent.is_empty() {
+@@ -9541,6 +9657,75 @@ fn in_flight(history: &[D3D12_AUTO_BREADCRUMB_OP], markers: &[(u32, String)], do
+     text
+ }
+ 
++/// Several shadows can name the same host buffer. All their copies still
++/// run, but that resource leaves COPY_DEST only once before the passes.
++/// Adapted from avatarmanz/VIctory-7900XTX 773d902f16d523c431925a319d6b430dedcba157.
++fn copied_buffer_transition(
++    resource: &ID3D12Resource,
++    transitioned: &mut Vec<*mut std::ffi::c_void>,
++) -> Option<D3D12_RESOURCE_BARRIER> {
++    let raw = resource.as_raw();
++    if transitioned.contains(&raw) {
++        return None;
++    }
++    transitioned.push(raw);
++    Some(transition(resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
++}
++
++#[cfg(test)]
++mod copied_buffer_transition_tests {
++    use super::*;
++
++    #[test]
++    fn copied_aliases_have_one_transition_per_host_buffer() {
++        // Authored resources only, on the verified software adapter. No
++        // command queue is created and no GPU work is submitted.
++        let adapter = warp_adapter().expect("software WARP adapter");
++        let mut device: Option<ID3D12Device> = None;
++        // SAFETY: the adapter and output pointer are live.
++        unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_0, &mut device) }.unwrap();
++        let device = device.unwrap();
++        let make_buffer = || {
++            let heap = D3D12_HEAP_PROPERTIES { Type: D3D12_HEAP_TYPE_DEFAULT, ..Default::default() };
++            let desc = D3D12_RESOURCE_DESC {
++                Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
++                Width: 4096,
++                Height: 1,
++                DepthOrArraySize: 1,
++                MipLevels: 1,
++                SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
++                Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
++                ..Default::default()
++            };
++            let mut resource: Option<ID3D12Resource> = None;
++            // SAFETY: a complete small buffer description and live output.
++            unsafe {
++                device.CreateCommittedResource(
++                    &heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST, None, &mut resource,
++                )
++            }.unwrap();
++            resource.unwrap()
++        };
++        let first = make_buffer();
++        let alias = first.clone();
++        let second = make_buffer();
++        let mut transitioned = Vec::new();
++        let planned: Vec<_> = [&first, &alias, &second, &first].into_iter()
++            .filter_map(|resource| copied_buffer_transition(resource, &mut transitioned)).collect();
++        assert_eq!(planned.len(), 2);
++        for (barrier, resource) in planned.iter().zip([&first, &second]) {
++            assert_eq!(barrier.Type, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION);
++            // SAFETY: the production helper constructed transition barriers;
++            // the three resource handles remain alive for this assertion.
++            let planned = unsafe { &barrier.Anonymous.Transition };
++            assert_eq!(planned.pResource.as_ref().unwrap().as_raw(), resource.as_raw());
++            assert_eq!(planned.Subresource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
++            assert_eq!(planned.StateBefore, D3D12_RESOURCE_STATE_COPY_DEST);
++            assert_eq!(planned.StateAfter, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
++        }
++    }
++}
++
+ pub(crate) fn transition(
+     resource: &ID3D12Resource,
+     before: D3D12_RESOURCE_STATES,
+diff --git a/crates/victory-gpu/src/list.rs b/crates/victory-gpu/src/list.rs
+index 8a17ddb..e79bf85 100644
+--- a/crates/victory-gpu/src/list.rs
++++ b/crates/victory-gpu/src/list.rs
+@@ -225,6 +225,13 @@ unsafe impl Send for Idle {}
+ #[cfg(windows)]
+ static IDLE: std::sync::Mutex<(Vec<Idle>, u64)> = std::sync::Mutex::new((Vec::new(), 0));
+ 
++/// Idle, already-reset host lists, or unknown when the pool is busy.
++/// Scratch is counted elsewhere; list count is not a retained-byte estimate.
++#[cfg(all(windows, feature = "diagnostics"))]
++pub(crate) fn sampled_idle_lists() -> Option<u64> {
++    crate::host::try_memory_snapshot(&IDLE, |idle| idle.0.len() as u64)
++}
++
+ /// The most host lists kept idle (128 were too few: flights land several at
+ /// a time, so lists were thrown away and others made in the same frame, with
+ /// their preludes and buffers, 12 % of the submitting thread in the opening,

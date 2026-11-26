@@ -301,3 +301,16 @@ blocking ownership or locking issue. The existing deferred-constant title-heap
 lookup remains outside this change. These checks establish the local fix, not
 lower title memory usage or playable first-mission rendering; a guarded title
 comparison is required.
+
+[The ownership census and barrier patch](runtimes/patches/victory-ownership-census-barriers.patch)
+applies next, producing `8c7f573`. It adapts upstream `773d902f` so aliased buffers
+receive one COPY_DEST-to-NON_PIXEL_SHADER_RESOURCE transition after their copies.
+An authored test with two small WARP buffers verifies aliased/distinct resources
+and exact transition states without submitting GPU work. Two ownership-sampler
+tests also pass. The sampler uses bounded try-lock snapshots, distinguishes
+unknown owners from zero, and leaves submission/retirement lifetimes unchanged.
+The summary parser accepts the new fields; all 22 synthetic checks pass.
+
+The new upstream review and failed post-lifetime-fix title comparison are recorded
+in [the memory follow-up](docs/memory-followup-20261126.md). Light DRED is now the
+launcher default for this candidate, with full marker text available explicitly.
