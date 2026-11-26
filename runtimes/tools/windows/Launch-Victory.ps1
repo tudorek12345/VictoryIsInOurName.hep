@@ -35,6 +35,8 @@ param(
     [switch]$MovieAudio = $true,
     [switch]$MemoryStats,
     [switch]$MemorySamples,
+    [ValidateRange(0, 3600)]
+    [int]$MemoryMapEvery = 60,
     [switch]$GpuTiming,
     [switch]$FullGpuMarkers,
     [switch]$SplitGpuLists,
@@ -92,6 +94,12 @@ if ($useXcl -and $VictorySource -ne 'review') {
 $snapshot = $VictorySource -in 'amd7900', 'fxceless'
 $standalone = $snapshot -or $VictorySource -eq 'amd7900-series-s'
 $amdFork = $VictorySource -in 'amd7900', 'amd7900-series-s'
+if ($PSBoundParameters.ContainsKey('MemoryMapEvery')) {
+    if ($useXcl -or $VictorySource -ne 'amd7900-series-s') {
+        throw 'MemoryMapEvery requires the integrated AMD diagnostic runtime.'
+    }
+    $MemoryStats = $true
+}
 if (-not $useXcl -and $VictorySource -eq 'amd7900-series-s' -and -not ($PrepareOnly -or $PrewarmPipelines)) {
     if (-not $PSBoundParameters.ContainsKey('MenuPicture')) { $MenuPicture = $Console -eq 'series-s' -and -not $GuestOutput }
     if (-not $PSBoundParameters.ContainsKey('QueuedSubmit') -and -not $GpuTiming) { $QueuedSubmit = $true }
@@ -427,6 +435,9 @@ try {
             )
             if ($MemoryStats -or $MemorySamples) { $arguments += @('--env', 'VICTORY_MEMORY_STATS=1') }
             if ($MemorySamples) { $arguments += @('--env', 'VICTORY_MEMORY_SAMPLE=1') }
+            if ($PSBoundParameters.ContainsKey('MemoryMapEvery')) {
+                $arguments += @('--env', "VICTORY_MEMORY_MAP=$MemoryMapEvery")
+            }
             if ($TextureNoWait) { $arguments += @('--env', 'VICTORY_TEXTURE_NO_WAIT=1') }
             if ($TrimIdleTextures) { $arguments += @('--env', 'VICTORY_TEXTURE_KEEP=0') }
             if ($Renderer -eq 'warp' -and $VictorySource -ne 'review') {
@@ -532,6 +543,7 @@ try {
             menuPicture = [bool]$MenuPicture
             memoryStats = [bool]($MemoryStats -or $MemorySamples)
             memorySamples = [bool]$MemorySamples
+            memoryMapEvery = if ($PSBoundParameters.ContainsKey('MemoryMapEvery')) { $MemoryMapEvery } else { $null }
             pipelineBookFrom = if ($PipelineBookFrom) { $PipelineBookFrom } else { $null }
             pipelineUseFrom = if ($PipelineUseFrom) { $PipelineUseFrom } else { $null }
             gpuTiming = [bool]$GpuTiming

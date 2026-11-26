@@ -24,11 +24,16 @@ observed gameplay/FPS improvement.
 
 ## Candidates and changes not imported
 
-- **Guest output size remains under evaluation.** [avatarmanz's resolution
+- **Guest output size was adapted and measured separately.** [avatarmanz's resolution
   change](https://github.com/avatarmanz/VIctory-7900XTX/commit/f63b4b12c556ff123c6fd591d8380dba2f17c8ff)
-  changes the title's output-setting path with byte checks. Resizing a host
-  window does not prove that guest render targets changed. The candidate is
-  not validated here. Its separate FidelityFX scale experiment documents a
+  changes the title's output-setting path with byte checks. The opt-in local
+  adaptation verifies the image and both mapped ranges before a transactional
+  patch. It retains the allocator's overflow check and validates remaining
+  pool capacity instead of unconditionally bypassing the final assertion.
+  Ten loader tests passed. The subsequent Series-X run confirmed a 1920x1080
+  swapchain and an observed 1280x720 depth target, but still reached the job
+  memory guard with late intervals at 2.2-3.1 FPS. This is not a gameplay fix.
+  Its separate FidelityFX scale experiment documents a
   Series-S crash; those switches are not being adopted together.
 - **Raw constant buffers are deferred.** [3920dc26](https://github.com/avatarmanz/VIctory-7900XTX/commit/3920dc26bf995d7ea8772c9d9b9a8176fa7bc2db)
   uses raw descriptor twins/root SRVs to avoid alignment-driven copies. It
@@ -73,3 +78,27 @@ source integration. No archive-wide merge was selected.
 These source reviews and decoder tests do not establish a playable first mission,
 stable 30 FPS or reduced whole-process memory. Series S/X selection remains tied
 to controlled runs, visible rendering, measured memory and actual guest dimensions.
+
+## Later refresh: fxceless `ceb9e1f7`
+
+A subsequent live check found [ceb9e1f7](https://github.com/fxceless/victory-fork/commit/ceb9e1f7a0180e61961bfde85d69d24e2dd84b39),
+published after the table's cutoff. The 7900 XTX head was still `0dec5dcc`.
+The new fxceless change gathers texture checks on helper threads between title
+writes, adds descriptor and DirectStorage timing, and gives dispatch spreading
+a distinct environment switch. Its author reports 8.7-9.4 ms less preparation
+work at equal draws on another machine. That is not a local RX 9060 XT result.
+
+Parallel texture refresh remains off there by default and was not imported in
+this pass. Moving checks requires validating write/flush ordering against this
+integration's submission path; each helper can also retain its own temporary
+texture buffer. The local bottleneck includes substantial CPU preparation, but
+this change does not establish a fix for the 22 GiB job-limit failure. The
+additional timing code and switch rename do not repair a demonstrated defect in
+the current integration, so they were not merged merely to match the head.
+
+The launcher exposes the existing address-space census through optional
+`-MemoryMapEvery N`, counted in approximately five-second memory-report
+intervals (`0` disables it). Omitting the option retains the runtime default
+of 60 intervals. The option enables memory statistics and records the request
+in run metadata. A memory-map walk can stall memory queries; runs using it
+are allocation investigations, not clean FPS benchmarks.

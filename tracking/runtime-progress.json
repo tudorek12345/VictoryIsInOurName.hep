@@ -7,71 +7,71 @@
   "subject": "GTA VI on the Windows D3D12 runtime integration",
   "observations": [
     {
-      "stage": "intro",
-      "result": "Both final-binary runs have a visible Rockstar intro or logo capture with a 30 FPS window caption; this is an interval observation, not a whole-run guarantee."
+      "stage": "output",
+      "result": "Requested 1920x1080 was applied and the swapchain stayed 1920x1080; an observed aspect-ratio depth target was 1280x720. Native render-scale logic and pool capacity were retained."
     },
     {
-      "stage": "rendered-scene",
-      "result": "Series S produced a recognizable rendered character close-up. Seven world-rendering interval samples around the transition were 1.3-2.4 FPS, sample median 1.9. No gameplay input, responsive control or first-mission completion was verified."
+      "stage": "frame-rate",
+      "result": "Twelve of 13 early low-draw intervals were 29.3-30.1 FPS and one 15.9 FPS. Transition was 0.4 FPS, then later rendering intervals 3.1, 2.7 and 2.2 FPS. No valid world capture or gameplay input was obtained."
     },
     {
       "stage": "memory",
-      "result": "Both fresh-profile runs stopped at the job commit reserve. Series S then had a separate profile-cleanup failure, followed by a documented successful manual API retry."
+      "result": "Runtime stopped at the unchanged job commit reserve after 95.547 seconds. A subsequent profile-cleanup sharing violation produced launcher 125 after runtime 126; all 151 package access paths were restored."
     },
     {
       "stage": "audio",
-      "result": "Recorded signal was present in X and later S intervals. The first 45 seconds of S were effectively silent; correct logo audibility and glitch-free playback remain unverified."
+      "result": "Recorded audio signal exists across the 94.501 second capture. Correct logo audibility, synchronization and glitch-free playback remain unverified."
     }
   ],
-  "testedCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
+  "testedCommit": "f690d6fbd6e879cbc185c4abb4cb5fca52dc64ad",
   "hardwareForThisRun": {
     "gpu": "AMD Radeon RX 9060 XT",
     "driver": "32.0.32029.2010",
     "vramGB": 16,
     "cpu": "AMD Ryzen 7 5700X",
     "systemRamGB": 32,
-    "scope": "GPU adapter and driver verified in the two local run diagnostics; CPU and installed RAM identified by the maintainer."
+    "scope": "GPU adapter and driver verified in this local run; CPU and installed RAM identified by the maintainer."
   },
   "captureForThisRun": null,
   "independentReproduction": false,
   "limitations": [
-    "This headline describes the completed 0331fdc6 and b28a27fe runs, not later experiments. The original November 24 report is preserved under historicalMaintainerReport20261124.",
-    "The first mission is not verified playable: no gameplay input was sent in the Series S comparison, mission identity is unverified, and both runs reached the memory guard.",
-    "Series S also enabled MenuPicture and had different foreground timing. Early S captures were occluded and invalid as game-image evidence; this is not a matched-scene or resolution-only benchmark.",
-    "Whole-run interval medians include intro/background intervals. GPU-wait aggregate fields measure CPU fence/landing waits, not hardware GPU timestamp duration.",
-    "Raw captures, audio, logs and game data remain private. Recorded signal is not proof of logo audibility; absent matching Windows events do not prove general driver health."
+    "This headline describes checkedOutput20261126. Earlier X/S results remain unchanged under preparedFreshConsoleComparison20261126, with their prior headline preserved under historicalPreparedComparisonHeadline20261126.",
+    "First-mission playability remains unverified: no valid world capture, gameplay input, responsive control or mission identity was obtained before the memory guard.",
+    "The build differs from the earlier X baseline by output handling, BC7 and cache history; this is not a matched-scene or resolution-only benchmark.",
+    "Whole-run interval medians include intro/loading workloads. GPU-wait aggregates measure CPU fence/landing waits, not hardware GPU timestamp duration.",
+    "Raw captures, audio, logs and game data remain private. Recorded signal does not prove logo audibility; absent matching Windows events do not prove general driver health."
   ],
-  "nextEvidence": "Verify responsive player control and mission context in a visible scene under existing guards, while measuring remaining pipeline work, CPU preparation and retained allocation ownership.",
+  "nextEvidence": "Obtain valid visible mission and responsive control evidence while reducing measured allocation pressure and distinguishing additional pipeline work from CPU preparation under the existing guards.",
   "stages": [
     {
       "id": "first-boot",
       "stage": "Boot and first-boot screens",
       "status": "not-retested",
-      "detail": "Historical maintainer observations are preserved separately; the current comparison does not revalidate every first-boot setting."
+      "detail": "A fresh profile was used; every first-boot setting was not revalidated."
     },
     {
       "id": "intro-video",
       "stage": "Intro video and audio",
-      "status": "observed-with-limitations",
-      "detail": "Visible logo/intro captures show 30 FPS. Later recorded audio exists, but initial S audio is effectively silent and correct logo audibility is unverified."
+      "status": "measured-with-limitations",
+      "detail": "Early low-draw intervals were mostly near 30 FPS and recorded audio exists. This does not verify logo audibility or uninterrupted loading performance."
     },
     {
       "id": "profile-saves",
       "stage": "Start screen, profile and saves",
       "status": "unverified-in-this-comparison",
-      "detail": "Fresh isolated profiles were used. Save correctness and a deliberate first-mission selection were not verified."
+      "detail": "Fresh isolated profile; save correctness and deliberate first-mission selection were not verified."
     },
     {
       "id": "world-loading",
       "stage": "Loading into a rendered scene",
-      "status": "observed-transition",
-      "detail": "S proceeds from the restored logo to a recognizable character close-up; this does not establish mission identity or player control."
+      "status": "rendering-work-observed",
+      "detail": "High-draw rendering intervals and a 1280x720 depth target are logged. The attempted world capture produced no file before termination."
     },
     {
       "id": "world-rendering",
       "stage": "World rendering and first-mission playability",
       "status": "not-playable-verified",
-      "detail": "S later intervals are 1.3-2.4 FPS and X has a final 1.5 FPS interval. Both reach the memory guard. Responsive gameplay and first-mission completion remain unverified."
+      "detail": "After a 0.4 FPS transition, later intervals were 2.2-3.1 FPS. No valid world capture or gameplay input; memory guard stopped the runtime."
     }
   ],
   "localCandidateComparison": {
@@ -6018,7 +6018,7 @@
       }
     }
   },
-  "latestMeasuredComparison": "preparedFreshConsoleComparison20261126",
+  "latestMeasuredComparison": "checkedOutput20261126",
   "preparedFreshConsoleComparison20261126": {
     "report": "docs/prepared-console-comparison-20261126.md",
     "evidenceDate": "2026-11-26",
@@ -6583,5 +6583,318 @@
       "scope": "Existing synthetic summary suite plus CPU-wait metadata/alias checks, bounded swapchain-resize history checks and metadata-only guest-output request separation; local and public mirror passed."
     },
     "interpretation": "Visible Series S rendering is verified in one private close-up capture, but first-mission identity and responsive control are not. Both runs stopped at the memory guard. Different MenuPicture/foreground behavior and scene coverage prevent matched-performance or stability claims. All aggregate gpuMs/runtimeGpuWaitMs fields are CPU fence/landing waits, not hardware GPU execution durations."
+  },
+  "historicalPreparedComparisonHeadline20261126": {
+    "reportedOn": "2026-11-26",
+    "reportedBy": "repository maintainer; local tool measurements and manually inspected private captures",
+    "verification": "local evidence, not independent reproduction",
+    "observations": [
+      {
+        "stage": "intro",
+        "result": "Both final-binary runs have a visible Rockstar intro or logo capture with a 30 FPS window caption; this is an interval observation, not a whole-run guarantee."
+      },
+      {
+        "stage": "rendered-scene",
+        "result": "Series S produced a recognizable rendered character close-up. Seven world-rendering interval samples around the transition were 1.3-2.4 FPS, sample median 1.9. No gameplay input, responsive control or first-mission completion was verified."
+      },
+      {
+        "stage": "memory",
+        "result": "Both fresh-profile runs stopped at the job commit reserve. Series S then had a separate profile-cleanup failure, followed by a documented successful manual API retry."
+      },
+      {
+        "stage": "audio",
+        "result": "Recorded signal was present in X and later S intervals. The first 45 seconds of S were effectively silent; correct logo audibility and glitch-free playback remain unverified."
+      }
+    ],
+    "testedCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
+    "hardwareForThisRun": {
+      "gpu": "AMD Radeon RX 9060 XT",
+      "driver": "32.0.32029.2010",
+      "vramGB": 16,
+      "cpu": "AMD Ryzen 7 5700X",
+      "systemRamGB": 32,
+      "scope": "GPU adapter and driver verified in the two local run diagnostics; CPU and installed RAM identified by the maintainer."
+    },
+    "captureForThisRun": null,
+    "limitations": [
+      "This headline describes the completed 0331fdc6 and b28a27fe runs, not later experiments. The original November 24 report is preserved under historicalMaintainerReport20261124.",
+      "The first mission is not verified playable: no gameplay input was sent in the Series S comparison, mission identity is unverified, and both runs reached the memory guard.",
+      "Series S also enabled MenuPicture and had different foreground timing. Early S captures were occluded and invalid as game-image evidence; this is not a matched-scene or resolution-only benchmark.",
+      "Whole-run interval medians include intro/background intervals. GPU-wait aggregate fields measure CPU fence/landing waits, not hardware GPU timestamp duration.",
+      "Raw captures, audio, logs and game data remain private. Recorded signal is not proof of logo audibility; absent matching Windows events do not prove general driver health."
+    ],
+    "nextEvidence": "Verify responsive player control and mission context in a visible scene under existing guards, while measuring remaining pipeline work, CPU preparation and retained allocation ownership.",
+    "stages": [
+      {
+        "id": "first-boot",
+        "stage": "Boot and first-boot screens",
+        "status": "not-retested",
+        "detail": "Historical maintainer observations are preserved separately; the current comparison does not revalidate every first-boot setting."
+      },
+      {
+        "id": "intro-video",
+        "stage": "Intro video and audio",
+        "status": "observed-with-limitations",
+        "detail": "Visible logo/intro captures show 30 FPS. Later recorded audio exists, but initial S audio is effectively silent and correct logo audibility is unverified."
+      },
+      {
+        "id": "profile-saves",
+        "stage": "Start screen, profile and saves",
+        "status": "unverified-in-this-comparison",
+        "detail": "Fresh isolated profiles were used. Save correctness and a deliberate first-mission selection were not verified."
+      },
+      {
+        "id": "world-loading",
+        "stage": "Loading into a rendered scene",
+        "status": "observed-transition",
+        "detail": "S proceeds from the restored logo to a recognizable character close-up; this does not establish mission identity or player control."
+      },
+      {
+        "id": "world-rendering",
+        "stage": "World rendering and first-mission playability",
+        "status": "not-playable-verified",
+        "detail": "S later intervals are 1.3-2.4 FPS and X has a final 1.5 FPS interval. Both reach the memory guard. Responsive gameplay and first-mission completion remain unverified."
+      }
+    ],
+    "latestMeasuredComparison": "preparedFreshConsoleComparison20261126"
+  },
+  "checkedOutput20261126": {
+    "report": "docs/checked-output-20261126.md",
+    "evidenceDate": "2026-11-26",
+    "evidenceCutoffUtc": "2026-11-26T11:35:00Z",
+    "sourceCommit": "f690d6fbd6e879cbc185c4abb4cb5fca52dc64ad",
+    "runtimeSha256": "0C3B6914C2FFCDB26B5674DF380905F6ECC525308CC346B370C83D79DF4F2C5E",
+    "patchValidation": {
+      "focusedLoaderTestsPassed": 10,
+      "focusedLoaderTestsFailed": 0,
+      "scope": "Verified original-image identity and mapped footprints; authored output setter, unsigned pool bound, transaction rollback and Windows memory protections. This is not gameplay validation.",
+      "nativePoolCapacityUnchanged": true,
+      "nativeRenderScaleUnchanged": true,
+      "optionalNotDefault": true
+    },
+    "preparation": {
+      "runId": "original-20261126-033001-ec0c62cb",
+      "sourceCommit": "f690d6fbd6e879cbc185c4abb4cb5fca52dc64ad",
+      "runtimeSha256": "0C3B6914C2FFCDB26B5674DF380905F6ECC525308CC346B370C83D79DF4F2C5E",
+      "console": "series-x",
+      "cacheMode": "shared-content-keyed",
+      "libraryWriters": 1,
+      "knownPipelines": 83555,
+      "selectedPipelines": 1715,
+      "processedPipelines": 1715,
+      "pipelinesLoaded": 1715,
+      "newPipelinesMade": 0,
+      "refusedPipelines": 0,
+      "childFailures": 0,
+      "completed": true,
+      "precompileElapsedSeconds": 46,
+      "launcherElapsedSeconds": 48.46,
+      "peakJobCommitBytes": 453230592,
+      "jobCommitLimitBytes": 6442450944,
+      "exitCode": 0,
+      "runtimeResultBeforeCleanup": 0,
+      "restoredPackagePaths": 151,
+      "cleanupFailure": false
+    },
+    "run": {
+      "runId": "original-20261126-033111-8cad5208",
+      "sourceCommit": "f690d6fbd6e879cbc185c4abb4cb5fca52dc64ad",
+      "checkoutDirty": false,
+      "runtimeSha256": "0C3B6914C2FFCDB26B5674DF380905F6ECC525308CC346B370C83D79DF4F2C5E",
+      "console": "series-x",
+      "freshProfile": true,
+      "renderer": "hardware",
+      "gpu": "AMD Radeon RX 9060 XT",
+      "driverVersion": "32.0.32029.2010",
+      "queuedSubmit": true,
+      "dredMode": "light",
+      "textureNoWait": true,
+      "trimIdleTextures": false,
+      "menuPicture": false,
+      "pipelineWorkers": 1,
+      "shadowWindowKiB": 256,
+      "shadowBarMiB": 0,
+      "gpuTiming": false,
+      "missionTrace": false,
+      "warmCacheFrom": "original-20261126-033001-ec0c62cb",
+      "cacheFilesSeeded": 4067,
+      "driverCacheFilesSeeded": 4,
+      "started": "2026-11-26T03:31:17.0870380-08:00",
+      "requestedSeconds": 240,
+      "launcherElapsedSeconds": 102.94,
+      "finalRunnerElapsedSeconds": 95.547,
+      "resolution": {
+        "requestedGuestOutput": "1920x1080",
+        "appliedGuestOutput": {
+          "width": 1920,
+          "height": 1080,
+          "timestampUtc": "2026-11-26T11:31:18.978763Z"
+        },
+        "reportedGuestDisplay": {
+          "width": 3840,
+          "height": 2160
+        },
+        "initialAndFinalObservedSwapchain": {
+          "width": 1920,
+          "height": 1080,
+          "timestampUtc": "2026-11-26T11:31:20.106426Z"
+        },
+        "swapchainObservationCount": 1,
+        "observedAspectRatioDepthTarget": {
+          "width": 1280,
+          "height": 720,
+          "timestampUtc": "2026-11-26T11:32:31.175064Z"
+        },
+        "otherDepthTargets": "Square shadow targets include 2048x2048; output size does not describe every pass."
+      },
+      "captureEvidence": {
+        "validWorldCaptureObtained": false,
+        "attemptedWorldCaptureAfterUtc": "2026-11-26T11:32:52Z",
+        "attemptResult": "The parent capture attempt did not produce a file before the guard stopped the runtime.",
+        "gameplayInputSent": false,
+        "responsiveControlVerified": false,
+        "missionIdentityVerified": false,
+        "firstMissionPlayableVerified": false
+      },
+      "earlyLowDrawIntervals": {
+        "count": 13,
+        "drawsPerFrameMinimum": 3,
+        "drawsPerFrameMaximum": 28,
+        "minimumFps": 15.9,
+        "maximumFps": 30.1,
+        "countBetween29_3And30_1Fps": 12,
+        "interpretation": "Intro/loading-sized workloads only; not sustained loading or gameplay FPS."
+      },
+      "laterRenderingIntervals": [
+        {
+          "timestampUtc": "2026-11-26T11:32:37.863433Z",
+          "fps": 0.4,
+          "frameMs": 2821.3,
+          "preparingMs": 626.0,
+          "drawsPerFrame": 327,
+          "pipelinesBeingMade": 0
+        },
+        {
+          "timestampUtc": "2026-11-26T11:32:43.235689Z",
+          "fps": 3.1,
+          "frameMs": 318.6,
+          "preparingMs": 260.7,
+          "drawsPerFrame": 3396,
+          "pipelinesBeingMade": 0
+        },
+        {
+          "timestampUtc": "2026-11-26T11:32:48.809273Z",
+          "fps": 2.7,
+          "frameMs": 372.2,
+          "preparingMs": 196.6,
+          "drawsPerFrame": 1628,
+          "pipelinesBeingMade": 2
+        },
+        {
+          "timestampUtc": "2026-11-26T11:32:53.995414Z",
+          "fps": 2.2,
+          "frameMs": 450.8,
+          "preparingMs": 249.1,
+          "drawsPerFrame": 2339,
+          "pipelinesBeingMade": 8
+        }
+      ],
+      "pipelineEvidence": {
+        "lastSavedLibraryTimestampUtc": "2026-11-26T11:32:06.446448Z",
+        "lastSavedLibraryLoaded": 1668,
+        "lastSavedLibraryMade": 1,
+        "lastSavedLibraryStartedEarly": 1669,
+        "lastSavedLibraryIsFinalTotal": false,
+        "lateAllRecordingThreadWaitMs": [
+          159.2,
+          455.3
+        ],
+        "interpretation": "Later pipeline work remains despite selected prewarming. Early asynchronous being-made counts do not equal distinct cache misses. Disabled ray-tracing builder drops are separately classified; cache-deserialization warnings do not alone prove lost passes."
+      },
+      "jobCommitLimitBytes": 23622320128,
+      "jobCommitReserveMiB": 512,
+      "hostCommitReserveMiB": 4096,
+      "hostPhysicalReserveMiB": 0,
+      "jobStopThresholdBytes": 23085449216,
+      "jobCommitBytesAtStop": 23110279168,
+      "peakJobCommitBytes": 23146758144,
+      "finalSampledTitlePrivateBytes": 23098843136,
+      "finalSampledTitleWorkingSetBytes": 17499172864,
+      "lastLoggedAvailablePhysicalMiB": 581,
+      "lastDxgiLocalUsedMiB": 7193,
+      "lastDxgiSharedUsedMiB": 6917,
+      "memoryAccountingInterpretation": "These counters represent different accounting domains and sampled instants; categories overlap and must not be summed.",
+      "pendingUploadReclamation": {
+        "sampleCount": 80,
+        "maximumRoundedUploadsPerFrame": 0,
+        "interpretation": "No measured memory savings established; rounded rates are not cumulative counts or bytes."
+      },
+      "stopReason": "job commit reserve",
+      "runtimeResultBeforeCleanup": 126,
+      "launcherExitCode": 125,
+      "cleanupFailure": true,
+      "cleanupFailureHex": "0x80070020",
+      "restoredPackagePaths": 151,
+      "cleanupInterpretation": "Profile cleanup failed after the runtime guard stop. Any subsequent recovery is separate and does not erase these initial results.",
+      "audio": {
+        "durationSeconds": 94.50095833333333,
+        "sampleRate": 48000,
+        "channels": 2,
+        "sampleWidthBytes": 2,
+        "segments": [
+          {
+            "fromSeconds": 0,
+            "toSeconds": 45,
+            "samples": 4320000,
+            "nonzeroSamples": 2251410,
+            "rmsDbFS": -30.348147020714315,
+            "normalizedPeak": 0.29901123046875,
+            "completelySilentBuckets": 0,
+            "bucketCount": 45
+          },
+          {
+            "fromSeconds": 45,
+            "toSeconds": 90,
+            "samples": 4320000,
+            "nonzeroSamples": 1645876,
+            "rmsDbFS": -43.64795606208641,
+            "normalizedPeak": 0.2196044921875,
+            "completelySilentBuckets": 0,
+            "bucketCount": 45
+          },
+          {
+            "fromSeconds": 90,
+            "toSeconds": 94.50095833333333,
+            "samples": 432092,
+            "nonzeroSamples": 426802,
+            "rmsDbFS": -25.520960794967877,
+            "normalizedPeak": 0.34808349609375,
+            "completelySilentBuckets": 0,
+            "bucketCount": 5
+          }
+        ],
+        "logoAudibilityVerified": false,
+        "glitchFreePlaybackVerified": false,
+        "interpretation": "Signal measurement only. It does not prove source identity, logo audibility, correct synchronization or glitch-free playback. A partially recorded final second is included as a partial bucket."
+      },
+      "windowsEvents": {
+        "fromUtc": "2026-11-26T11:31:10Z",
+        "toUtc": "2026-11-26T11:35:00Z",
+        "queriesCompleted": true,
+        "display4101Count": 0,
+        "application1000Count": 0,
+        "matchingTitleApplication1000Count": 0,
+        "interpretation": "No matching events in this window; not proof of general driver health."
+      },
+      "recognizedDeviceRemovalLogMessages": 0,
+      "recognizedAllocationFailureLogMessages": 0
+    },
+    "comparisonBaseline": "preparedFreshConsoleComparison20261126.seriesX",
+    "comparisonLimitations": [
+      "Different executable also includes the BC7 correction and different cache history; not resolution-only or matched-scene evidence.",
+      "No valid world capture, gameplay input or mission identity was established.",
+      "GPU-wait aggregate means CPU fence/landing wait, not GPU hardware execution; recording and preparation counters overlap.",
+      "Lower output and the smaller observed depth target are verified, but the same job memory reserve still terminated the run."
+    ]
   }
 }
