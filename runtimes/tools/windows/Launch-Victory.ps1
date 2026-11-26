@@ -60,6 +60,7 @@ param(
 
     [switch]$FreshState,
     [switch]$Test720p,
+    [string]$DisplayMode,
     [string]$WarpDll,
 
     [ValidatePattern('^original-\d{8}-\d{6}-[a-f0-9]{8}$')]
@@ -140,6 +141,24 @@ $repo = if ($useXcl) { Join-Path $local 'upstream-xcl' } else {
     }
 }
 $runtime = if ($useXcl -or $standalone) { $repo } else { Join-Path $repo 'runtimes\victory' }
+# These switches differ across the supported runtime trees. Reject a request
+# that the selected source ignores instead of recording a false test mode.
+function Runtime-ReadsOption([string]$RelativePath, [string]$Option) {
+    if ($useXcl) { return $false }
+    $path = Join-Path $runtime $RelativePath
+    (Test-Path -LiteralPath $path -PathType Leaf) -and
+        (Select-String -LiteralPath $path -SimpleMatch ('"' + $Option + '"') -Quiet)
+}
+$displayOptions = & (Join-Path $local 'Resolve-VictoryDisplayOptions.ps1') `
+    -DisplayMode $DisplayMode -Test720p:$Test720p `
+    -GuestDisplaySupported:(Runtime-ReadsOption 'crates\victory-gpu\src\dxgi.rs' 'VICTORY_DISPLAY_MODE') `
+    -LegacyPresentSupported:(Runtime-ReadsOption 'crates\victory-gpu\src\present.rs' 'VICTORY_PRESENT_720P') `
+    -MissionTrace:$MissionTrace `
+    -MissionTraceSupported:(Runtime-ReadsOption 'crates\victory-gpu\src\mission_trace.rs' 'VICTORY_MISSION_TRACE')
+$resolutionTest = [bool]($Test720p -or $DisplayMode)
+if ($Test720p -and $FreshState) {
+    throw 'Test720p uses a copy of the saved Victory profile; use DisplayMode with FreshState for a new profile.'
+}
 $package = Join-Path $workspace 'buildgta'
 $title = Join-Path $package 'game_scarlett_master.exe'
 $toolHome = Join-Path $local 'isolated-run'
@@ -173,7 +192,7 @@ if ($WarpDll) {
     }
 }
 
-if ($WarmCacheFrom -and ($useXcl -or $PrepareOnly -or -not ($Test720p -or $FreshState))) {
+if ($WarmCacheFrom -and ($useXcl -or $PrepareOnly -or -not ($resolutionTest -or $FreshState))) {
     throw 'A warm cache seed requires a Victory run with its own test profile.'
 }
 if ($BuiltRuntimeFrom -and ($useXcl -or $VictorySource -ne 'amd7900-series-s' -or $PrepareOnly)) {
@@ -292,42 +311,32 @@ try {
             'amd7900-series-s' { 'stage\victory-amd-series-s-state' }
             'fxceless' { 'stage\victory-fxceless-state' }
         })
-        $output = if ($useXcl -or $FreshState -or $Test720p) {
+        $output = if ($useXcl -or $FreshState -or $resolutionTest) {
             Join-Path $run 'output'
         } else {
             $sharedState
         }
         $logs = Join-Path $run 'logs'
         New-Item -ItemType Directory -Path $bin, $output, $logs -Force | Out-Null
-        if ($Test720p) {
-            if ($useXcl -or $FreshState) { throw 'The resolution test uses a copy of the saved Victory profile.' }
+        if ($resolutionTest -and -not $FreshState) {
             $sharedData = Join-Path $sharedState 'data'
             if (Test-Path -LiteralPath $sharedData -PathType Container) {
                 Copy-Item -LiteralPath $sharedData -Destination (Join-Path $output 'data') -Recurse
             }
         }
+        $displaySettings = [pscustomobject]@{ matchedFiles=0; updatedFiles=0 }
+        if ($displayOptions.GuestDisplayMode) {
+            $displaySettings = & (Join-Path $local 'Set-VictoryTestDisplayMode.ps1') `
+                -OutputDirectory $output -DisplayMode $displayOptions.GuestDisplayMode `
+                -StageRoot (Join-Path $toolHome 'stage')
+        }
+        $cacheSeed = $null
         if ($WarmCacheFrom) {
-            $seed = Join-Path $toolHome ('stage\' + $WarmCacheFrom)
-            $seedSummary = Get-Content -LiteralPath (Join-Path $seed 'logs\diagnostics.json') -Raw | ConvertFrom-Json
-            $seedEngine = Join-Path $seed 'bin\victory.exe'
-            if ($seedSummary.renderer -ne $Renderer -or
-                $seedSummary.console -ne $Console -or
-                (Get-FileHash -LiteralPath $seedEngine).Hash -ne (Get-FileHash -LiteralPath $engine).Hash) {
-                throw 'The seed must use the same Victory executable, renderer, and console profile.'
-            }
+            $cacheSeed = & (Join-Path $local 'Seed-VictoryWarmCache.ps1') -Run $WarmCacheFrom `
+                -DestinationOutput $output -RuntimeExe $engine -Renderer $Renderer -Console $Console `
+                -StageRoot (Join-Path $toolHome 'stage')
             $seededCache = Join-Path $output 'cache'
-            New-Item -ItemType Directory -Path $seededCache | Out-Null
-            foreach ($kind in @('shaders', 'pipelines')) {
-                $source = Join-Path $seed ('output\cache\' + $kind)
-                if (Test-Path -LiteralPath $source -PathType Container) {
-                    Copy-Item -LiteralPath $source -Destination (Join-Path $seededCache $kind) -Recurse
-                }
-            }
-            $driverSeed = Join-Path $seed 'output\driver-cache'
-            if (Test-Path -LiteralPath $driverSeed -PathType Container) {
-                Copy-Item -LiteralPath $driverSeed -Destination (Join-Path $output 'driver-cache') -Recurse
-            }
-            Write-Host "Seeded shader, pipeline and available private driver cache from $WarmCacheFrom"
+            Write-Host "Seeded $($cacheSeed.cacheFiles) shader/pipeline and $($cacheSeed.driverCacheFiles) private driver cache files from $($cacheSeed.sourceState)"
             if ($PrewarmPipelines -and -not (Test-Path -LiteralPath (Join-Path $seededCache 'pipelines\known-pipelines.bin'))) {
                 throw 'The selected seed has no saved pipeline book.'
             }
@@ -425,7 +434,12 @@ try {
                 $arguments += @('--env', ('VICTORY_AUDIO_CAPTURE=' + (Join-Path $captureDir 'audio.wav')))
             }
             $arguments += @('--env', ('VICTORY_BINK_XAUDIO2=' + [int][bool]$MovieAudio))
-            if ($Test720p) { $arguments += @('--env', 'VICTORY_PRESENT_720P=1') }
+            # A guest display mode is an input to the title's settings. It
+            # does not force every internal render target to this size.
+            if ($displayOptions.GuestDisplayMode) {
+                $arguments += @('--env', ('VICTORY_DISPLAY_MODE=' + $displayOptions.GuestDisplayMode))
+            }
+            if ($displayOptions.LegacyPresent720p) { $arguments += @('--env', 'VICTORY_PRESENT_720P=1') }
             if ($DiagnosticKeys) {
                 $arguments += @('--env', "VICTORY_KEYS=$DiagnosticKeys", '--env', 'VICTORY_KEYS_STAND_IN=1')
             }
@@ -481,7 +495,12 @@ try {
             driverVersion = $driverVersion
             console = $profile
             requested720p = [bool]$Test720p
+            requestedGuestDisplayMode = $displayOptions.GuestDisplayMode
+            legacy720pPresentationOnly = $displayOptions.LegacyPresent720p
+            displaySettingsFilesMatched = $displaySettings.matchedFiles
+            displaySettingsFilesUpdated = $displaySettings.updatedFiles
             warmCacheFrom = if ($WarmCacheFrom) { $WarmCacheFrom } else { $null }
+            warmCacheSeed = $cacheSeed
             builtRuntimeFrom = if ($BuiltRuntimeFrom) { $BuiltRuntimeFrom } else { $null }
             queuedSubmit = [bool]$QueuedSubmit
             dredMode = if ($useXcl) { 'xcl-enabled' } elseif ($VictorySource -eq 'amd7900-series-s' -and -not $FullGpuMarkers) { 'light' } else { 'full-markers' }
