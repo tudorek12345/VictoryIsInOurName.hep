@@ -1,0 +1,9 @@
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.dxil
+*.log
+*.local.json
+variants.json
+variants/
