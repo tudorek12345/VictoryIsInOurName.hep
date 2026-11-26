@@ -2057,6 +2057,726 @@
         ],
         "visibleGameplayVerified": false,
         "playerInputResponseVerified": false
+      },
+      {
+        "runId": "original-20261125-225212-6a678211",
+        "checkout": "dc9fd41e26907d2b94d24b07d7bbf16656fbb413",
+        "checkoutDirty": false,
+        "runtimeSha256": "718CC581BC4083CFAE981206D3F3E1F809528109CCBE7125CA5B977DE2E0B7AA",
+        "started": "2026-11-25T22:52:12.2874714-08:00",
+        "elapsedSeconds": 1337.07,
+        "exitCode": 0,
+        "renderer": "hardware",
+        "console": "series-x",
+        "prewarmLibrary": true,
+        "prewarmIndices": [
+          null
+        ],
+        "hostPhysicalReserveMiB": 0,
+        "hostCommitReserveMiB": 4096,
+        "jobCommitLimitBytes": 6442450944,
+        "peakJobCommitBytes": 1829470208,
+        "warmCacheFrom": "original-20261125-224907-8564bc34",
+        "pipelineWorkers": null,
+        "textureNoWait": false,
+        "stopReason": "not recorded",
+        "restoredPackagePaths": 151,
+        "precompile": {
+          "requested": true,
+          "known": 83555,
+          "previouslyProcessed": 0,
+          "previouslyBad": 0,
+          "selected": 1404,
+          "processes": 1,
+          "completed": true,
+          "processed": 1404,
+          "refused": 0,
+          "childFailures": 0,
+          "elapsedSeconds": 1336
+        },
+        "pipelineCacheEvents": [
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 40,
+            "loaded": 0,
+            "saved_bytes": 7588
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 13136
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 35,
+            "loaded": 5,
+            "saved_bytes": 18246
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 23794
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 40,
+            "loaded": 0,
+            "saved_bytes": 29634
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 35182
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 40730
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 40,
+            "loaded": 0,
+            "saved_bytes": 46570
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 40,
+            "loaded": 0,
+            "saved_bytes": 52410
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 37,
+            "loaded": 3,
+            "saved_bytes": 57812
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 39,
+            "loaded": 1,
+            "saved_bytes": 63506
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 39,
+            "loaded": 1,
+            "saved_bytes": 69200
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 40,
+            "loaded": 0,
+            "saved_bytes": 75040
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 80588
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 86136
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 91684
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 36,
+            "loaded": 4,
+            "saved_bytes": 96940
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 37,
+            "loaded": 3,
+            "saved_bytes": 102342
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 40,
+            "loaded": 0,
+            "saved_bytes": 108182
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 113730
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 37,
+            "loaded": 3,
+            "saved_bytes": 119132
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 124680
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 130228
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 37,
+            "loaded": 3,
+            "saved_bytes": 135630
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 141178
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 35,
+            "loaded": 5,
+            "saved_bytes": 146288
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 39,
+            "loaded": 1,
+            "saved_bytes": 151982
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 34,
+            "loaded": 6,
+            "saved_bytes": 156946
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 36,
+            "loaded": 4,
+            "saved_bytes": 162202
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 37,
+            "loaded": 3,
+            "saved_bytes": 167604
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 38,
+            "loaded": 2,
+            "saved_bytes": 173152
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 36,
+            "loaded": 4,
+            "saved_bytes": 178408
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 35,
+            "loaded": 5,
+            "saved_bytes": 183518
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 37,
+            "loaded": 3,
+            "saved_bytes": 188920
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 39,
+            "loaded": 1,
+            "saved_bytes": 194614
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 3,
+            "loaded": 1,
+            "saved_bytes": 195052
+          }
+        ],
+        "allSamples": {
+          "count": 0
+        },
+        "jobProcesses": [
+          {
+            "processId": 27368,
+            "sampledPeakPrivateBytes": 69181440,
+            "sampledPeakWorkingSetBytes": 74854400,
+            "lastSample": {
+              "elapsedMs": 1333469,
+              "processId": 27368,
+              "privateBytes": 68988928,
+              "workingSetBytes": 74805248
+            }
+          },
+          {
+            "processId": 16056,
+            "sampledPeakPrivateBytes": 1261568,
+            "sampledPeakWorkingSetBytes": 8646656,
+            "lastSample": {
+              "elapsedMs": 1333469,
+              "processId": 16056,
+              "privateBytes": 1183744,
+              "workingSetBytes": 8601600
+            }
+          },
+          {
+            "processId": 20088,
+            "sampledPeakPrivateBytes": 371806208,
+            "sampledPeakWorkingSetBytes": 361902080,
+            "lastSample": {
+              "elapsedMs": 25563,
+              "processId": 20088,
+              "privateBytes": 291598336,
+              "workingSetBytes": 260591616
+            }
+          },
+          {
+            "processId": 5948,
+            "sampledPeakPrivateBytes": 1736876032,
+            "sampledPeakWorkingSetBytes": 1724076032,
+            "lastSample": {
+              "elapsedMs": 189094,
+              "processId": 5948,
+              "privateBytes": 444882944,
+              "workingSetBytes": 419684352
+            }
+          },
+          {
+            "processId": 23248,
+            "sampledPeakPrivateBytes": 553009152,
+            "sampledPeakWorkingSetBytes": 436375552,
+            "lastSample": {
+              "elapsedMs": 235110,
+              "processId": 23248,
+              "privateBytes": 457125888,
+              "workingSetBytes": 436375552
+            }
+          },
+          {
+            "processId": 1764,
+            "sampledPeakPrivateBytes": 396148736,
+            "sampledPeakWorkingSetBytes": 387624960,
+            "lastSample": {
+              "elapsedMs": 270891,
+              "processId": 1764,
+              "privateBytes": 375939072,
+              "workingSetBytes": 358498304
+            }
+          },
+          {
+            "processId": 28568,
+            "sampledPeakPrivateBytes": 382111744,
+            "sampledPeakWorkingSetBytes": 369057792,
+            "lastSample": {
+              "elapsedMs": 301532,
+              "processId": 28568,
+              "privateBytes": 353120256,
+              "workingSetBytes": 344289280
+            }
+          },
+          {
+            "processId": 21964,
+            "sampledPeakPrivateBytes": 509689856,
+            "sampledPeakWorkingSetBytes": 498884608,
+            "lastSample": {
+              "elapsedMs": 347407,
+              "processId": 21964,
+              "privateBytes": 426508288,
+              "workingSetBytes": 397119488
+            }
+          },
+          {
+            "processId": 14756,
+            "sampledPeakPrivateBytes": 463319040,
+            "sampledPeakWorkingSetBytes": 436518912,
+            "lastSample": {
+              "elapsedMs": 388266,
+              "processId": 14756,
+              "privateBytes": 463319040,
+              "workingSetBytes": 436518912
+            }
+          },
+          {
+            "processId": 18288,
+            "sampledPeakPrivateBytes": 436146176,
+            "sampledPeakWorkingSetBytes": 368709632,
+            "lastSample": {
+              "elapsedMs": 418954,
+              "processId": 18288,
+              "privateBytes": 381538304,
+              "workingSetBytes": 368709632
+            }
+          },
+          {
+            "processId": 26712,
+            "sampledPeakPrivateBytes": 443326464,
+            "sampledPeakWorkingSetBytes": 436408320,
+            "lastSample": {
+              "elapsedMs": 464938,
+              "processId": 26712,
+              "privateBytes": 415318016,
+              "workingSetBytes": 390995968
+            }
+          },
+          {
+            "processId": 11504,
+            "sampledPeakPrivateBytes": 620601344,
+            "sampledPeakWorkingSetBytes": 615018496,
+            "lastSample": {
+              "elapsedMs": 500750,
+              "processId": 11504,
+              "privateBytes": 620601344,
+              "workingSetBytes": 615018496
+            }
+          },
+          {
+            "processId": 25300,
+            "sampledPeakPrivateBytes": 394207232,
+            "sampledPeakWorkingSetBytes": 383819776,
+            "lastSample": {
+              "elapsedMs": 541688,
+              "processId": 25300,
+              "privateBytes": 394207232,
+              "workingSetBytes": 383819776
+            }
+          },
+          {
+            "processId": 24432,
+            "sampledPeakPrivateBytes": 462028800,
+            "sampledPeakWorkingSetBytes": 449708032,
+            "lastSample": {
+              "elapsedMs": 572344,
+              "processId": 24432,
+              "privateBytes": 385122304,
+              "workingSetBytes": 373567488
+            }
+          },
+          {
+            "processId": 1996,
+            "sampledPeakPrivateBytes": 241430528,
+            "sampledPeakWorkingSetBytes": 240967680,
+            "lastSample": {
+              "elapsedMs": 597875,
+              "processId": 1996,
+              "privateBytes": 189440000,
+              "workingSetBytes": 188555264
+            }
+          },
+          {
+            "processId": 26072,
+            "sampledPeakPrivateBytes": 599425024,
+            "sampledPeakWorkingSetBytes": 595951616,
+            "lastSample": {
+              "elapsedMs": 638782,
+              "processId": 26072,
+              "privateBytes": 599425024,
+              "workingSetBytes": 595951616
+            }
+          },
+          {
+            "processId": 3784,
+            "sampledPeakPrivateBytes": 494063616,
+            "sampledPeakWorkingSetBytes": 483020800,
+            "lastSample": {
+              "elapsedMs": 679657,
+              "processId": 3784,
+              "privateBytes": 494063616,
+              "workingSetBytes": 483020800
+            }
+          },
+          {
+            "processId": 26344,
+            "sampledPeakPrivateBytes": 410054656,
+            "sampledPeakWorkingSetBytes": 407048192,
+            "lastSample": {
+              "elapsedMs": 725657,
+              "processId": 26344,
+              "privateBytes": 361336832,
+              "workingSetBytes": 347164672
+            }
+          },
+          {
+            "processId": 20668,
+            "sampledPeakPrivateBytes": 456273920,
+            "sampledPeakWorkingSetBytes": 443478016,
+            "lastSample": {
+              "elapsedMs": 766532,
+              "processId": 20668,
+              "privateBytes": 456273920,
+              "workingSetBytes": 443478016
+            }
+          },
+          {
+            "processId": 20952,
+            "sampledPeakPrivateBytes": 290070528,
+            "sampledPeakWorkingSetBytes": 291250176,
+            "lastSample": {
+              "elapsedMs": 786969,
+              "processId": 20952,
+              "privateBytes": 187949056,
+              "workingSetBytes": 193679360
+            }
+          },
+          {
+            "processId": 16612,
+            "sampledPeakPrivateBytes": 441012224,
+            "sampledPeakWorkingSetBytes": 430571520,
+            "lastSample": {
+              "elapsedMs": 817641,
+              "processId": 16612,
+              "privateBytes": 441012224,
+              "workingSetBytes": 430571520
+            }
+          },
+          {
+            "processId": 29744,
+            "sampledPeakPrivateBytes": 384614400,
+            "sampledPeakWorkingSetBytes": 379658240,
+            "lastSample": {
+              "elapsedMs": 843188,
+              "processId": 29744,
+              "privateBytes": 384614400,
+              "workingSetBytes": 379658240
+            }
+          },
+          {
+            "processId": 20608,
+            "sampledPeakPrivateBytes": 369954816,
+            "sampledPeakWorkingSetBytes": 342020096,
+            "lastSample": {
+              "elapsedMs": 863657,
+              "processId": 20608,
+              "privateBytes": 303665152,
+              "workingSetBytes": 287834112
+            }
+          },
+          {
+            "processId": 6696,
+            "sampledPeakPrivateBytes": 466604032,
+            "sampledPeakWorkingSetBytes": 455847936,
+            "lastSample": {
+              "elapsedMs": 894360,
+              "processId": 6696,
+              "privateBytes": 288022528,
+              "workingSetBytes": 280702976
+            }
+          },
+          {
+            "processId": 28248,
+            "sampledPeakPrivateBytes": 407072768,
+            "sampledPeakWorkingSetBytes": 349945856,
+            "lastSample": {
+              "elapsedMs": 935266,
+              "processId": 28248,
+              "privateBytes": 247271424,
+              "workingSetBytes": 231092224
+            }
+          },
+          {
+            "processId": 16340,
+            "sampledPeakPrivateBytes": 433991680,
+            "sampledPeakWorkingSetBytes": 425926656,
+            "lastSample": {
+              "elapsedMs": 981250,
+              "processId": 16340,
+              "privateBytes": 262397952,
+              "workingSetBytes": 260112384
+            }
+          },
+          {
+            "processId": 21304,
+            "sampledPeakPrivateBytes": 379211776,
+            "sampledPeakWorkingSetBytes": 366338048,
+            "lastSample": {
+              "elapsedMs": 1006797,
+              "processId": 21304,
+              "privateBytes": 242208768,
+              "workingSetBytes": 233897984
+            }
+          },
+          {
+            "processId": 5416,
+            "sampledPeakPrivateBytes": 455614464,
+            "sampledPeakWorkingSetBytes": 358387712,
+            "lastSample": {
+              "elapsedMs": 1032282,
+              "processId": 5416,
+              "privateBytes": 339300352,
+              "workingSetBytes": 328421376
+            }
+          },
+          {
+            "processId": 29460,
+            "sampledPeakPrivateBytes": 518258688,
+            "sampledPeakWorkingSetBytes": 506486784,
+            "lastSample": {
+              "elapsedMs": 1088454,
+              "processId": 29460,
+              "privateBytes": 417378304,
+              "workingSetBytes": 413347840
+            }
+          },
+          {
+            "processId": 2364,
+            "sampledPeakPrivateBytes": 436613120,
+            "sampledPeakWorkingSetBytes": 392540160,
+            "lastSample": {
+              "elapsedMs": 1119063,
+              "processId": 2364,
+              "privateBytes": 396750848,
+              "workingSetBytes": 392540160
+            }
+          },
+          {
+            "processId": 16968,
+            "sampledPeakPrivateBytes": 479920128,
+            "sampledPeakWorkingSetBytes": 483303424,
+            "lastSample": {
+              "elapsedMs": 1149719,
+              "processId": 16968,
+              "privateBytes": 256520192,
+              "workingSetBytes": 248541184
+            }
+          },
+          {
+            "processId": 25200,
+            "sampledPeakPrivateBytes": 509833216,
+            "sampledPeakWorkingSetBytes": 488366080,
+            "lastSample": {
+              "elapsedMs": 1180344,
+              "processId": 25200,
+              "privateBytes": 484372480,
+              "workingSetBytes": 488366080
+            }
+          },
+          {
+            "processId": 20492,
+            "sampledPeakPrivateBytes": 339697664,
+            "sampledPeakWorkingSetBytes": 346894336,
+            "lastSample": {
+              "elapsedMs": 1205797,
+              "processId": 20492,
+              "privateBytes": 253280256,
+              "workingSetBytes": 248348672
+            }
+          },
+          {
+            "processId": 17248,
+            "sampledPeakPrivateBytes": 571994112,
+            "sampledPeakWorkingSetBytes": 572841984,
+            "lastSample": {
+              "elapsedMs": 1251782,
+              "processId": 17248,
+              "privateBytes": 571994112,
+              "workingSetBytes": 572841984
+            }
+          },
+          {
+            "processId": 18080,
+            "sampledPeakPrivateBytes": 506793984,
+            "sampledPeakWorkingSetBytes": 496513024,
+            "lastSample": {
+              "elapsedMs": 1287532,
+              "processId": 18080,
+              "privateBytes": 408735744,
+              "workingSetBytes": 389341184
+            }
+          },
+          {
+            "processId": 7248,
+            "sampledPeakPrivateBytes": 277536768,
+            "sampledPeakWorkingSetBytes": 267038720,
+            "lastSample": {
+              "elapsedMs": 1307954,
+              "processId": 7248,
+              "privateBytes": 255078400,
+              "workingSetBytes": 248082432
+            }
+          },
+          {
+            "processId": 23836,
+            "sampledPeakPrivateBytes": 375734272,
+            "sampledPeakWorkingSetBytes": 368672768,
+            "lastSample": {
+              "elapsedMs": 1328375,
+              "processId": 23836,
+              "privateBytes": 375734272,
+              "workingSetBytes": 368672768
+            }
+          },
+          {
+            "processId": 20404,
+            "sampledPeakPrivateBytes": 430665728,
+            "sampledPeakWorkingSetBytes": 297697280,
+            "lastSample": {
+              "elapsedMs": 1333469,
+              "processId": 20404,
+              "privateBytes": 430665728,
+              "workingSetBytes": 297697280
+            }
+          }
+        ],
+        "availablePhysicalBytesAtStop": null,
+        "allocationFailureMessages": 0,
+        "deviceRemovalMessages": 0,
+        "directPipelineMeasurements": [],
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false
       }
     ],
     "upstreamReviewed": {
