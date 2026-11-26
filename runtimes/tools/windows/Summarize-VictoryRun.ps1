@@ -47,20 +47,24 @@ function SampleSummary($Items) {
         firstTimestamp=$itemsArray[0].timestamp
         lastTimestamp=$itemsArray[-1].timestamp
     }
-    foreach ($field in @('fps','frameMs','prepareMs','copyMs','textureMs','gpuMs','readbackMs','drawsPerFrame','droppedWithoutPipeline','pipelinesBeingMade','droppedIndirect')) {
+    foreach ($field in @('fps','frameMs','prepareMs','copyMs','textureMs','gpuMs','runtimeGpuWaitMs','readbackMs','drawsPerFrame','droppedWithoutPipeline','pipelinesBeingMade','droppedIndirect')) {
         $result[$field] = Statistics @($itemsArray | ForEach-Object { $_.$field })
     }
     return $result
 }
 $diagFile = Join-Path $logDir 'diagnostics.json'
 $metadata = if (Test-Path -LiteralPath $diagFile -PathType Leaf) { Get-Content -LiteralPath $diagFile -Raw | ConvertFrom-Json } else { $null }
+# This flag requests separate timestamp diagnostics. It does not change the
+# aggregate SUBMISSION_US[1] counter, which measures CPU fence/landing waits.
+$metadataGpuTiming = if ($metadata.gpuTiming -is [bool]) { $metadata.gpuTiming } else { $null }
 $samples = New-Object 'System.Collections.Generic.List[object]'
 $memory = New-Object 'System.Collections.Generic.List[object]'
 $timedMemory = New-Object 'System.Collections.Generic.List[object]'
 $videoMemory = New-Object 'System.Collections.Generic.List[object]'
 $pipelineCache = New-Object 'System.Collections.Generic.List[object]'
 $displayModes = New-Object 'System.Collections.Generic.List[object]'
-$swapchains = New-Object 'System.Collections.Generic.List[object]'
+$swapchains = New-Object 'System.Collections.Generic.Queue[object]'
+$swapchainState = @{ count=0; first=$null }
 $thinUploadTail = New-Object 'System.Collections.Generic.Queue[object]'
 $thinUploadState = @{ count=0; maximum=$null; last=$null }
 $precompile = [ordered]@{ requested=$false; known=$null; previouslyProcessed=$null; previouslyBad=$null; selected=$null; processes=$null; completed=$false; processed=$null; refused=$null; childFailures=$null; elapsedSeconds=$null }
@@ -109,10 +113,16 @@ Read-LinesShared (Join-Path $logDir 'victory.log') {
         $thinUploadTail.Enqueue($sample)
         if ($thinUploadTail.Count -gt $TailSamples) { $null=$thinUploadTail.Dequeue() }
     }
-    if ($line -match '\b(display mode reported to the title|presenting to a window)\s+width=(\d+)\s+height=(\d+)') {
+    if ($line -match "\b(display mode reported to the title|presenting to a window|the swap chain's buffers were made again for another size or format)\s+width=(\d+)\s+height=(\d+)") {
         $kind = $Matches[1]
         $size = [pscustomobject]@{ logLine=$lineNumber; timestamp=$timestamp; width=[int]$Matches[2]; height=[int]$Matches[3] }
-        if ($kind -eq 'display mode reported to the title') { $displayModes.Add($size) } else { $swapchains.Add($size) }
+        if ($kind -eq 'display mode reported to the title') { $displayModes.Add($size) } else {
+            $size | Add-Member -NotePropertyName event -NotePropertyValue $(if ($kind -eq 'presenting to a window') { 'created' } else { 'resized' })
+            $swapchainState.count++
+            if ($null -eq $swapchainState.first) { $swapchainState.first=$size }
+            $swapchains.Enqueue($size)
+            if ($swapchains.Count -gt $TailSamples) { $null=$swapchains.Dequeue() }
+        }
     }
     $match = [regex]::Match($line, $framePattern)
     if ($match.Success) {
@@ -121,7 +131,8 @@ Read-LinesShared (Join-Path $logDir 'victory.log') {
             logLine=$lineNumber; timestamp=$timestamp
             fps=(Number $g['fps'].Value); frameMs=(Number $g['frame'].Value)
             prepareMs=(Number $g['prep'].Value); copyMs=(Number $g['copy'].Value); textureMs=(Number $g['texture'].Value)
-            gpuMs=(Number $g['gpu'].Value); readbackMs=(Number $g['back'].Value)
+            gpuMs=(Number $g['gpu'].Value); runtimeGpuWaitMs=(Number $g['gpu'].Value)
+            readbackMs=(Number $g['back'].Value)
             drawsPerFrame=(Number $g['draws'].Value); droppedWithoutPipeline=(Number $g['dropped'].Value)
             pipelinesBeingMade=[int]$g['making'].Value; droppedIndirect=(Number $g['indirect'].Value)
         })
@@ -209,15 +220,21 @@ if ($metadata.requestedGuestDisplayMode -and $lastSwapchain) {
 }
 $report = [ordered]@{
     schemaVersion=1; run=(Split-Path -Leaf $runPath); generatedAt=[DateTimeOffset]::UtcNow.ToString('o')
-    interpretation='Interval samples only. Sample median is not whole-run FPS or a 1% low. CPU preparation is a subset of frame time. GPU time uses the runtime counter and may include waits; overlapping queued work must not be summed. Visible, responsive gameplay and audible output require independent evidence.'
+    interpretation='Interval samples only. Sample median is not whole-run FPS or a 1% low. CPU preparation is a subset of frame time. runtimeGpuWaitMs (legacy gpuMs) measures CPU fence/landing waits, not hardware GPU execution time; overlapping queued work must not be summed. Visible, responsive gameplay and audible output require independent evidence.'
+    timing=[ordered]@{
+        metadataGpuTiming=$metadataGpuTiming
+        interpretation='runtimeGpuWaitMs is the aggregate CPU fence/landing wait counter; gpuMs is its compatibility alias, not hardware GPU timestamp duration. No hardware GPU duration is inferred from this aggregate, even when metadataGpuTiming is true. That flag records a diagnostic request only; absent or non-boolean metadata is unknown.'
+    }
     checkout=$metadata.checkout; checkoutDirty=$metadata.checkoutDirty; runtimeSha256=$metadata.runtimeSha256
     requestedRenderer=$metadata.renderer; console=$metadata.console; adapter=$state.adapter; softwareAdapter=$state.software; vramMiB=$state.vramMiB
     resolution=[ordered]@{
         requestedGuestDisplayMode=$metadata.requestedGuestDisplayMode
         legacyPresentationOnly=$metadata.legacy720pPresentationOnly
         reportedGuestDisplay=$lastDisplay; observedSwapchain=$lastSwapchain
+        initialSwapchain=$swapchainState.first; swapchainObservationCount=$swapchainState.count
+        swapchainHistory=@($swapchains.ToArray())
         swapchainMatchesRequest=$swapchainMatchesRequest
-        interpretation='The guest display report, swapchain and internal render targets are different. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown.'
+        interpretation='The guest display report, swapchain and internal render targets are different. observedSwapchain is the latest recognized creation or resize, not the size of the entire run. swapchainHistory is a bounded tail in log order. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown.'
     }
     elapsedSeconds=$metadata.elapsedSeconds; launcherExitCode=$metadata.exitCode
     stopReason=$state.stopReason; childResult=$state.childResult

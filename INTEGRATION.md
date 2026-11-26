@@ -421,3 +421,21 @@ The preceding title run used only 16 MiB of these upload arenas, so this fix is
 not presented as the cause or solution of its multi-gigabyte pressure. Arena
 reservations remain reusable, and unrelated command-list pool retention is still
 unquantified. See [the ownership report](docs/pending-upload-leak-20261126.md).
+
+## BC7 mode-specific channel rotation
+
+[The BC7 rotation patch](runtimes/patches/victory-bc7-mode-rotation.patch)
+applies after pending-upload reclamation and produces `2ebbf74`. It isolates
+the format correction and synthetic regression from
+[fxceless 06702fe8](https://github.com/fxceless/victory-fork/commit/06702fe86b91bacbf4a0a27662ae443435bf732e).
+Channel rotation is meaningful only in BC7 modes 4 and 5, as specified by
+[Microsoft's BC7 decoding reference](https://learn.microsoft.com/en-us/windows/win32/direct3d11/bc7-format).
+The old BCPack decoder also interpreted unrelated control bits as rotation in
+other modes, changing endpoint precision and packed channel order.
+
+The authored stream regression failed before the production change (mode 0,
+rotation-like bits 1). After correction, the optimized formats library passed
+42 tests, with five existing optional benchmark/reference tests ignored. The
+regression covers all eight modes, invalid rotation-like bits in nonrotating
+modes, and valid rotated endpoint packing. No game streams or tables are added.
+This establishes a decoder correction, not a measured FPS, RAM or gameplay fix.

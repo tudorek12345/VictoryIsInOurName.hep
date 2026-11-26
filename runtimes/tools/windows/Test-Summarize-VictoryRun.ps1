@@ -33,6 +33,22 @@ Job ended and stage grants were restored. Child result 126
     Assert ($r.adapter -eq 'Synthetic Radeon' -and $r.softwareAdapter -eq $false -and $r.vramMiB -eq 16384) 'ANSI adapter fields were not parsed.'
     Assert ($r.lastMemorySample.availablePhysicalMiB -eq 8192 -and $r.lastMemorySample.privateMiB -eq 512) 'Memory counters were not parsed.'
     $passed++
+    Assert ($r.samples[0].runtimeGpuWaitMs -eq 3 -and $r.samples[2].runtimeGpuWaitMs -eq 250 -and $r.samples[2].gpuMs -eq $r.samples[2].runtimeGpuWaitMs -and $r.tailSamples[-1].runtimeGpuWaitMs -eq 250 -and $r.allSamples.runtimeGpuWaitMs.median -eq 45 -and $r.allSamples.gpuMs.median -eq 45) 'CPU GPU-wait samples and summaries must preserve the legacy values without relabeling them as hardware durations.'
+    Assert ($null -eq $r.timing.metadataGpuTiming -and $r.timing.interpretation -match 'not hardware GPU timestamp duration' -and $r.interpretation -match 'CPU fence/landing waits') 'Missing timestamp-request metadata must remain unknown and aggregate timing must identify CPU waits.'
+    $passed++
+    $originalMetadata=Get-Content -LiteralPath $metadata -Raw
+    foreach ($case in @(
+        @{json='{"gpuTiming":true}'; expected=$true},
+        @{json='{"gpuTiming":false}'; expected=$false},
+        @{json='{"gpuTiming":null}'; expected=$null},
+        @{json='{"gpuTiming":"false"}'; expected=$null}
+    )) {
+        Write-Text $metadata $case.json
+        $timingReport=Report
+        Assert ($timingReport.timing.metadataGpuTiming -eq $case.expected -and $timingReport.samples[0].runtimeGpuWaitMs -eq 3 -and $timingReport.timing.interpretation -match 'even when metadataGpuTiming is true' -and -not $timingReport.samples[0].PSObject.Properties['hardwareGpuMs']) 'Timestamp-request metadata must preserve boolean/unknown values and never manufacture hardware GPU time from the aggregate.'
+    }
+    Write-Text $metadata $originalMetadata
+    $passed++
     Assert ($r.phaseEvidence.Count -eq 0 -and -not $r.PSObject.Properties['gameplayVerified'] -and $r.interpretation -match 'not whole-run FPS') 'Draw counts must not infer gameplay or whole-run FPS.'
     $passed++
     Assert ($r.stopReason -eq 'physical memory reserve' -and $r.availablePhysicalBytesAtStop -eq 2000000000 -and $r.restoredPackagePaths -eq 151 -and $r.peakJobCommitBytes -eq 4000000000 -and $r.zeroCapabilityAppContainerVerified) 'Guard and cleanup evidence was not retained.'
@@ -168,6 +184,21 @@ DeleteAppContainerProfile failed for Synthetic (0x80070020)
     Write-Text $victory 'presenting to a window width=3840 height=2160 format=28'
     $r=Report
     Assert ($r.resolution.observedSwapchain.height -eq 2160 -and $null -eq $r.resolution.swapchainMatchesRequest) 'An observed output without a request is not a mode mismatch.'
+    $passed++
+    Write-Text $metadata '{"requestedGuestDisplayMode":"1920x1080"}'
+    Write-Text $victory @'
+2026-01-01T00:00:01Z presenting to a window width=3840 height=2160 format=28
+2026-01-01T00:00:02Z the swap chain's buffers were made again for another size or format width=1920 height=1080 format=28 frame=30
+2026-01-01T00:00:03Z the swap chain's buffers were made again for another size or format width=3840 height=2160 format=28 frame=60
+2026-01-01T00:00:04Z the swap chain's buffers were made again for another size or format width=1920 height=1080 format=28 frame=90
+'@
+    $r=& $helper -Run synthetic -StageRoot $root -AsObject -IncludeSamples -TailSamples 2
+    Assert ($r.resolution.swapchainObservationCount -eq 4 -and $r.resolution.initialSwapchain.width -eq 3840 -and $r.resolution.initialSwapchain.event -eq 'created' -and $r.resolution.observedSwapchain.width -eq 1920 -and $r.resolution.observedSwapchain.event -eq 'resized' -and $r.resolution.observedSwapchain.logLine -eq 4 -and $r.resolution.swapchainMatchesRequest -eq $true) 'The latest actual resize must replace initial dimensions without losing the first observation or inventing a whole-run resolution.'
+    Assert ($r.resolution.swapchainHistory.Count -eq 2 -and $r.resolution.swapchainHistory[0].logLine -eq 3 -and $r.resolution.swapchainHistory[0].timestamp -eq '2026-01-01T00:00:03Z' -and $r.resolution.swapchainHistory[0].width -eq 3840 -and $r.resolution.swapchainHistory[1].timestamp -eq '2026-01-01T00:00:04Z' -and $r.resolution.swapchainHistory[1].width -eq 1920) 'Swapchain history must preserve source order and timestamps while remaining bounded even with IncludeSamples.'
+    $passed++
+    Write-Text $victory "2026-01-01T00:00:05Z swapchain resized to 1280x720`n2026-01-01T00:00:06Z the swap chain's buffers were made again for another size or format size=1280x720"
+    $r=Report
+    Assert ($r.resolution.swapchainObservationCount -eq 0 -and $null -eq $r.resolution.initialSwapchain -and $null -eq $r.resolution.observedSwapchain -and $r.resolution.swapchainHistory.Count -eq 0 -and $null -eq $r.resolution.swapchainMatchesRequest) 'Unrecognized old resize formats must stay unknown rather than inventing actual dimensions.'
     $passed++
     $thin='list calls translated by threads of ours per frame (VICTORY_THIN): 20 in 1.0 ms (all threads), 2.0 lists, 3.0 pieces; left in the middle 0.00'
     Write-Text $victory "2026-01-01T00:00:01Z INFO victory_gpu::list::thin: $thin"
