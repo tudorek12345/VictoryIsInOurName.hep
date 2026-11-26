@@ -224,27 +224,27 @@ try {
         $engine = & (Join-Path $local 'Resolve-VictoryBuiltRuntime.ps1') -Run $BuiltRuntimeFrom -LocalRoot $local
         Write-Host "Using the verified current-source executable from $BuiltRuntimeFrom"
     } else {
-    Push-Location -LiteralPath $runtime
-    try {
-        Write-Host "Building the current $Backend source at $runtime"
-        # Windows PowerShell turns redirected native stderr (including compiler
-        # warnings) into ErrorRecords. The compiler's exit code decides success.
-        $buildErrorPreference = $ErrorActionPreference
+        Push-Location -LiteralPath $runtime
         try {
-            $ErrorActionPreference = 'Continue'
-            if ($useXcl) {
-                & $cargo +1.98.1 build --locked --release -p xcl
-            } else {
-                & $cargo build --locked --jobs 2 --profile diag -p victory --features diagnostics
+            Write-Host "Building the current $Backend source at $runtime"
+            # Windows PowerShell turns redirected native stderr (including compiler
+            # warnings) into ErrorRecords. The compiler's exit code decides success.
+            $buildErrorPreference = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = 'Continue'
+                if ($useXcl) {
+                    & $cargo +1.98.1 build --locked --release -p xcl
+                } else {
+                    & $cargo build --locked --jobs 2 --profile diag -p victory --features diagnostics
+                }
+                $buildExitCode = $LASTEXITCODE
+            } finally {
+                $ErrorActionPreference = $buildErrorPreference
             }
-            $buildExitCode = $LASTEXITCODE
+            if ($buildExitCode -ne 0) { throw "$Backend failed to build (exit $buildExitCode)." }
         } finally {
-            $ErrorActionPreference = $buildErrorPreference
+            Pop-Location
         }
-        if ($buildExitCode -ne 0) { throw "$Backend failed to build (exit $buildExitCode)." }
-    } finally {
-        Pop-Location
-    }
     }
 
     if ($PrepareOnly) {
@@ -267,7 +267,10 @@ try {
         $reserveCommitBytes = 8GB
         $withReserve = [Math]::Floor(($available - $reserveCommitBytes) / 1MB)
         if ($CommitMiB -eq 0) {
-            $preferredCommitMiB = 24576
+            # Measured 24 GiB runs exhausted this 32 GiB streaming host; the
+            # 22 GiB comparison stopped before allocation failures. Explicit
+            # experiment caps remain available with the same commit guard.
+            $preferredCommitMiB = 22528
             $CommitMiB = [Math]::Min($preferredCommitMiB, $withReserve)
         }
         if ($CommitMiB -lt 512 -or $CommitMiB -gt $withReserve) {

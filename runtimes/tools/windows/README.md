@@ -19,7 +19,7 @@ the Windows GPU watchdog unchanged. The memory reserve monitor is checked every
 Direct invocation now defaults to the Series X profile on Radeon, with ordered
 submission and two pipeline workers. At the user's request, the physical-RAM
 reserve defaults to zero. The independent 4 GiB system-commit reserve, automatic
-job cap of at most 24 GiB and 8 GiB startup commit headroom remain enabled. Builds use
+job cap of at most 22 GiB and 8 GiB startup commit headroom remain enabled. Builds use
 two Cargo jobs to leave CPU headroom for other applications. The explicit profile is:
 
 ```powershell
