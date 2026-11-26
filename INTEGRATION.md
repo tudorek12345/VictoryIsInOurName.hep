@@ -277,3 +277,27 @@ No GPU submission lifetime protection was shortened.
 increase is already active. Its capacity was not the limiting factor; the
 pagefile configuration was left unchanged. The sampler now records per-pagefile
 use and D: latency/queue/throughput for future comparisons.
+
+## Dynamic descriptor resource ownership
+
+[The descriptor lifetime patch](runtimes/patches/victory-dynamic-descriptor-lifetime.patch)
+applies after the cool_fox heap-lifetime patch, producing candidate `5987159`.
+Returning dynamic slots previously freed their allocation bits while retaining
+their strong resource references. That could prevent otherwise-idle buffer
+shadows from becoming reclaimable. Release now detaches those references under
+the allocation lock and sends them through the existing GPU submission retirement
+queue after unlocking.
+
+Each recording owns its original host heap through non-cloneable slot leases;
+heap address reuse can no longer return slots to a replacement heap. The table,
+root-view and binding caches also use the retained host heap identity. Static
+descriptors and permanent heap-lifetime allocations keep their previous lifetime.
+
+The optimized diagnostic runtime built successfully. Focused lifetime tests
+passed 7/7, descriptor tests 46/46, and draw tests 7/7 with one existing ignored
+test. Four new regressions cover reference transfer, bounds, original-heap
+ownership and returning slots once. An independent source review found no
+blocking ownership or locking issue. The existing deferred-constant title-heap
+lookup remains outside this change. These checks establish the local fix, not
+lower title memory usage or playable first-mission rendering; a guarded title
+comparison is required.

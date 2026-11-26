@@ -1,0 +1,455 @@
+diff --git a/crates/victory-gpu/src/descriptor.rs b/crates/victory-gpu/src/descriptor.rs
+index 9c3cc2e..5462fc2 100644
+--- a/crates/victory-gpu/src/descriptor.rs
++++ b/crates/victory-gpu/src/descriptor.rs
+@@ -56,7 +56,7 @@ pub(crate) struct Heap {
+     /// descriptor order when a draw first uses them (decision 0007, step
+     /// 3); slots written before wait in `pending`.
+     #[cfg(windows)]
+-    host: std::sync::OnceLock<Option<host::HostHeap>>,
++    host: std::sync::OnceLock<Option<std::sync::Arc<host::HostHeap>>>,
+     #[cfg(windows)]
+     pending: std::sync::Mutex<Vec<u32>>,
+     /// Changed pages of a placed shader-visible heap. Some titles copy
+@@ -82,7 +82,7 @@ impl Heap {
+     #[cfg(windows)]
+     pub(crate) fn host(&self) -> Option<&host::HostHeap> {
+         if let Some(h) = self.host.get() {
+-            return h.as_ref();
++            return h.as_deref();
+         }
+         if self.desc.flags & SHADER_VISIBLE == 0 || !matches!(self.desc.kind, VIEWS_KIND | SAMPLERS)
+         {
+@@ -98,9 +98,17 @@ impl Heap {
+                 for i in pending.drain(..) {
+                     h.mirror(i, self.start + u64::from(i) * step, false);
+                 }
+-                Some(h)
++                Some(std::sync::Arc::new(h))
+             })
+-            .as_ref()
++            .as_deref()
++    }
++
++    /// An owning reference for dynamic slots that can outlive the title
++    /// heap while a detached command list waits for its GPU submission.
++    #[cfg(windows)]
++    pub(crate) fn host_owned(&self) -> Option<std::sync::Arc<host::HostHeap>> {
++        self.host()?;
++        self.host.get()?.clone()
+     }
+ 
+     /// The handle of descriptor `index` of this heap.
+@@ -610,19 +618,6 @@ pub(crate) fn with_heap<T>(heap: usize, f: impl FnOnce(&Heap) -> T) -> Option<T>
+     heaps.iter().any(|&(_, _, h)| h == heap).then(|| f(unsafe { &*(heap as *const Heap) }))
+ }
+ 
+-/// Gives back dynamic slots of the host heap behind the title heap at
+-/// `heap`, if that heap still exists.
+-#[cfg(windows)]
+-pub(crate) fn release_dynamic(heap: usize, first: u32, n: u32) {
+-    let heaps = SHADER_HEAPS.read().unwrap_or_else(|e| e.into_inner());
+-    if heaps.iter().any(|&(_, _, h)| h == heap)
+-        // SAFETY: registered heaps are live (removed when dropped).
+-        && let Some(Some(host)) = unsafe { &*(heap as *const Heap) }.host.get()
+-    {
+-        host.release(first, n);
+-    }
+-}
+-
+ /// Runs `f` with the host heap of the title's largest view heap, if there is
+ /// one (nothing is waited for).
+ #[cfg(windows)]
+diff --git a/crates/victory-gpu/src/descriptor/host.rs b/crates/victory-gpu/src/descriptor/host.rs
+index 42c02c9..e476cf9 100644
+--- a/crates/victory-gpu/src/descriptor/host.rs
++++ b/crates/victory-gpu/src/descriptor/host.rs
+@@ -111,6 +111,61 @@ impl Made {
+     }
+ }
+ 
++/// A recording's dynamic slots. Owning the original heap avoids looking up
++/// a title heap by a CPU address that may have been freed and reused. This
++/// is deliberately not Clone: only its owner returns the slots, once.
++pub(crate) struct DynamicSlots {
++    heap: std::sync::Arc<HostHeap>,
++    first: u32,
++    count: u32,
++}
++
++impl DynamicSlots {
++    pub(crate) fn first(&self) -> u32 {
++        self.first
++    }
++}
++
++impl Drop for DynamicSlots {
++    fn drop(&mut self) {
++        self.heap.release(self.first, self.count);
++    }
++}
++
++/// Remove only the references owned by live slots being returned. Called
++/// with the allocation lock held, so a slot cannot be reused until its old
++/// reference is detached. The caller retires these resources after unlocking.
++fn take_dynamic_resources<T>(
++    count: u32,
++    first: u32,
++    n: u32,
++    taken: &mut [bool],
++    kept: &[Mutex<Option<T>>],
++) -> (u32, Vec<T>) {
++    let Some(at) = first.checked_sub(count).map(|at| at as usize) else {
++        return (0, Vec::new());
++    };
++    let end = at.saturating_add(n as usize).min(taken.len());
++    let Some(slots) = taken.get_mut(at..end) else {
++        return (0, Vec::new());
++    };
++    let mut given = 0;
++    let mut retired = Vec::new();
++    for (offset, live) in slots.iter_mut().enumerate() {
++        if !*live {
++            continue;
++        }
++        if let Some(slot) = (first as usize).checked_add(offset).and_then(|index| kept.get(index))
++            && let Some(resource) = slot.lock().unwrap_or_else(|e| e.into_inner()).take()
++        {
++            retired.push(resource);
++        }
++        *live = false;
++        given += 1;
++    }
++    (given, retired)
++}
++
+ pub(crate) struct HostHeap {
+     pub(crate) buffer_sweep: Mutex<crate::draw::BufferSweep>,
+     pub(crate) buffer_frame: std::sync::atomic::AtomicU64,
+@@ -1695,6 +1750,13 @@ fn null_sampler(at: D3D12_CPU_DESCRIPTOR_HANDLE) {
+ }
+ 
+ impl HostHeap {
++    /// The recording owns the allocation until its state is retired. The
++    /// heap never owns the recording, so this reference cannot form a cycle.
++    pub(crate) fn dynamic_slots(self: &std::sync::Arc<Self>, n: u32) -> Option<DynamicSlots> {
++        let first = self.dynamic(n)?;
++        Some(DynamicSlots { heap: self.clone(), first, count: n })
++    }
++
+     /// `n` consecutive free dynamic slots (view heaps only), taken until
+     /// [`HostHeap::release`]: the first's index.
+     pub(crate) fn dynamic(&self, n: u32) -> Option<u32> {
+@@ -1759,6 +1821,13 @@ impl HostHeap {
+         self.count
+     }
+ 
++    /// The host heap's identity, held live by a recording's heap reference
++    /// or its dynamic allocations, even if the title heap address is reused.
++    pub(crate) fn identity(&self) -> usize {
++        use windows::core::Interface;
++        self.heap.as_raw() as usize
++    }
++
+     /// The GPU address of the table of element strides by title slot (view
+     /// heaps).
+     pub(crate) fn strides_gpu(&self) -> Option<u64> {
+@@ -2583,17 +2652,20 @@ impl HostHeap {
+     /// returned).
+     ///
+     /// [`dynamic`]: HostHeap::dynamic
+-    pub(crate) fn release(&self, first: u32, n: u32) {
+-        let Some(at) = first.checked_sub(self.count) else {
+-            return;
+-        };
+-        let mut guard = self.next.lock().unwrap_or_else(|e| e.into_inner());
+-        let end = (at + n).min(self.dynamic) as usize;
+-        if let Some(slots) = guard.1.get_mut(at as usize..end) {
+-            let given = slots.iter().filter(|taken| **taken).count() as u32;
++    fn release(&self, first: u32, n: u32) {
++        let retired = {
++            let mut guard = self.next.lock().unwrap_or_else(|e| e.into_inner());
++            let (given, retired) = take_dynamic_resources(self.count, first, n, &mut guard.1, &self.kept);
+             self.free.fetch_add(given, std::sync::atomic::Ordering::Relaxed);
+-            self.too_long.store(u32::MAX, std::sync::atomic::Ordering::Relaxed);
+-            slots.fill(false);
++            if given != 0 {
++                self.too_long.store(u32::MAX, std::sync::atomic::Ordering::Relaxed);
++            }
++            retired
++        };
++        // Preserve the same submission quarantine as replacement via keep().
++        // Never take the retirement lock while holding allocation/slot locks.
++        for resource in retired {
++            crate::host::retire_resource(resource);
+         }
+     }
+ 
+@@ -5498,6 +5570,100 @@ mod tests {
+         assert_eq!(slots(frame + 3 + TABLED_FRAMES), [2]);
+     }
+ 
++    #[test]
++    fn dynamic_release_detaches_only_live_resources_and_preserves_retirement_ownership() {
++        use std::sync::Arc;
++
++        // Static, live dynamic, already-free dynamic, live dynamic.
++        let resources: Vec<_> = (0..4).map(Arc::new).collect();
++        let weak: Vec<_> = resources.iter().map(Arc::downgrade).collect();
++        let kept: Vec<_> = resources.into_iter().map(|r| Mutex::new(Some(r))).collect();
++        let mut taken = [true, false, true];
++        let (given, retired) = take_dynamic_resources(1, 1, 3, &mut taken, &kept);
++        assert_eq!(given, 2);
++        assert_eq!(taken, [false; 3]);
++        assert_eq!(retired.iter().map(|r| **r).collect::<Vec<_>>(), [1, 3]);
++        assert!(kept[0].lock().unwrap().is_some());
++        assert!(kept[2].lock().unwrap().is_some());
++        assert!(kept[1].lock().unwrap().is_none());
++        assert!(kept[3].lock().unwrap().is_none());
++        // Returning the slot transfers ownership to retirement; it does
++        // not destroy a resource that the GPU may still reference.
++        assert!(weak.iter().all(|r| r.upgrade().is_some()));
++        drop(retired);
++        assert!(weak[1].upgrade().is_none() && weak[3].upgrade().is_none());
++        assert!(weak[0].upgrade().is_some() && weak[2].upgrade().is_some());
++        // A repeat return neither counts slots twice nor clears a free
++        // slot's unrelated retained resource.
++        let (given, retired) = take_dynamic_resources(1, 1, 3, &mut taken, &kept);
++        assert_eq!(given, 0);
++        assert!(retired.is_empty() && kept[2].lock().unwrap().is_some());
++    }
++
++    #[test]
++    fn dynamic_release_rejects_static_slots_and_bounds_overflowing_ranges() {
++        let kept: Vec<_> = (0..5).map(|i| Mutex::new(Some(i))).collect();
++        let mut taken = [true; 3];
++        for (first, n) in [(1, u32::MAX), (u32::MAX, u32::MAX), (5, 1), (2, 0)] {
++            let (given, retired) = take_dynamic_resources(2, first, n, &mut taken, &kept);
++            assert_eq!(given, 0);
++            assert!(retired.is_empty());
++            assert_eq!(taken, [true; 3]);
++        }
++        let (given, retired) = take_dynamic_resources(2, 3, u32::MAX, &mut taken, &kept);
++        assert_eq!(given, 2);
++        assert_eq!(retired, [3, 4]);
++        assert_eq!(taken, [true, false, false]);
++        assert!(kept[..3].iter().all(|slot| slot.lock().unwrap().is_some()));
++    }
++
++    #[test]
++    fn dynamic_slots_return_to_the_original_heap_and_keep_it_alive() {
++        use std::sync::Arc;
++        use std::sync::atomic::Ordering::Relaxed;
++
++        let old = Arc::new(HostHeap::new(false, 4).expect("host descriptor heap required"));
++        let old_weak = Arc::downgrade(&old);
++        let old_slots = old.dynamic_slots(2).unwrap();
++        let new = Arc::new(HostHeap::new(false, 4).expect("replacement host descriptor heap required"));
++        let new_slots = new.dynamic_slots(2).unwrap();
++        assert_eq!(old_slots.first(), new_slots.first());
++        assert_ne!(old.identity(), new.identity());
++        let new_free = new.free.load(Relaxed);
++        drop(old);
++        // A title heap can disappear while its detached recording waits.
++        assert!(old_weak.upgrade().is_some());
++        drop(old_slots);
++        // No address registry is consulted, and the replacement's live
++        // slots are untouched. No back-reference keeps the old heap alive.
++        assert!(old_weak.upgrade().is_none());
++        assert_eq!(new.free.load(Relaxed), new_free);
++        assert!(new.next.lock().unwrap().1[..2].iter().all(|live| *live));
++        drop(new_slots);
++        assert_eq!(new.free.load(Relaxed), new_free + 2);
++        assert!(new.next.lock().unwrap().1[..2].iter().all(|live| !*live));
++    }
++
++    #[test]
++    fn dynamic_slots_are_returned_once_when_a_recording_is_cleared() {
++        use std::sync::Arc;
++        use std::sync::atomic::Ordering::Relaxed;
++
++        let heap = Arc::new(HostHeap::new(false, 4).expect("host descriptor heap required"));
++        let free = heap.free.load(Relaxed);
++        let mut slots = vec![heap.dynamic_slots(2).unwrap(), heap.dynamic_slots(3).unwrap()];
++        assert_eq!(heap.free.load(Relaxed), free - 5);
++        slots.clear();
++        assert_eq!(heap.free.load(Relaxed), free);
++        let replacement = heap.dynamic_slots(1).unwrap();
++        // A later clear/drop cannot return a new recording's allocation.
++        slots.clear();
++        drop(slots);
++        assert_eq!(heap.free.load(Relaxed), free - 1);
++        drop(replacement);
++        assert_eq!(heap.free.load(Relaxed), free);
++    }
++
+     #[test]
+     fn dynamic_slots_are_held_until_released() {
+         let Some(heap) = HostHeap::new(false, 4) else {
+diff --git a/crates/victory-gpu/src/draw.rs b/crates/victory-gpu/src/draw.rs
+index c06bf46..4a4bc46 100644
+--- a/crates/victory-gpu/src/draw.rs
++++ b/crates/victory-gpu/src/draw.rs
+@@ -334,13 +334,13 @@ pub(crate) struct State {
+     /// Graphics, compute.
+     host_roots: [usize; 2],
+     host_heaps: [usize; 2],
+-    /// Tables made afresh in this list: (table, slot count, contents) → first
+-    /// dynamic slot.
+-    fresh_tables: std::collections::HashMap<(u64, u32, u64), FreshTable, std::hash::BuildHasherDefault<crate::host::AddressHash>>,
+-    /// The dynamic slots the list holds: title heap, first, count; given
+-    /// back when the list has run, is reset or released.
+-    dynamic: Vec<(usize, u32, u32)>,
+-    /// Root SRVs bound as one-view tables in this list: (title heap, title
++    /// Tables made afresh in this list: (host heap, table, slot count,
++    /// contents) → first dynamic slot. DynamicSlots keeps that heap alive.
++    fresh_tables: std::collections::HashMap<(usize, u64, u32, u64), FreshTable, std::hash::BuildHasherDefault<crate::host::AddressHash>>,
++    /// The dynamic slots the list holds, owning their original host heap;
++    /// given back when the list has run, is reset or released.
++    dynamic: Vec<crate::descriptor::host::DynamicSlots>,
++    /// Root SRVs bound as one-view tables in this list: (host heap, title
+     /// address; 0 for none) → dynamic slot, and the host copy the slot
+     /// shows: later draws of the list bring that one up to date, whatever
+     /// copy the address would find by then (`shadow.rs` `tails`).
+@@ -354,14 +354,6 @@ pub(crate) struct State {
+     recording: u64,
+ }
+ 
+-impl Drop for State {
+-    fn drop(&mut self) {
+-        for &(heap, first, n) in &self.dynamic {
+-            crate::descriptor::release_dynamic(heap, first, n);
+-        }
+-    }
+-}
+-
+ impl State {
+     /// The list's submission has run (submissions are waited for): the
+     /// dynamic slots its tables were made in are given back, not kept
+@@ -378,9 +370,7 @@ impl State {
+             static ONCE: std::sync::Once = std::sync::Once::new();
+             ONCE.call_once(|| tracing::warn!("a list ran again after its descriptor tables were given back"));
+         }
+-        for (heap, first, n) in self.dynamic.drain(..) {
+-            crate::descriptor::release_dynamic(heap, first, n);
+-        }
++        self.dynamic.clear();
+         self.fresh_tables.clear();
+         self.recording = 0;
+         self.root_srv_slots.clear();
+@@ -1451,7 +1441,13 @@ impl State {
+         }
+         // Heaps first: a root signature with directly indexed heaps must be
+         // set after them.
+-        if self.host_heaps != self.heaps {
++        let host_heaps = self.heaps.map(|h| {
++            (h != 0)
++                .then(|| crate::descriptor::heap(h as This).host())
++                .flatten()
++                .map_or(0, crate::descriptor::host::HostHeap::identity)
++        });
++        if self.host_heaps != host_heaps {
+             let heaps: Vec<Option<ID3D12DescriptorHeap>> = self
+                 .heaps
+                 .iter()
+@@ -1462,7 +1458,7 @@ impl State {
+             heaps.iter().flatten().for_each(|h| list.keep(h));
+             // SAFETY: an open list and shader-visible heaps.
+             unsafe { l.SetDescriptorHeaps(&heaps) };
+-            self.host_heaps = self.heaps;
++            self.host_heaps = host_heaps;
+             self.host_roots = [0; 2];
+         }
+         // The depth target a draw only tests, for the views of it that the
+@@ -1753,19 +1749,20 @@ impl State {
+             0 => None,
+             h => Some(crate::descriptor::heap(h as This)),
+         };
+-        let Some((heap, host)) = heap.and_then(|h| Some((h, h.host()?))) else {
++        let Some(host) = heap.and_then(|h| h.host_owned()) else {
+             once!("a root UAV without a bound view heap: the draw is dropped");
+             return false;
+         };
+-        let key = (std::ptr::from_ref(heap) as usize, address.unwrap_or(0));
++        let key = (host.identity(), address.unwrap_or(0));
+         let (index, shadow) = match self.root_uav_slots.get(&key) {
+             Some((index, shadow)) => (*index, address.zip(shadow.clone())),
+             None => {
+                 let shadow = address.and_then(|a| find(a).map(|s| (a, s)));
+-                let Some(index) = host.dynamic(1) else {
++                let Some(slots) = host.dynamic_slots(1) else {
+                     return false;
+                 };
+-                self.dynamic.push((key.0, index, 1));
++                let index = slots.first();
++                self.dynamic.push(slots);
+                 if let Some((a, s)) = &shadow {
+                     // SAFETY: a live buffer.
+                     let base = unsafe { s.buffer.GetGPUVirtualAddress() };
+@@ -1819,24 +1816,25 @@ impl State {
+             0 => None,
+             h => Some(crate::descriptor::heap(h as This)),
+         };
+-        let Some((heap, host)) = heap.and_then(|h| Some((h, h.host()?))) else {
++        let Some(host) = heap.and_then(|h| h.host_owned()) else {
+             once!("a root SRV without a bound view heap: the draw is dropped");
+             return false;
+         };
+         // A view that begins early is another view than one that does not
+         // (title addresses stay below bit 63).
+         let key = (
+-            std::ptr::from_ref(heap) as usize,
++            host.identity(),
+             address.unwrap_or(0) | u64::from(biased) << 63,
+         );
+         let (index, shadow) = match self.root_srv_slots.get(&key) {
+             Some((index, shadow)) => (*index, address.zip(shadow.clone())),
+             None => {
+                 let shadow = address.and_then(|a| crate::shadow::find(a, 1).map(|s| (a, s)));
+-                let Some(index) = host.dynamic(1) else {
++                let Some(slots) = host.dynamic_slots(1) else {
+                     return false;
+                 };
+-                self.dynamic.push((key.0, index, 1));
++                let index = slots.first();
++                self.dynamic.push(slots);
+                 self.root_srv_slots
+                     .insert(key, (index, shadow.as_ref().map(|(_, s)| s.clone())));
+                 match &shadow {
+@@ -3212,7 +3210,7 @@ impl State {
+             if heap.samplers() || (table - heap.start) % 32 != 0 {
+                 continue;
+             }
+-            let Some(host) = heap.host() else {
++            let Some(host) = heap.host_owned() else {
+                 continue;
+             };
+             let mut selected: Vec<u32> = indexed
+@@ -3252,7 +3250,7 @@ impl State {
+                     // SAFETY: a descriptor slot in title memory.
+                     h.add(unsafe { (at as *const [u32; 3]).read_unaligned() });
+                 }
+-                (table, n, h.0)
++                (host.identity(), table, n, h.0)
+             };
+             // Who reads of it, and as what, as far as [`readable`] goes by it.
+             let reader = (used.as_ptr() as usize, used.len(), STORES.get(), TESTED_DEPTH.get().0);
+@@ -3307,15 +3305,15 @@ impl State {
+                 made.push((slot, first * 32));
+                 continue;
+             }
+-            let Some(first) = host.dynamic(n) else {
++            let Some(slots) = host.dynamic_slots(n) else {
+                 // No room: the draw must not run with the title's own
+                 // offsets (slots never made for it); `bind` drops it.
+                 made.push((slot, u32::MAX));
+                 continue;
+             };
++            let first = slots.first();
+             self.fresh_tables.insert(key, FreshTable { first, epoch: 0, ready: Vec::new() });
+-            self.dynamic
+-                .push((std::ptr::from_ref(heap) as usize, first, n));
++            self.dynamic.push(slots);
+             // The title's own slots of this table: what the draw reads of
+             // them it brings up to date here, in the dynamic slots.
+             let title_first = heap.index(table).filter(|first| first + n <= host.count());
