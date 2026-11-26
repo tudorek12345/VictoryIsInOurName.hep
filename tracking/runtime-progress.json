@@ -84,16 +84,50 @@
   },
   "localCandidateComparison": {
     "date": "2026-11-26",
-    "hardware": {"gpu": "AMD Radeon RX 9060 XT", "driver": "32.0.32029.2010", "ramGiB": 32},
+    "hardware": {
+      "gpu": "AMD Radeon RX 9060 XT",
+      "driver": "32.0.32029.2010",
+      "ramGiB": 32
+    },
     "integrationRevision": "9a0c530b7ceb09997b508cb3be7d8396b26bf472",
-    "serialSourceTests": {"passed": 307, "failed": 0, "ignored": 5},
+    "serialSourceTests": {
+      "passed": 307,
+      "failed": 0,
+      "ignored": 5
+    },
     "candidateRevision": "e2a28ec70632f5112be085abfa7d0a557b25e8d8",
     "candidateSource": "https://github.com/avatarmanz/VIctory-7900XTX",
-    "seriesXWarp": {"loadingFpsRange": [12.9, 20.3], "elapsedSeconds": 155.45, "limitGiB": 16, "outcome": "Allocation failure at world transition"},
-    "seriesSWarp": {"elapsedSeconds": 240.98, "peakCommitGiB": 5.96, "outcome": "Timer expired. Captures stayed black."},
-    "seriesXRadeon": {"earlyFps": 30, "limitGiB": 16, "outcome": "Memory allocation failed at world entry in both runs"},
-    "prewarm": {"previouslyUsedPipelinesBuilt": 23, "elapsedSeconds": 2.69},
-    "guardedRadeon": {"elapsedSeconds": 98.73, "limitGiB": 24, "peakCommitGiB": 15.66, "physicalReserveGiB": 3, "systemCommitReserveGiB": 4, "outcome": "Physical memory guard stopped the job at world entry"},
+    "seriesXWarp": {
+      "loadingFpsRange": [
+        12.9,
+        20.3
+      ],
+      "elapsedSeconds": 155.45,
+      "limitGiB": 16,
+      "outcome": "Allocation failure at world transition"
+    },
+    "seriesSWarp": {
+      "elapsedSeconds": 240.98,
+      "peakCommitGiB": 5.96,
+      "outcome": "Timer expired. Captures stayed black."
+    },
+    "seriesXRadeon": {
+      "earlyFps": 30,
+      "limitGiB": 16,
+      "outcome": "Memory allocation failed at world entry in both runs"
+    },
+    "prewarm": {
+      "previouslyUsedPipelinesBuilt": 23,
+      "elapsedSeconds": 2.69
+    },
+    "guardedRadeon": {
+      "elapsedSeconds": 98.73,
+      "limitGiB": 24,
+      "peakCommitGiB": 15.66,
+      "physicalReserveGiB": 3,
+      "systemCommitReserveGiB": 4,
+      "outcome": "Physical memory guard stopped the job at world entry"
+    },
     "seriesSPresentationRadeon": {
       "patchRevision": "7857fb4b6c59ed2ec6b3090f13814518e1bfffab",
       "runtimeSha256": "46045A9B7F18C9DF90D095DE31EA19114352E84ADF628A00F48FC365AB5AD038",
@@ -150,5 +184,85 @@
       "status": "pending",
       "result": "Fix the remaining defect once identified and verify controllable gameplay on hardware."
     }
-  ]
+  ],
+  "radeonQueuedSubmission20261125": {
+    "timestamp": "2026-11-25T20:57:10-08:00",
+    "runtimeRevision": "629334cd32ca6a1f21dbfcb3fc4861a66d4e3891",
+    "runtimeSha256": "088D375E57F8552F2A6DADF8984EE6168B20A27BD74E1C4F237F83E4D490D272",
+    "runId": "original-20261125-205709-692aafa1",
+    "adapter": "AMD Radeon RX 9060 XT",
+    "driver": "32.0.32029.2010",
+    "console": "series-s",
+    "queuedSubmission": true,
+    "pipelineWorkers": 2,
+    "observedStages": [
+      "intro",
+      "navigation settings",
+      "loading artwork with visible spinner"
+    ],
+    "sampledLoadingFpsRange": [
+      29.8,
+      30.3
+    ],
+    "audio": {
+      "capturedNonSilentStereo": true,
+      "sampleRateHz": 48000,
+      "first45SecondsPcmPeak": 9798,
+      "first45SecondsPcmRms": 995.41,
+      "defaultHeadsetSessionNonzero": true,
+      "gameplayAudioVerified": false
+    },
+    "elapsedSeconds": 91.8,
+    "requestedSeconds": 240,
+    "exitReason": "physical-memory reserve guard",
+    "jobCommitLimitGiB": 24,
+    "peakJobCommitBytes": 15592214528,
+    "hostPhysicalReserveMiB": 3072,
+    "hostCommitReserveMiB": 4096,
+    "availablePhysicalBytesAtStop": 2574495744,
+    "guardSamplingMilliseconds": 500,
+    "packagePathsRestored": 151,
+    "displayResetEvent4101Observed": false,
+    "visibleGameplayVerified": false,
+    "playerInputResponseVerified": false,
+    "limitations": [
+      "The guard ended the run before scheduled gameplay input.",
+      "Sampled loading FPS is not gameplay performance.",
+      "Non-silent PCM and a nonzero headset session do not verify complete gameplay sound.",
+      "No available post-burst per-process memory census established its owner; the newer runner now samples all job processes."
+    ]
+  },
+  "shaderCompilerInvestigation20261125": {
+    "runtimeRevision": "3747dfc",
+    "publicIntegrationCommit": "262a698d",
+    "focusedCpuTests": {
+      "passed": 36,
+      "ignored": 2
+    },
+    "shaderRegression": {
+      "passed": 282,
+      "ignored": 4,
+      "excluded": 1,
+      "exclusion": "Separately reproduced AMD compiler access violation in structured-buffer indexed count test; test remains enabled in source."
+    },
+    "compactCodeMeasurements": [
+      {
+        "pipelineIndex": 51362,
+        "oldDxilBytes": 385348,
+        "newDxilBytes": 375456,
+        "oldHeapHandles": 384,
+        "newHeapHandles": 228
+      },
+      {
+        "pipelineIndex": 51416,
+        "oldDxilBytes": 378008,
+        "newDxilBytes": 368132,
+        "oldHeapHandles": 386,
+        "newHeapHandles": 230
+      }
+    ],
+    "offlineResult": "Both still access-violate below 0.6 GiB job commit. New native reports identify amdxc64.dll+0x861b9f reading address0x8.",
+    "syntheticResult": "Authored DXC shaders with a heap-indexed buffer size query and load reproduce the same compiler fault. Removing the load or query, or using explicit registers, compiles. Wave size and wave-read-first alternatives do not resolve it.",
+    "status": "Compatible descriptor binding workaround under investigation; no gameplay fix claimed."
+  }
 }
