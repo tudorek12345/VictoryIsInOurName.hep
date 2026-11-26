@@ -264,5 +264,44 @@
     "offlineResult": "Both still access-violate below 0.6 GiB job commit. New native reports identify amdxc64.dll+0x861b9f reading address0x8.",
     "syntheticResult": "Authored DXC shaders with a heap-indexed buffer size query and load reproduce the same compiler fault. Removing the load or query, or using explicit registers, compiles. Wave size and wave-read-first alternatives do not resolve it.",
     "status": "Compatible descriptor binding workaround under investigation; no gameplay fix claimed."
+  },
+  "bufferQueryWorkaround20261125": {
+    "runtimeRevision": "33cbd2f",
+    "driver": "32.0.32029.2010",
+    "adapter": "AMD Radeon RX 9060 XT",
+    "source": "Authored synthetic matrix followed by narrow query-only translation change.",
+    "focusedSizeTests": {
+      "passed": 10,
+      "failed": 0
+    },
+    "fullShaderTests": {
+      "passed": 285,
+      "failed": 0,
+      "ignored": 4,
+      "filtered": 0
+    },
+    "pipelineCreation": {
+      "indices": [
+        51343,
+        51362,
+        51368,
+        51380,
+        51410,
+        51416
+      ],
+      "passed": 6,
+      "failed": 0,
+      "firstRun": "original-20261125-214220-a5bd5f18",
+      "remainingRun": "original-20261125-214330-070a701b",
+      "remainingBatchPeakJobCommitBytes": 625065984,
+      "jobCommitLimitMiB": 6144,
+      "physicalReserveMiB": 3072,
+      "systemCommitReserveMiB": 4096
+    },
+    "gameplayVerified": false,
+    "limitations": [
+      "Pipeline creation is not visible or controllable gameplay.",
+      "Synthetic tests do not establish all-title compatibility."
+    ]
   }
 }

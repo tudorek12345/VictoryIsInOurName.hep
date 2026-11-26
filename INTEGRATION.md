@@ -99,3 +99,33 @@ work. Dedicated screen workers and the explicit unlimited override are preserved
 Startup diagnostics expose both counts and the quota. Seven focused queue tests
 passed. This corrects scheduling; lower peak memory in the title is not yet
 measured. The system physical/commit reserves remain in force for OBS.
+
+## Radeon buffer-query compiler workaround
+
+Apply [the buffer-query patch](runtimes/patches/victory-7900xtx-buffer-query.patch)
+after the worker-budget patch. This reproduces candidate `33cbd2f`. The complete
+patch sequence passed application checks against its pinned source.
+
+A buffer size query now uses a separate handle whose index is read from the
+same active lane. This preserves every lane's descriptor index while avoiding
+the AMD compiler's failing query/load handle combination. Raw twins, null-slot
+bounds and descriptor properties remain unchanged; pixel helpers retain the
+original bounded index. Image queries and all data loads/stores keep their
+existing paths. No new GPU allocation, size approximation or skipped shader is
+introduced. The [authored reproducer](runtimes/tools/windows/shader-compiler-probe/RESULTS.md)
+records the failure-to-success controls.
+
+All ten focused size tests pass, including the previously crashing indexed
+structured-buffer count, a raw-UAV query/load/store and a raw-twin count whose
+original view has different contents. The complete optimized shader suite now
+passes **285 tests, zero failures, four existing ignores, no exclusions**.
+Test statistics observe the actual optimized module; the original strict
+waterfall/descriptor assertions were preserved, together with their GPU output
+checks.
+
+The six previously failing recorded world pipelines all created successfully
+with the query fix on RX 9060 XT / driver 32.0.32029.2010. The first took about
+7.17 seconds; the remaining five completed in one bounded process with a peak
+of 625,065,984 bytes (0.58 GiB). Tests used 6 GiB caps and the existing physical
+and commit reserves. This resolves the demonstrated compiler exception;
+rendered gameplay remains a separate end-to-end validation requirement.

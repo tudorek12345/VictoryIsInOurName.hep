@@ -1,0 +1,226 @@
+diff --git a/crates/victory-shader/src/emit/bitcode/opt.rs b/crates/victory-shader/src/emit/bitcode/opt.rs
+index d3ce5cd..12cabcb 100644
+--- a/crates/victory-shader/src/emit/bitcode/opt.rs
++++ b/crates/victory-shader/src/emit/bitcode/opt.rs
+@@ -73,6 +73,9 @@ pub const DEFAULT: u32 = ALL & !WIDE;
+ /// declares by flag (the validator's "flags must match usage").
+ #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+ pub(crate) struct Usage {
++    /// Non-uniform heap handles remaining in the module, after any cleanup.
++    #[cfg(test)]
++    pub nonuniform_handles: u32,
+     /// A wave or quad operation.
+     pub wave_ops: bool,
+     /// A rasterizer ordered view.
+@@ -1095,6 +1098,12 @@ impl Module {
+                 if name.starts_with("wave") || name.starts_with("quad") {
+                     u.wave_ops = true;
+                 } else if name == "createHandleFromHeap" {
++                    #[cfg(test)]
++                    {
++                        u.nonuniform_handles += u32::from(
++                            args.get(3).and_then(|&n| self.int_k(n)).is_some_and(|(_, n)| n != 0),
++                        );
++                    }
+                     match args.get(2).and_then(|&s| self.int_k(s)) {
+                         Some((_, 0)) => u.heap_views = true,
+                         _ => u.heap_samplers = true,
+diff --git a/crates/victory-shader/src/emit/lower.rs b/crates/victory-shader/src/emit/lower.rs
+index 42dc3f4..c587eb2 100644
+--- a/crates/victory-shader/src/emit/lower.rs
++++ b/crates/victory-shader/src/emit/lower.rs
+@@ -59,7 +59,7 @@ pub(crate) struct Lowered {
+     pub samplers: Vec<[u32; 4]>,
+     /// The wave size the shader requires of the host, if any.
+     pub wave_size: Option<u32>,
+-    /// Heap handles made with a non-uniform index.
++    /// Non-uniform heap handles in the emitted module after cleanup.
+     #[cfg(test)]
+     pub nonuniform_handles: u32,
+     /// Handles shared for descriptors at fixed root-parameter addresses.
+@@ -2435,6 +2435,10 @@ impl<'a> Lower<'a> {
+         let root_uavs = self.s.root_uavs.iter().map(|r| r.0).collect();
+         let cmp_samplers = self.s.cmp_samplers;
+         let wave_size = self.s.wave_size;
++        #[cfg(test)]
++        let (dxil, usage) = self.s.finish_with_usage();
++        #[cfg(not(test))]
++        let dxil = self.s.finish();
+         Ok(Lowered {
+             wave_size,
+             cmp_samplers,
+@@ -2442,14 +2446,14 @@ impl<'a> Lower<'a> {
+             root_srvs,
+             root_uavs,
+             #[cfg(test)]
+-            nonuniform_handles: self.s.nonuniform_handles,
++            nonuniform_handles: usage.nonuniform_handles,
+             #[cfg(test)]
+             entry_handles: self.entry_handles.len(),
+             #[cfg(test)]
+             join_handles: self.join_handles.len(),
+             #[cfg(test)]
+-            wave_ops: self.s.flags & flags::WAVE_OPS != 0,
+-            dxil: self.s.finish(),
++            wave_ops: usage.wave_ops,
++            dxil,
+             user_data,
+             samplers: self.samplers,
+         })
+@@ -6538,7 +6542,11 @@ impl<'a> Lower<'a> {
+         (first, props, image, uav, used)
+         };
+         let src = Source::Loaded { load: site, first };
+-        let h = self.handle(site, &src, false, props)?;
++        let h = if image.is_none() {
++            self.buffer_query_handle(site, first, props)?
++        } else {
++            self.handle(site, &src, false, props)?
++        };
+         let c = self.cur;
+         let i32t = self.s.t.i32;
+         let dims = self.s.m.named_struct("dx.types.Dimensions", vec![i32t; 4]);
+@@ -7183,6 +7191,44 @@ impl<'a> Lower<'a> {
+             .max_by_key(|u| u.table_offset_dwords)
+     }
+ 
++    /// A buffer's size query uses its own handle. The Radeon compiler can
++    /// crash when a uniform heap handle serves both GetDimensions and a
++    /// buffer load, including DXC-generated programs. Reading each lane's
++    /// own index keeps the query's handle separate without changing which
++    /// descriptor it addresses. Helper pixels retain their original index:
++    /// wave reads do not include them.
++    fn buffer_query_handle(
++        &mut self,
++        load: Site,
++        first: u8,
++        props: (u32, u32),
++    ) -> Result<V, Why> {
++        let src = Source::Loaded { load, first };
++        let index = self.heap_index(load, first, false)?;
++        let (mut index, mut bounded) = self.raw_twin(&src, index, false, props);
++        let c = self.cur;
++        let i32t = self.s.t.i32;
++        // Apply the same null-slot bound as heap_handle_at before the
++        // identity operation, including when this is not a raw twin.
++        let limit = super::shader::view_heap_limit();
++        if !bounded && limit != 0 {
++            let last = self.s.m.i32(limit);
++            index = self.s.op(c, "binary.i32", Attr::ReadNone, i32t, 40, &[index, last]);
++            self.s.m.tag(index, Tag::Clamp);
++            bounded = true;
++        }
++        self.s.flags |= flags::WAVE_OPS;
++        let lane = self.s.op(c, "waveGetLaneIndex", Attr::ReadOnly, i32t, 111, &[]);
++        let own = self.read_lane(index, lane);
++        let index = if self.s.pixel {
++            let helper = self.helper_lane();
++            self.s.m.select(c, helper, index, own)
++        } else {
++            own
++        };
++        Ok(self.s.heap_handle_at(c, index, false, true, props, bounded))
++    }
++
+     /// A handle for the descriptor `src` read at `site`.
+     fn handle(
+         &mut self,
+diff --git a/crates/victory-shader/src/emit/shader.rs b/crates/victory-shader/src/emit/shader.rs
+index 1f6585f..b9fb730 100644
+--- a/crates/victory-shader/src/emit/shader.rs
++++ b/crates/victory-shader/src/emit/shader.rs
+@@ -522,7 +522,17 @@ impl Shader {
+     }
+ 
+     /// The finished container.
+-    pub fn finish(mut self) -> Vec<u8> {
++    pub fn finish(self) -> Vec<u8> {
++        self.finish_inspected(|_| ()).0
++    }
++
++    /// Test observations of the same cleaned-up module the container writes.
++    #[cfg(test)]
++    pub fn finish_with_usage(self) -> (Vec<u8>, super::bitcode::opt::Usage) {
++        self.finish_inspected(Module::usage)
++    }
++
++    fn finish_inspected<R>(mut self, inspect: impl FnOnce(&Module) -> R) -> (Vec<u8>, R) {
+         if self.pixel {
+             // Reading a per-vertex value with attributeAtVertex needs a
+             // constant input, even when the source declaration was smooth.
+@@ -567,6 +577,7 @@ impl Shader {
+                 }
+             }
+         }
++        let observed = inspect(&self.m);
+         // Unordered views outside pixel and compute programs (memory by
+         // address), as DXC counts them: ranges declared below, not views
+         // picked from the heap (VIctory a1a2077a).
+@@ -949,7 +960,7 @@ impl Shader {
+             parts.push((b"PSG1", &psg1));
+         }
+         parts.extend([(b"PSV0", &psv0[..]), (b"HASH", &hash), (b"DXIL", &dxil)]);
+-        container::build(&parts)
++        (container::build(&parts), observed)
+     }
+ 
+     /// The user-data buffer's annotation carries its size, known only now.
+diff --git a/crates/victory-shader/src/emit/size_tests.rs b/crates/victory-shader/src/emit/size_tests.rs
+index 9c78bf4..713cce0 100644
+--- a/crates/victory-shader/src/emit/size_tests.rs
++++ b/crates/victory-shader/src/emit/size_tests.rs
+@@ -225,6 +225,54 @@ fn the_record_count_of_a_structured_buffer_read_by_index() {
+     }
+ }
+ 
++/// Querying a raw twin must count that view, not the title's original
++/// slot. Both the query and load retain the runtime's twin mapping.
++#[test]
++fn a_table_buffer_query_uses_the_same_raw_twin_as_its_load() {
++    let load = [
++        0x7E06_0280, // v_mov_b32 v3, 0
++        0xE030_2000, // buffer_load_dword v5, v3, s[8:11], 0 idxen
++        0x8002_0503,
++        0x7E0A_0505, // v_readfirstlane_b32 s5, v5
++    ];
++    let words = [TABLE, COUNT, &load, STORE].concat();
++    super::shader::RAW_VIEWS_HERE.set(Some(4));
++    let result = build(&words, (4, 16));
++    super::shader::RAW_VIEWS_HERE.set(None);
++    let shader = result.expect("translates");
++    let (mut title, mut twin, texel) = ([0u32; 12], [0u32; 20], [[0.0; 4]; 1]);
++    title[0] = 77;
++    twin[0] = 99;
++    let raw = |data| View::Buffer { data, stride: Stride::Raw };
++    let other = || View::Texture(1, 1, &texel);
++    let views = [raw(&title), other(), other(), other(), raw(&twin), other(), View::RawUav(2)];
++    for (label, got) in run(&shader, &views) {
++        assert_eq!(got[..2], [5, 99], "{label}");
++    }
++}
++
++/// A UAV can be counted, read and written through the same descriptor.
++/// Its size remains bytes and its query does not alias the load's handle.
++#[test]
++fn a_raw_uav_can_be_queried_and_loaded() {
++    let body = [
++        0x7E04_02FF, // v_mov_b32 v2, 77
++        77,
++        0xE070_0008, // buffer_store_dword v2, off, s[20:23], 0 offset:8
++        0x8005_0200,
++        0xE030_0008, // buffer_load_dword v3, off, s[20:23], 0 offset:8
++        0x8005_0300,
++        0x7E0A_0503, // v_readfirstlane_b32 s5, v3
++        0xBE84_0316, // s_mov_b32 s4, s22 (byte count)
++    ];
++    let shader = build(&[TABLE, &body, STORE].concat(), (8, 0)).expect("translates");
++    let texel = [[0.0; 4]; 1];
++    let views = [View::Texture(1, 1, &texel), View::Texture(1, 1, &texel), View::RawUav(3)];
++    for (label, got) in run(&shader, &views) {
++        assert_eq!(got[..3], [12, 77, 77], "{label}");
++    }
++}
++
+ /// An upscaler counts its groups in a texture with atomics and sets the
+ /// counter back with a store of one channel, 16 bits wide.
+ #[test]
