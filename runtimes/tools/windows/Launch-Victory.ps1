@@ -54,6 +54,9 @@ param(
     [ValidateSet(0, 64, 128, 256, 512, 1024, 2048, 4096)]
     [int]$ShadowWindowKiB = 0,
 
+    [ValidateRange(0, 4096)]
+    [int]$ShadowBarMiB = 0,
+
     [switch]$FreshState,
     [switch]$Test720p,
     [string]$WarpDll,
@@ -122,6 +125,9 @@ if ($MemorySamples -and ($useXcl -or $VictorySource -ne 'amd7900-series-s')) {
 }
 if ($ShadowWindowKiB -and -not $amdFork) {
     throw 'ShadowWindowKiB requires the AMD fork.'
+}
+if ($ShadowBarMiB -and (-not $amdFork -or $Renderer -ne 'hardware')) {
+    throw 'ShadowBarMiB requires an AMD fork hardware run.'
 }
 $repo = if ($useXcl) { Join-Path $local 'upstream-xcl' } else {
     switch ($VictorySource) {
@@ -401,6 +407,7 @@ try {
                 $arguments += @('--env', "VICTORY_WINDOW_KB=$ShadowWindowKiB")
                 if ($ShadowWindowKiB -lt 4096) { $arguments += @('--env', 'VICTORY_WINDOW_TAILS=1') }
             }
+            if ($ShadowBarMiB) { $arguments += @('--env', "VICTORY_WINDOWS_BAR_MB=$ShadowBarMiB") }
             if ($MenuPicture -and $Console -eq 'series-s') {
                 $arguments += @('--env', 'VICTORY_SERIES_S_MENU_PICTURE=1')
                 if ($VictorySource -eq 'amd7900-series-s' -and -not $QueuedSubmit) {
@@ -493,6 +500,7 @@ try {
             diagnosticKeys = if ($DiagnosticKeys) { $DiagnosticKeys } else { $null }
             captureFrames = @($CaptureAt)
             shadowWindowKiB = if ($ShadowWindowKiB) { $ShadowWindowKiB } else { $null }
+            shadowBarMiB = $ShadowBarMiB
             binkXAudio2 = [bool]$MovieAudio
             warpProductVersion = if ($warpModule) { $warpModule.VersionInfo.ProductVersion } else { $null }
             checkout = $checkout

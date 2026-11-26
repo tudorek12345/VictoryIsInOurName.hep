@@ -251,3 +251,29 @@ probe confirmed the notification stop before allocation failure; rapid bursts
 and system-wide paging can still outrun it. The summary records the runtime exit
 before cleanup and distinguishes allocation-at-cap, guard stops and cleanup
 failures. Nineteen summary checks and the runner isolation/guard checks passed.
+
+## 26 November: prepared cache and memory follow-up
+
+All 1,670 recorded-use pipelines completed library preparation in 1,748 seconds,
+without a refusal or compiler-child failure. Peak job commit was 1.70 GiB.
+The private driver cache and host library are installed for the normal launcher.
+This prepares the selected observed pipeline set, not every possible world shader.
+
+Three bounded title tests are recorded in `preparedCacheWorldTests20261126` in
+[the numeric report](tracking/runtime-progress.json). Intro/loading interval
+medians were 30 FPS, but all three stopped at the 22 GiB job notification
+threshold. Correct world rendering and player control remain unverified. The
+first comparison's uppercase `ENTER` requests were ignored by the case-sensitive
+input parser; later requests use its documented format. No input response is
+claimed from a run that stopped before its movement interval.
+
+The heap-ownership adaptation from [cool_fox](docs/COOL_FOX_REVIEW.md) is active
+at `4d081d4`; its source patch and seven focused passing tests are retained.
+Optional mapped-VRAM windows also work on this Radeon (2,028,470,272 bytes were
+recorded), but did not prevent the guard stop, so they remain opt-in.
+No GPU submission lifetime protection was shortened.
+
+[The pagefile audit](docs/pagefile-check-20261126.md) confirms the user's D:
+increase is already active. Its capacity was not the limiting factor; the
+pagefile configuration was left unchanged. The sampler now records per-pagefile
+use and D: latency/queue/throughput for future comparisons.

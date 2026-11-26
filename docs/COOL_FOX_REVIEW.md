@@ -43,8 +43,16 @@ rules remain in place. It does not shorten fence quarantine or change shaders.
 The [adaptation patch](../runtimes/patches/victory-cool-fox-heap-lifetime.patch)
 applies after the validation patch, at `ed6d475`. The affected draw test group
 passed seven tests with one existing ignore, including new ownership-drop and
-range-growth regressions. This is a separate candidate pending title validation,
-not a measured RAM/FPS saving.
+range-growth regressions. Candidate `4d081d4` built successfully and was tested
+on the original package with the prepared Radeon cache. The 22 GiB job guard
+stopped it during loading after about 73 seconds (79.3 seconds including cleanup).
+Eleven FPS intervals ranged from 17.1 to 30.1, median 30. No visible or controllable
+world was verified, and no peak-memory reduction was demonstrated. A separate
+2 GiB mapped-VRAM experiment also reached the guard and remains opt-in.
+
+On 26 November, a repeat GitHub connector request and public Git read both
+returned repository-not-found for `codec-d/cool_fox`. The review is therefore
+bound to the previously retrieved snapshot above, not an asserted current head.
 
 ## Changes not copied wholesale
 

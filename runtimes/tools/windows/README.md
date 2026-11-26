@@ -89,6 +89,13 @@ still validates its translation/driver fingerprint when opening those caches.
 Use `-CommitMiB 6144` for bounded offline preparation. Setting
 `-HostReserveMiB 0` disables only the physical floor, never the commit guard.
 
+`-ShadowBarMiB 2048` is an optional hardware diagnostic for the existing GPU
+upload path. It requires advertised GPU-upload support and leaves the existing
+VRAM-budget check intact. The Radeon creation/map probe passed, but the title
+test still reached the job guard; it is not enabled by default or claimed to
+solve memory pressure. Build the authored, no-dispatch probe with
+`shader-compiler-probe/build-upload-probe.cmd`.
+
 Read a run with:
 
 ```powershell

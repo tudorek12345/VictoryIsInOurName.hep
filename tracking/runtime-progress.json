@@ -3355,5 +3355,1561 @@
         "playerInputResponseVerified": false
       }
     ]
+  },
+  "preparedCacheWorldTests20261126": {
+    "fullPreparation": {
+      "runId": "original-20261125-233731-225a1e50",
+      "checkout": "ed6d4750b33c176523ba55f9c311f7a6d6aebe59",
+      "checkoutDirty": false,
+      "runtimeSha256": "BF70C86B3FAF3847ECA020C23F66A6ACE5175853D52D31DC1A3F015D0E7A7806",
+      "started": "2026-11-25T23:37:32.2195189-08:00",
+      "elapsedSeconds": 1749.05,
+      "exitCode": 0,
+      "renderer": "hardware",
+      "console": "series-x",
+      "prewarmLibrary": true,
+      "prewarmIndices": [
+        null
+      ],
+      "hostPhysicalReserveMiB": 0,
+      "hostCommitReserveMiB": 4096,
+      "jobCommitLimitBytes": 6442450944,
+      "peakJobCommitBytes": 1830125568,
+      "warmCacheFrom": "original-20261125-233720-3803a78f",
+      "pipelineWorkers": null,
+      "textureNoWait": false,
+      "stopReason": "not recorded",
+      "restoredPackagePaths": 151,
+      "precompile": {
+        "requested": true,
+        "known": 83555,
+        "previouslyProcessed": 0,
+        "previouslyBad": 0,
+        "selected": 1670,
+        "processes": 1,
+        "completed": true,
+        "processed": 1670,
+        "refused": 0,
+        "childFailures": 0,
+        "elapsedSeconds": 1748
+      },
+      "pipelineCacheEvents": [
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 40,
+          "loaded": 0,
+          "saved_bytes": 7588
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 12844
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 18100
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 37,
+          "loaded": 3,
+          "saved_bytes": 23502
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 39,
+          "loaded": 1,
+          "saved_bytes": 29196
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 40,
+          "loaded": 0,
+          "saved_bytes": 35036
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 40292
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 38,
+          "loaded": 2,
+          "saved_bytes": 45840
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 40,
+          "loaded": 0,
+          "saved_bytes": 51680
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 39,
+          "loaded": 1,
+          "saved_bytes": 57374
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 40,
+          "loaded": 0,
+          "saved_bytes": 63214
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 68470
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 38,
+          "loaded": 2,
+          "saved_bytes": 74018
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 37,
+          "loaded": 3,
+          "saved_bytes": 79420
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 39,
+          "loaded": 1,
+          "saved_bytes": 85114
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 39,
+          "loaded": 1,
+          "saved_bytes": 90808
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 37,
+          "loaded": 3,
+          "saved_bytes": 96210
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 38,
+          "loaded": 2,
+          "saved_bytes": 101758
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 34,
+          "loaded": 6,
+          "saved_bytes": 106722
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 111978
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 117234
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 40,
+          "loaded": 0,
+          "saved_bytes": 123074
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 38,
+          "loaded": 2,
+          "saved_bytes": 128622
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 133878
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 38,
+          "loaded": 2,
+          "saved_bytes": 139426
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 35,
+          "loaded": 5,
+          "saved_bytes": 144536
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 39,
+          "loaded": 1,
+          "saved_bytes": 150230
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 155486
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 160742
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 165998
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 35,
+          "loaded": 5,
+          "saved_bytes": 171108
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 38,
+          "loaded": 2,
+          "saved_bytes": 176656
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 35,
+          "loaded": 5,
+          "saved_bytes": 181766
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 187022
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 37,
+          "loaded": 3,
+          "saved_bytes": 192424
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 35,
+          "loaded": 5,
+          "saved_bytes": 197534
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 37,
+          "loaded": 3,
+          "saved_bytes": 202936
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 34,
+          "loaded": 6,
+          "saved_bytes": 207900
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 36,
+          "loaded": 4,
+          "saved_bytes": 213156
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 35,
+          "loaded": 5,
+          "saved_bytes": 218266
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 39,
+          "loaded": 1,
+          "saved_bytes": 223960
+        },
+        {
+          "timestamp": null,
+          "event": "offline-checkpoint",
+          "made": 27,
+          "loaded": 3,
+          "saved_bytes": 227902
+        }
+      ],
+      "allSamples": {
+        "count": 0
+      },
+      "jobProcesses": [
+        {
+          "processId": 26372,
+          "sampledPeakPrivateBytes": 65110016,
+          "sampledPeakWorkingSetBytes": 60379136,
+          "lastSample": {
+            "elapsedMs": 1747250,
+            "processId": 26372,
+            "privateBytes": 65040384,
+            "workingSetBytes": 60235776
+          }
+        },
+        {
+          "processId": 12260,
+          "sampledPeakPrivateBytes": 1261568,
+          "sampledPeakWorkingSetBytes": 8056832,
+          "lastSample": {
+            "elapsedMs": 1747250,
+            "processId": 12260,
+            "privateBytes": 1183744,
+            "workingSetBytes": 8011776
+          }
+        },
+        {
+          "processId": 12428,
+          "sampledPeakPrivateBytes": 448831488,
+          "sampledPeakWorkingSetBytes": 425844736,
+          "lastSample": {
+            "elapsedMs": 30594,
+            "processId": 12428,
+            "privateBytes": 448831488,
+            "workingSetBytes": 425844736
+          }
+        },
+        {
+          "processId": 12592,
+          "sampledPeakPrivateBytes": 1528074240,
+          "sampledPeakWorkingSetBytes": 1516208128,
+          "lastSample": {
+            "elapsedMs": 209391,
+            "processId": 12592,
+            "privateBytes": 527749120,
+            "workingSetBytes": 489689088
+          }
+        },
+        {
+          "processId": 18940,
+          "sampledPeakPrivateBytes": 431976448,
+          "sampledPeakWorkingSetBytes": 390094848,
+          "lastSample": {
+            "elapsedMs": 255391,
+            "processId": 18940,
+            "privateBytes": 247926784,
+            "workingSetBytes": 229187584
+          }
+        },
+        {
+          "processId": 18636,
+          "sampledPeakPrivateBytes": 506990592,
+          "sampledPeakWorkingSetBytes": 476712960,
+          "lastSample": {
+            "elapsedMs": 296250,
+            "processId": 18636,
+            "privateBytes": 229978112,
+            "workingSetBytes": 203821056
+          }
+        },
+        {
+          "processId": 10256,
+          "sampledPeakPrivateBytes": 329871360,
+          "sampledPeakWorkingSetBytes": 312131584,
+          "lastSample": {
+            "elapsedMs": 326907,
+            "processId": 10256,
+            "privateBytes": 329871360,
+            "workingSetBytes": 312131584
+          }
+        },
+        {
+          "processId": 29228,
+          "sampledPeakPrivateBytes": 452788224,
+          "sampledPeakWorkingSetBytes": 450912256,
+          "lastSample": {
+            "elapsedMs": 367766,
+            "processId": 29228,
+            "privateBytes": 344051712,
+            "workingSetBytes": 324333568
+          }
+        },
+        {
+          "processId": 29168,
+          "sampledPeakPrivateBytes": 461549568,
+          "sampledPeakWorkingSetBytes": 434528256,
+          "lastSample": {
+            "elapsedMs": 408672,
+            "processId": 29168,
+            "privateBytes": 461549568,
+            "workingSetBytes": 434528256
+          }
+        },
+        {
+          "processId": 1200,
+          "sampledPeakPrivateBytes": 350097408,
+          "sampledPeakWorkingSetBytes": 339484672,
+          "lastSample": {
+            "elapsedMs": 429094,
+            "processId": 1200,
+            "privateBytes": 320663552,
+            "workingSetBytes": 287477760
+          }
+        },
+        {
+          "processId": 19648,
+          "sampledPeakPrivateBytes": 453111808,
+          "sampledPeakWorkingSetBytes": 434933760,
+          "lastSample": {
+            "elapsedMs": 475125,
+            "processId": 19648,
+            "privateBytes": 426467328,
+            "workingSetBytes": 412774400
+          }
+        },
+        {
+          "processId": 29496,
+          "sampledPeakPrivateBytes": 480886784,
+          "sampledPeakWorkingSetBytes": 465924096,
+          "lastSample": {
+            "elapsedMs": 510907,
+            "processId": 29496,
+            "privateBytes": 360603648,
+            "workingSetBytes": 348684288
+          }
+        },
+        {
+          "processId": 9644,
+          "sampledPeakPrivateBytes": 426561536,
+          "sampledPeakWorkingSetBytes": 404389888,
+          "lastSample": {
+            "elapsedMs": 556829,
+            "processId": 9644,
+            "privateBytes": 270106624,
+            "workingSetBytes": 248733696
+          }
+        },
+        {
+          "processId": 27412,
+          "sampledPeakPrivateBytes": 854425600,
+          "sampledPeakWorkingSetBytes": 830902272,
+          "lastSample": {
+            "elapsedMs": 597641,
+            "processId": 27412,
+            "privateBytes": 854425600,
+            "workingSetBytes": 830902272
+          }
+        },
+        {
+          "processId": 4504,
+          "sampledPeakPrivateBytes": 468013056,
+          "sampledPeakWorkingSetBytes": 464252928,
+          "lastSample": {
+            "elapsedMs": 633344,
+            "processId": 4504,
+            "privateBytes": 260419584,
+            "workingSetBytes": 245424128
+          }
+        },
+        {
+          "processId": 20264,
+          "sampledPeakPrivateBytes": 473022464,
+          "sampledPeakWorkingSetBytes": 468099072,
+          "lastSample": {
+            "elapsedMs": 669141,
+            "processId": 20264,
+            "privateBytes": 212496384,
+            "workingSetBytes": 196722688
+          }
+        },
+        {
+          "processId": 11604,
+          "sampledPeakPrivateBytes": 452448256,
+          "sampledPeakWorkingSetBytes": 451411968,
+          "lastSample": {
+            "elapsedMs": 704938,
+            "processId": 11604,
+            "privateBytes": 226426880,
+            "workingSetBytes": 225501184
+          }
+        },
+        {
+          "processId": 27868,
+          "sampledPeakPrivateBytes": 355737600,
+          "sampledPeakWorkingSetBytes": 358350848,
+          "lastSample": {
+            "elapsedMs": 735563,
+            "processId": 27868,
+            "privateBytes": 286846976,
+            "workingSetBytes": 260857856
+          }
+        },
+        {
+          "processId": 17756,
+          "sampledPeakPrivateBytes": 413179904,
+          "sampledPeakWorkingSetBytes": 404377600,
+          "lastSample": {
+            "elapsedMs": 781532,
+            "processId": 17756,
+            "privateBytes": 405139456,
+            "workingSetBytes": 386306048
+          }
+        },
+        {
+          "processId": 10524,
+          "sampledPeakPrivateBytes": 493195264,
+          "sampledPeakWorkingSetBytes": 483123200,
+          "lastSample": {
+            "elapsedMs": 853032,
+            "processId": 10524,
+            "privateBytes": 426557440,
+            "workingSetBytes": 418570240
+          }
+        },
+        {
+          "processId": 8948,
+          "sampledPeakPrivateBytes": 416190464,
+          "sampledPeakWorkingSetBytes": 405962752,
+          "lastSample": {
+            "elapsedMs": 909204,
+            "processId": 8948,
+            "privateBytes": 345792512,
+            "workingSetBytes": 333516800
+          }
+        },
+        {
+          "processId": 7848,
+          "sampledPeakPrivateBytes": 445227008,
+          "sampledPeakWorkingSetBytes": 440741888,
+          "lastSample": {
+            "elapsedMs": 965438,
+            "processId": 7848,
+            "privateBytes": 445227008,
+            "workingSetBytes": 440741888
+          }
+        },
+        {
+          "processId": 30260,
+          "sampledPeakPrivateBytes": 381538304,
+          "sampledPeakWorkingSetBytes": 383774720,
+          "lastSample": {
+            "elapsedMs": 996110,
+            "processId": 30260,
+            "privateBytes": 188538880,
+            "workingSetBytes": 194629632
+          }
+        },
+        {
+          "processId": 17412,
+          "sampledPeakPrivateBytes": 494399488,
+          "sampledPeakWorkingSetBytes": 364462080,
+          "lastSample": {
+            "elapsedMs": 1026766,
+            "processId": 17412,
+            "privateBytes": 126689280,
+            "workingSetBytes": 156884992
+          }
+        },
+        {
+          "processId": 21856,
+          "sampledPeakPrivateBytes": 306429952,
+          "sampledPeakWorkingSetBytes": 306728960,
+          "lastSample": {
+            "elapsedMs": 1047188,
+            "processId": 21856,
+            "privateBytes": 216453120,
+            "workingSetBytes": 201207808
+          }
+        },
+        {
+          "processId": 26316,
+          "sampledPeakPrivateBytes": 534945792,
+          "sampledPeakWorkingSetBytes": 522797056,
+          "lastSample": {
+            "elapsedMs": 1093125,
+            "processId": 26316,
+            "privateBytes": 401166336,
+            "workingSetBytes": 392626176
+          }
+        },
+        {
+          "processId": 27716,
+          "sampledPeakPrivateBytes": 422809600,
+          "sampledPeakWorkingSetBytes": 366264320,
+          "lastSample": {
+            "elapsedMs": 1123797,
+            "processId": 27716,
+            "privateBytes": 375169024,
+            "workingSetBytes": 366264320
+          }
+        },
+        {
+          "processId": 16016,
+          "sampledPeakPrivateBytes": 416231424,
+          "sampledPeakWorkingSetBytes": 406499328,
+          "lastSample": {
+            "elapsedMs": 1159610,
+            "processId": 16016,
+            "privateBytes": 393965568,
+            "workingSetBytes": 386150400
+          }
+        },
+        {
+          "processId": 25236,
+          "sampledPeakPrivateBytes": 513630208,
+          "sampledPeakWorkingSetBytes": 501125120,
+          "lastSample": {
+            "elapsedMs": 1200485,
+            "processId": 25236,
+            "privateBytes": 513630208,
+            "workingSetBytes": 501125120
+          }
+        },
+        {
+          "processId": 25344,
+          "sampledPeakPrivateBytes": 522928128,
+          "sampledPeakWorkingSetBytes": 518234112,
+          "lastSample": {
+            "elapsedMs": 1261797,
+            "processId": 25344,
+            "privateBytes": 522928128,
+            "workingSetBytes": 518234112
+          }
+        },
+        {
+          "processId": 15660,
+          "sampledPeakPrivateBytes": 306794496,
+          "sampledPeakWorkingSetBytes": 310579200,
+          "lastSample": {
+            "elapsedMs": 1282250,
+            "processId": 15660,
+            "privateBytes": 235180032,
+            "workingSetBytes": 244506624
+          }
+        },
+        {
+          "processId": 22168,
+          "sampledPeakPrivateBytes": 439558144,
+          "sampledPeakWorkingSetBytes": 432488448,
+          "lastSample": {
+            "elapsedMs": 1323172,
+            "processId": 22168,
+            "privateBytes": 302723072,
+            "workingSetBytes": 294072320
+          }
+        },
+        {
+          "processId": 13292,
+          "sampledPeakPrivateBytes": 367202304,
+          "sampledPeakWorkingSetBytes": 360251392,
+          "lastSample": {
+            "elapsedMs": 1353829,
+            "processId": 13292,
+            "privateBytes": 367202304,
+            "workingSetBytes": 360251392
+          }
+        },
+        {
+          "processId": 12692,
+          "sampledPeakPrivateBytes": 462811136,
+          "sampledPeakWorkingSetBytes": 456990720,
+          "lastSample": {
+            "elapsedMs": 1415219,
+            "processId": 12692,
+            "privateBytes": 448589824,
+            "workingSetBytes": 447451136
+          }
+        },
+        {
+          "processId": 20732,
+          "sampledPeakPrivateBytes": 377171968,
+          "sampledPeakWorkingSetBytes": 372011008,
+          "lastSample": {
+            "elapsedMs": 1445813,
+            "processId": 20732,
+            "privateBytes": 248299520,
+            "workingSetBytes": 242376704
+          }
+        },
+        {
+          "processId": 30444,
+          "sampledPeakPrivateBytes": 464240640,
+          "sampledPeakWorkingSetBytes": 454746112,
+          "lastSample": {
+            "elapsedMs": 1496938,
+            "processId": 30444,
+            "privateBytes": 275677184,
+            "workingSetBytes": 257683456
+          }
+        },
+        {
+          "processId": 22352,
+          "sampledPeakPrivateBytes": 402100224,
+          "sampledPeakWorkingSetBytes": 392179712,
+          "lastSample": {
+            "elapsedMs": 1522485,
+            "processId": 22352,
+            "privateBytes": 241487872,
+            "workingSetBytes": 231063552
+          }
+        },
+        {
+          "processId": 26360,
+          "sampledPeakPrivateBytes": 451616768,
+          "sampledPeakWorkingSetBytes": 459644928,
+          "lastSample": {
+            "elapsedMs": 1568469,
+            "processId": 26360,
+            "privateBytes": 444010496,
+            "workingSetBytes": 441679872
+          }
+        },
+        {
+          "processId": 10056,
+          "sampledPeakPrivateBytes": 465657856,
+          "sampledPeakWorkingSetBytes": 465158144,
+          "lastSample": {
+            "elapsedMs": 1604219,
+            "processId": 10056,
+            "privateBytes": 465657856,
+            "workingSetBytes": 465158144
+          }
+        },
+        {
+          "processId": 9160,
+          "sampledPeakPrivateBytes": 399720448,
+          "sampledPeakWorkingSetBytes": 405803008,
+          "lastSample": {
+            "elapsedMs": 1639969,
+            "processId": 9160,
+            "privateBytes": 333832192,
+            "workingSetBytes": 323596288
+          }
+        },
+        {
+          "processId": 11860,
+          "sampledPeakPrivateBytes": 658010112,
+          "sampledPeakWorkingSetBytes": 623931392,
+          "lastSample": {
+            "elapsedMs": 1680829,
+            "processId": 11860,
+            "privateBytes": 460726272,
+            "workingSetBytes": 457584640
+          }
+        },
+        {
+          "processId": 28036,
+          "sampledPeakPrivateBytes": 324624384,
+          "sampledPeakWorkingSetBytes": 332554240,
+          "lastSample": {
+            "elapsedMs": 1701204,
+            "processId": 28036,
+            "privateBytes": 307499008,
+            "workingSetBytes": 295137280
+          }
+        },
+        {
+          "processId": 17472,
+          "sampledPeakPrivateBytes": 338956288,
+          "sampledPeakWorkingSetBytes": 345116672,
+          "lastSample": {
+            "elapsedMs": 1716532,
+            "processId": 17472,
+            "privateBytes": 178913280,
+            "workingSetBytes": 187531264
+          }
+        },
+        {
+          "processId": 22476,
+          "sampledPeakPrivateBytes": 475881472,
+          "sampledPeakWorkingSetBytes": 470003712,
+          "lastSample": {
+            "elapsedMs": 1747250,
+            "processId": 22476,
+            "privateBytes": 475881472,
+            "workingSetBytes": 470003712
+          }
+        }
+      ],
+      "availablePhysicalBytesAtStop": null,
+      "allocationFailureMessages": 0,
+      "deviceRemovalMessages": 0,
+      "directPipelineMeasurements": [],
+      "visibleGameplayVerified": false,
+      "playerInputResponseVerified": false
+    },
+    "runs": [
+      {
+        "runId": "original-20261126-000913-c8d2c402",
+        "checkout": "ed6d4750b33c176523ba55f9c311f7a6d6aebe59",
+        "checkoutDirty": false,
+        "runtimeSha256": "BF70C86B3FAF3847ECA020C23F66A6ACE5175853D52D31DC1A3F015D0E7A7806",
+        "started": "2026-11-26T00:09:15.3201233-08:00",
+        "elapsedSeconds": 79.72,
+        "exitCode": 126,
+        "renderer": "hardware",
+        "console": "series-x",
+        "prewarmLibrary": false,
+        "prewarmIndices": [
+          null
+        ],
+        "hostPhysicalReserveMiB": 0,
+        "hostCommitReserveMiB": 4096,
+        "jobCommitLimitBytes": 23622320128,
+        "peakJobCommitBytes": 23275462656,
+        "warmCacheFrom": "original-20261125-233731-225a1e50",
+        "pipelineWorkers": 1,
+        "textureNoWait": true,
+        "stopReason": "job commit reserve",
+        "restoredPackagePaths": 151,
+        "precompile": {
+          "requested": false,
+          "known": null,
+          "previouslyProcessed": null,
+          "previouslyBad": null,
+          "selected": null,
+          "processes": null,
+          "completed": false,
+          "processed": null,
+          "refused": null,
+          "childFailures": null,
+          "elapsedSeconds": null
+        },
+        "pipelineCacheEvents": [
+          {
+            "timestamp": "2026-11-26T08:09:17.649055Z",
+            "event": "loaded",
+            "bytes": 227902
+          },
+          {
+            "timestamp": "2026-11-26T08:09:37.916094Z",
+            "event": "saved",
+            "bytes": 0,
+            "early": 1670,
+            "made": 0,
+            "loaded": 1041,
+            "started_early": 1309
+          }
+        ],
+        "allSamples": {
+          "count": 12,
+          "firstTimestamp": "2026-11-26T08:09:23.481556Z",
+          "lastTimestamp": "2026-11-26T08:10:20.557765Z",
+          "fps": {
+            "count": 12,
+            "minimum": 7.4,
+            "median": 30,
+            "maximum": 30
+          },
+          "frameMs": {
+            "count": 12,
+            "minimum": 33.3,
+            "median": 33.3,
+            "maximum": 136
+          },
+          "prepareMs": {
+            "count": 12,
+            "minimum": 0.4,
+            "median": 0.8,
+            "maximum": 23.3
+          },
+          "copyMs": {
+            "count": 12,
+            "minimum": 0.1,
+            "median": 0.1,
+            "maximum": 1.7
+          },
+          "textureMs": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0.4,
+            "maximum": 9.1
+          },
+          "gpuMs": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "readbackMs": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0.6
+          },
+          "drawsPerFrame": {
+            "count": 12,
+            "minimum": 3,
+            "median": 6,
+            "maximum": 46
+          },
+          "droppedWithoutPipeline": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "pipelinesBeingMade": {
+            "count": 12,
+            "minimum": 0,
+            "median": 89,
+            "maximum": 791
+          },
+          "droppedIndirect": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          }
+        },
+        "jobProcesses": [
+          {
+            "processId": 19232,
+            "sampledPeakPrivateBytes": 23240802304,
+            "sampledPeakWorkingSetBytes": 18928553984,
+            "lastSample": {
+              "elapsedMs": 73969,
+              "processId": 19232,
+              "privateBytes": 23240802304,
+              "workingSetBytes": 18928553984
+            }
+          },
+          {
+            "processId": 24864,
+            "sampledPeakPrivateBytes": 1216512,
+            "sampledPeakWorkingSetBytes": 7950336,
+            "lastSample": {
+              "elapsedMs": 73969,
+              "processId": 24864,
+              "privateBytes": 1179648,
+              "workingSetBytes": 7929856
+            }
+          },
+          {
+            "processId": 16124,
+            "sampledPeakPrivateBytes": 10301440,
+            "sampledPeakWorkingSetBytes": 15777792,
+            "lastSample": {
+              "elapsedMs": 73969,
+              "processId": 16124,
+              "privateBytes": 10268672,
+              "workingSetBytes": 15757312
+            }
+          }
+        ],
+        "availablePhysicalBytesAtStop": null,
+        "allocationFailureMessages": 0,
+        "deviceRemovalMessages": 0,
+        "directPipelineMeasurements": [],
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false,
+        "builtRuntimeFrom": "original-20261125-233731-225a1e50",
+        "shadowWindowKiB": 256,
+        "shadowBarMiB": null,
+        "jobCommitReserveMiB": 512,
+        "runtimeResultBeforeCleanup": 126,
+        "cleanupFailure": false,
+        "allocationFailureAtJobLimit": false,
+        "jobCommitBytesAtStop": 23252250624,
+        "jobStopThresholdBytes": 23085449216,
+        "timedMemory": {
+          "count": 67,
+          "sampledPeakPrivateBytes": 22165262336,
+          "lastSample": {
+            "timestamp": "2026-11-26T08:10:29.523743Z",
+            "elapsed_ms": 66042,
+            "frame": 1743,
+            "private_bytes": 22165262336,
+            "working_set_bytes": 17458397184,
+            "physical_free_bytes": 2291847168,
+            "commit_free_bytes": 13300494336,
+            "rust_bytes": 1374649172,
+            "host_lists": 1013,
+            "list_scratch_bytes": 215744512,
+            "list_spare_bytes": 0,
+            "list_upload_bytes": 17557856,
+            "host_texture_count": 26751,
+            "host_texture_bytes": 5557256192,
+            "shadow_count": 9101,
+            "shadow_bytes": 4039748978,
+            "shadow_card_bytes": 886571008,
+            "shadow_before_bytes": 44576,
+            "shadow_window_card_bytes": 84082688,
+            "shadow_window_mapped_card_bytes": 0,
+            "staging_count": 957,
+            "staging_bytes": 172738570,
+            "texture_pool_bytes": 3489660928,
+            "staging_pool_bytes": 603979776,
+            "shader_container_bytes": 197812392,
+            "translated_shader_bytes": 125520562,
+            "pipeline_library_bytes": 227902,
+            "made_upload_count": 275,
+            "made_upload_bytes": 1731203216,
+            "made_shared_count": 9258,
+            "made_shared_bytes": 4265072128,
+            "made_card_count": 542,
+            "made_card_bytes": 1261030656
+          },
+          "interpretation": "Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks."
+        },
+        "hostMemory": {
+          "samples": 11,
+          "minimumAvailablePhysicalBytes": 2168455168,
+          "minimumAvailableCommitBytes": 13550665728,
+          "maximumPageReadsPerSecond": 6895,
+          "interpretation": "System totals, sampled approximately every five to six seconds, including cleanup; hard faults are not necessarily pagefile I/O."
+        },
+        "audio": {
+          "measuredSeconds": 45.0,
+          "sampleRateHz": 48000,
+          "channels": 2,
+          "pcmPeak": 9798,
+          "pcmRms": 996.5152830746696,
+          "channelPeaks": [
+            9798,
+            9715
+          ],
+          "speakerOutputVerified": false,
+          "gameplayAudioVerified": false
+        },
+        "captureObservation": "External window capture near 56 seconds shows a dark loading/background screen and a 30 FPS caption. No visible world.",
+        "inputLimitation": "The case-sensitive diagnostic parser ignored uppercase ENTER and W_UP/D_UP. W/D were brief presses scheduled after the guard stop, so this run provides no input-response evidence."
+      },
+      {
+        "runId": "original-20261126-001501-5fc759d7",
+        "checkout": "4d081d4ac0376449b23a65564ca9586531de1776",
+        "checkoutDirty": false,
+        "runtimeSha256": "5F9171CA087DEE153E5AD44293A534EE2200156FDB09A8E55968F778518E1E8E",
+        "started": "2026-11-26T00:15:01.5766700-08:00",
+        "elapsedSeconds": 79.3,
+        "exitCode": 126,
+        "renderer": "hardware",
+        "console": "series-x",
+        "prewarmLibrary": false,
+        "prewarmIndices": [
+          null
+        ],
+        "hostPhysicalReserveMiB": 0,
+        "hostCommitReserveMiB": 4096,
+        "jobCommitLimitBytes": 23622320128,
+        "peakJobCommitBytes": 23233544192,
+        "warmCacheFrom": null,
+        "pipelineWorkers": 1,
+        "textureNoWait": true,
+        "stopReason": "job commit reserve",
+        "restoredPackagePaths": 151,
+        "precompile": {
+          "requested": false,
+          "known": null,
+          "previouslyProcessed": null,
+          "previouslyBad": null,
+          "selected": null,
+          "processes": null,
+          "completed": false,
+          "processed": null,
+          "refused": null,
+          "childFailures": null,
+          "elapsedSeconds": null
+        },
+        "pipelineCacheEvents": [
+          {
+            "timestamp": "2026-11-26T08:15:04.036853Z",
+            "event": "loaded",
+            "bytes": 227902
+          },
+          {
+            "timestamp": "2026-11-26T08:15:24.044751Z",
+            "event": "saved",
+            "bytes": 0,
+            "early": 1670,
+            "made": 0,
+            "loaded": 1076,
+            "started_early": 1309
+          }
+        ],
+        "allSamples": {
+          "count": 11,
+          "firstTimestamp": "2026-11-26T08:15:09.947420Z",
+          "lastTimestamp": "2026-11-26T08:16:01.994915Z",
+          "fps": {
+            "count": 11,
+            "minimum": 17.1,
+            "median": 30,
+            "maximum": 30.1
+          },
+          "frameMs": {
+            "count": 11,
+            "minimum": 33.2,
+            "median": 33.3,
+            "maximum": 58.5
+          },
+          "prepareMs": {
+            "count": 11,
+            "minimum": 0.4,
+            "median": 0.8,
+            "maximum": 7.4
+          },
+          "copyMs": {
+            "count": 11,
+            "minimum": 0.1,
+            "median": 0.1,
+            "maximum": 1
+          },
+          "textureMs": {
+            "count": 11,
+            "minimum": 0,
+            "median": 0.3,
+            "maximum": 3.8
+          },
+          "gpuMs": {
+            "count": 11,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "readbackMs": {
+            "count": 11,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0.1
+          },
+          "drawsPerFrame": {
+            "count": 11,
+            "minimum": 3,
+            "median": 6,
+            "maximum": 46
+          },
+          "droppedWithoutPipeline": {
+            "count": 11,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "pipelinesBeingMade": {
+            "count": 11,
+            "minimum": 0,
+            "median": 89,
+            "maximum": 733
+          },
+          "droppedIndirect": {
+            "count": 11,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          }
+        },
+        "jobProcesses": [
+          {
+            "processId": 22704,
+            "sampledPeakPrivateBytes": 23222054912,
+            "sampledPeakWorkingSetBytes": 18393362432,
+            "lastSample": {
+              "elapsedMs": 72531,
+              "processId": 22704,
+              "privateBytes": 23222054912,
+              "workingSetBytes": 18393362432
+            }
+          },
+          {
+            "processId": 9944,
+            "sampledPeakPrivateBytes": 1224704,
+            "sampledPeakWorkingSetBytes": 7954432,
+            "lastSample": {
+              "elapsedMs": 72531,
+              "processId": 9944,
+              "privateBytes": 1187840,
+              "workingSetBytes": 7938048
+            }
+          },
+          {
+            "processId": 12260,
+            "sampledPeakPrivateBytes": 10301440,
+            "sampledPeakWorkingSetBytes": 15708160,
+            "lastSample": {
+              "elapsedMs": 72531,
+              "processId": 12260,
+              "privateBytes": 10272768,
+              "workingSetBytes": 15691776
+            }
+          }
+        ],
+        "availablePhysicalBytesAtStop": null,
+        "allocationFailureMessages": 0,
+        "deviceRemovalMessages": 0,
+        "directPipelineMeasurements": [],
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false,
+        "builtRuntimeFrom": null,
+        "shadowWindowKiB": 256,
+        "shadowBarMiB": null,
+        "jobCommitReserveMiB": 512,
+        "runtimeResultBeforeCleanup": 126,
+        "cleanupFailure": false,
+        "allocationFailureAtJobLimit": false,
+        "jobCommitBytesAtStop": 23233515520,
+        "jobStopThresholdBytes": 23085449216,
+        "timedMemory": {
+          "count": 66,
+          "sampledPeakPrivateBytes": 23222054912,
+          "lastSample": {
+            "timestamp": "2026-11-26T08:16:14.976506Z",
+            "elapsed_ms": 65028,
+            "frame": 1666,
+            "private_bytes": 23222054912,
+            "working_set_bytes": 18231881728,
+            "physical_free_bytes": 3091480576,
+            "commit_free_bytes": 13367877632,
+            "rust_bytes": 1394377507,
+            "host_lists": 980,
+            "list_scratch_bytes": 216793088,
+            "list_spare_bytes": 0,
+            "list_upload_bytes": 17557856,
+            "host_texture_count": 27622,
+            "host_texture_bytes": 5561319424,
+            "shadow_count": 8933,
+            "shadow_bytes": 3913655690,
+            "shadow_card_bytes": 886571008,
+            "shadow_before_bytes": 0,
+            "shadow_window_card_bytes": 84082688,
+            "shadow_window_mapped_card_bytes": 0,
+            "staging_count": 7421,
+            "staging_bytes": 770900949,
+            "texture_pool_bytes": 3489660928,
+            "staging_pool_bytes": 1073741824,
+            "shader_container_bytes": 197812392,
+            "translated_shader_bytes": 125252794,
+            "pipeline_library_bytes": 227902,
+            "made_upload_count": 261,
+            "made_upload_bytes": 2868374112,
+            "made_shared_count": 9077,
+            "made_shared_bytes": 4121676288,
+            "made_card_count": 524,
+            "made_card_bytes": 1260590048
+          },
+          "interpretation": "Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks."
+        },
+        "hostMemory": {
+          "samples": 11,
+          "minimumAvailablePhysicalBytes": 3276800000,
+          "minimumAvailableCommitBytes": 15085604864,
+          "maximumPageReadsPerSecond": 15043,
+          "interpretation": "System totals, sampled approximately every five to six seconds, including cleanup; hard faults are not necessarily pagefile I/O."
+        },
+        "audio": {
+          "measuredSeconds": 45.0,
+          "sampleRateHz": 48000,
+          "channels": 2,
+          "pcmPeak": 9798,
+          "pcmRms": 996.5040164920171,
+          "channelPeaks": [
+            9798,
+            9715
+          ],
+          "speakerOutputVerified": false,
+          "gameplayAudioVerified": false
+        },
+        "captureObservation": "No world capture obtained before the guard stop. Correctly formatted movement intervals were scheduled after termination."
+      },
+      {
+        "runId": "original-20261126-002022-c39595b5",
+        "checkout": "4d081d4ac0376449b23a65564ca9586531de1776",
+        "checkoutDirty": false,
+        "runtimeSha256": "5F9171CA087DEE153E5AD44293A534EE2200156FDB09A8E55968F778518E1E8E",
+        "started": "2026-11-26T00:20:22.8380953-08:00",
+        "elapsedSeconds": 67.49,
+        "exitCode": 126,
+        "renderer": "hardware",
+        "console": "series-x",
+        "prewarmLibrary": false,
+        "prewarmIndices": [
+          null
+        ],
+        "hostPhysicalReserveMiB": 0,
+        "hostCommitReserveMiB": 4096,
+        "jobCommitLimitBytes": 23622320128,
+        "peakJobCommitBytes": 23190355968,
+        "warmCacheFrom": null,
+        "pipelineWorkers": 1,
+        "textureNoWait": true,
+        "stopReason": "job commit reserve",
+        "restoredPackagePaths": 151,
+        "precompile": {
+          "requested": false,
+          "known": null,
+          "previouslyProcessed": null,
+          "previouslyBad": null,
+          "selected": null,
+          "processes": null,
+          "completed": false,
+          "processed": null,
+          "refused": null,
+          "childFailures": null,
+          "elapsedSeconds": null
+        },
+        "pipelineCacheEvents": [
+          {
+            "timestamp": "2026-11-26T08:20:24.944003Z",
+            "event": "loaded",
+            "bytes": 227902
+          },
+          {
+            "timestamp": "2026-11-26T08:20:50.106530Z",
+            "event": "saved",
+            "bytes": 228048,
+            "early": 1671,
+            "made": 1,
+            "loaded": 1309,
+            "started_early": 1309
+          }
+        ],
+        "allSamples": {
+          "count": 10,
+          "firstTimestamp": "2026-11-26T08:20:30.915557Z",
+          "lastTimestamp": "2026-11-26T08:21:22.746462Z",
+          "fps": {
+            "count": 10,
+            "minimum": 2.3,
+            "median": 30,
+            "maximum": 30.1
+          },
+          "frameMs": {
+            "count": 10,
+            "minimum": 33.2,
+            "median": 33.4,
+            "maximum": 430.4
+          },
+          "prepareMs": {
+            "count": 10,
+            "minimum": 0.6,
+            "median": 3.3499999999999996,
+            "maximum": 81
+          },
+          "copyMs": {
+            "count": 10,
+            "minimum": 0.1,
+            "median": 0.1,
+            "maximum": 31.2
+          },
+          "textureMs": {
+            "count": 10,
+            "minimum": 0,
+            "median": 0.95,
+            "maximum": 3.5
+          },
+          "gpuMs": {
+            "count": 10,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 6.3
+          },
+          "readbackMs": {
+            "count": 10,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 2.6
+          },
+          "drawsPerFrame": {
+            "count": 10,
+            "minimum": 3,
+            "median": 10.5,
+            "maximum": 600
+          },
+          "droppedWithoutPipeline": {
+            "count": 10,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 282
+          },
+          "pipelinesBeingMade": {
+            "count": 10,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 87
+          },
+          "droppedIndirect": {
+            "count": 10,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 1
+          }
+        },
+        "jobProcesses": [
+          {
+            "processId": 20708,
+            "sampledPeakPrivateBytes": 23178833920,
+            "sampledPeakWorkingSetBytes": 17056223232,
+            "lastSample": {
+              "elapsedMs": 60812,
+              "processId": 20708,
+              "privateBytes": 23178833920,
+              "workingSetBytes": 17056223232
+            }
+          },
+          {
+            "processId": 1828,
+            "sampledPeakPrivateBytes": 1224704,
+            "sampledPeakWorkingSetBytes": 7979008,
+            "lastSample": {
+              "elapsedMs": 60812,
+              "processId": 1828,
+              "privateBytes": 1187840,
+              "workingSetBytes": 7958528
+            }
+          },
+          {
+            "processId": 29836,
+            "sampledPeakPrivateBytes": 10309632,
+            "sampledPeakWorkingSetBytes": 15712256,
+            "lastSample": {
+              "elapsedMs": 60812,
+              "processId": 29836,
+              "privateBytes": 10276864,
+              "workingSetBytes": 15691776
+            }
+          }
+        ],
+        "availablePhysicalBytesAtStop": null,
+        "allocationFailureMessages": 0,
+        "deviceRemovalMessages": 0,
+        "directPipelineMeasurements": [],
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false,
+        "builtRuntimeFrom": null,
+        "shadowWindowKiB": 256,
+        "shadowBarMiB": 2048,
+        "jobCommitReserveMiB": 512,
+        "runtimeResultBeforeCleanup": 126,
+        "cleanupFailure": false,
+        "allocationFailureAtJobLimit": false,
+        "jobCommitBytesAtStop": 23190298624,
+        "jobStopThresholdBytes": 23085449216,
+        "timedMemory": {
+          "count": 54,
+          "sampledPeakPrivateBytes": 22731776000,
+          "lastSample": {
+            "timestamp": "2026-11-26T08:21:23.941497Z",
+            "elapsed_ms": 53025,
+            "frame": 1342,
+            "private_bytes": 22715985920,
+            "working_set_bytes": 16659595264,
+            "physical_free_bytes": 3341160448,
+            "commit_free_bytes": 16102600704,
+            "rust_bytes": 1431206496,
+            "host_lists": 1244,
+            "list_scratch_bytes": 277086208,
+            "list_spare_bytes": 158597120,
+            "list_upload_bytes": 306176,
+            "host_texture_count": 25141,
+            "host_texture_bytes": 5438373888,
+            "shadow_count": 9197,
+            "shadow_bytes": 4050819714,
+            "shadow_card_bytes": 886571008,
+            "shadow_before_bytes": 173968,
+            "shadow_window_card_bytes": 84082688,
+            "shadow_window_mapped_card_bytes": 2028470272,
+            "staging_count": 130,
+            "staging_bytes": 54475330,
+            "texture_pool_bytes": 3489660928,
+            "staging_pool_bytes": 469762048,
+            "shader_container_bytes": 197809200,
+            "translated_shader_bytes": 125307951,
+            "pipeline_library_bytes": 227902,
+            "made_upload_count": 346,
+            "made_upload_bytes": 2601970784,
+            "made_shared_count": 5886,
+            "made_shared_bytes": 2295616256,
+            "made_card_count": 4662,
+            "made_card_bytes": 3313976176
+          },
+          "interpretation": "Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks."
+        },
+        "hostMemory": {
+          "samples": 11,
+          "minimumAvailablePhysicalBytes": 2225078272,
+          "minimumAvailableCommitBytes": 16035340288,
+          "maximumPageReadsPerSecond": 1498,
+          "interpretation": "System totals, sampled approximately every five to six seconds, including cleanup; hard faults are not necessarily pagefile I/O."
+        },
+        "audio": {
+          "measuredSeconds": 45.0,
+          "sampleRateHz": 48000,
+          "channels": 2,
+          "pcmPeak": 9798,
+          "pcmRms": 1029.9783088361214,
+          "channelPeaks": [
+            9798,
+            9715
+          ],
+          "speakerOutputVerified": false,
+          "gameplayAudioVerified": false
+        },
+        "captureObservation": "External window capture near 55 seconds shows black content with a 24 FPS caption. No visible gameplay."
+      }
+    ],
+    "coolFoxCandidate": "4d081d4ac0376449b23a65564ca9586531de1776",
+    "coolFoxSourceSnapshot": "f4b48ad766ddbec1a1867022cd42f7645b0dd55e",
+    "coolFoxRemoteRecheck": "GitHub connector and git ls-remote returned repository not found on 26 November; only the previously retrieved snapshot was evaluated.",
+    "gpuUploadProbe": {
+      "adapter": "AMD Radeon RX 9060 XT",
+      "options16Supported": true,
+      "readOnlyAndUavCreateMapPassed": true,
+      "bufferBytes": 4194304,
+      "gpuCommandsExecuted": false
+    },
+    "interpretation": [
+      "All 1670 selected PSOs completed offline with no refusal or child failure; this is the recorded-use set, not every possible gameplay pipeline.",
+      "Three bounded title runs reached the job notification threshold before the four-minute timer; each restored 151 package access paths.",
+      "Median interval FPS is not sustained gameplay FPS; phase timing and profile/cache state differ between runs.",
+      "The heap-lifetime adaptation and optional 2 GiB mapped-VRAM experiment did not demonstrate a lower peak commit or playable world.",
+      "Mapped-VRAM buffers remain opt-in; no change was made to the pagefile, Windows watchdog or GPU retirement lifetime.",
+      "The original package remains unchanged. Raw logs, audio, captures, pipeline books and generated shaders stay local."
+    ]
   }
 }
