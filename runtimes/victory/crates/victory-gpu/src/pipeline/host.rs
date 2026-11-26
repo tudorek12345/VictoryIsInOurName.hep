@@ -93,7 +93,60 @@ impl Default for GraphicsState {
     }
 }
 
+fn is_integer_target(format: DXGI_FORMAT) -> bool {
+    matches!(
+        format,
+        DXGI_FORMAT_R32G32B32A32_UINT
+            | DXGI_FORMAT_R32G32B32A32_SINT
+            | DXGI_FORMAT_R32G32B32_UINT
+            | DXGI_FORMAT_R32G32B32_SINT
+            | DXGI_FORMAT_R16G16B16A16_UINT
+            | DXGI_FORMAT_R16G16B16A16_SINT
+            | DXGI_FORMAT_R32G32_UINT
+            | DXGI_FORMAT_R32G32_SINT
+            | DXGI_FORMAT_R10G10B10A2_UINT
+            | DXGI_FORMAT_R8G8B8A8_UINT
+            | DXGI_FORMAT_R8G8B8A8_SINT
+            | DXGI_FORMAT_R16G16_UINT
+            | DXGI_FORMAT_R16G16_SINT
+            | DXGI_FORMAT_R32_UINT
+            | DXGI_FORMAT_R32_SINT
+            | DXGI_FORMAT_R8G8_UINT
+            | DXGI_FORMAT_R8G8_SINT
+            | DXGI_FORMAT_R16_UINT
+            | DXGI_FORMAT_R16_SINT
+            | DXGI_FORMAT_R8_UINT
+            | DXGI_FORMAT_R8_SINT
+    )
+}
+
 impl GraphicsState {
+    /// The console ignores blending on integer render targets. D3D12 rejects
+    /// an enabled blend on those formats, so normalize the fully read stream.
+    pub(crate) fn disable_integer_target_blending(&mut self) -> bool {
+        let count = self.targets.NumRenderTargets as usize;
+        let formats = &self.targets.RTFormats[..count.min(self.targets.RTFormats.len())];
+        let independent = self.blend.IndependentBlendEnable.as_bool();
+        if !formats.iter().enumerate().any(|(index, &format)| {
+            let slot = if independent { index } else { 0 };
+            is_integer_target(format) && self.blend.RenderTarget[slot].BlendEnable.as_bool()
+        }) {
+            return false;
+        }
+        if !independent {
+            // Give every target the original shared state before changing any.
+            let shared = self.blend.RenderTarget[0];
+            self.blend.RenderTarget.fill(shared);
+            self.blend.IndependentBlendEnable = true.into();
+        }
+        for (&format, blend) in formats.iter().zip(&mut self.blend.RenderTarget) {
+            if is_integer_target(format) {
+                blend.BlendEnable = false.into();
+            }
+        }
+        true
+    }
+
     /// Takes in one subobject of a stream: its type, then its data at +4
     /// (+8 for those holding pointers).
     ///
@@ -747,5 +800,50 @@ fn root_signature(
         let bytes =
             std::slice::from_raw_parts(blob.GetBufferPointer().cast::<u8>(), blob.GetBufferSize());
         Ok((device.CreateRootSignature(0, bytes)?, bytes.to_vec()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integer_targets_disable_blending() {
+        let mut g = GraphicsState::default();
+        g.targets.NumRenderTargets = 3;
+        g.targets.RTFormats[..3].copy_from_slice(&[
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            DXGI_FORMAT_R8_UINT,
+        ]);
+
+        let unblended = g.blend;
+        assert!(!g.disable_integer_target_blending());
+        assert_eq!(g.blend, unblended);
+
+        let shared = &mut g.blend.RenderTarget[0];
+        shared.BlendEnable = true.into();
+        shared.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        let shared = *shared;
+        assert!(g.disable_integer_target_blending());
+        assert!(g.blend.IndependentBlendEnable.as_bool());
+        assert_eq!(g.blend.RenderTarget[0], shared);
+        assert_eq!(g.blend.RenderTarget[1], shared);
+        assert_eq!(
+            g.blend.RenderTarget[2],
+            D3D12_RENDER_TARGET_BLEND_DESC {
+                BlendEnable: false.into(),
+                ..shared
+            }
+        );
+        assert!(!g.disable_integer_target_blending());
+
+        g.targets.NumRenderTargets = 2;
+        g.targets.RTFormats[1] = DXGI_FORMAT_R32_SINT;
+        g.blend.RenderTarget[2] = shared;
+        assert!(g.disable_integer_target_blending());
+        assert_eq!(g.blend.RenderTarget[0], shared);
+        assert!(!g.blend.RenderTarget[1].BlendEnable.as_bool());
+        assert_eq!(g.blend.RenderTarget[2], shared);
     }
 }

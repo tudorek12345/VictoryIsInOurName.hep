@@ -455,6 +455,11 @@ pub(crate) extern "system" fn create_stream(
         };
         at += size;
     }
+    #[cfg(windows)]
+    if graphics.disable_integer_target_blending() {
+        static REPORTED: std::sync::Once = std::sync::Once::new();
+        REPORTED.call_once(|| tracing::info!("host blend disabled for integer render targets"));
+    }
     hand_out(
         shaders,
         #[cfg(windows)]
