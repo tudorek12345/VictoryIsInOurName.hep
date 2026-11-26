@@ -5136,5 +5136,408 @@
       "drawIgnored": 1
     },
     "optimizedBuildPassed": true
+  },
+  "lightDredTypedWorld20261126": {
+    "run": {
+      "runId": "original-20261126-010757-50007ff0",
+      "checkout": "6e11a9abc1060c1c1fbfb6f5546eeb5c6d4114cb",
+      "checkoutDirty": false,
+      "runtimeSha256": "728B3D31470DE3C5ED5B0FC8D3E3D075F1D4AA493E06DB8378A26FD35ECD4EDF",
+      "started": "2026-11-26T01:07:57.2618584-08:00",
+      "elapsedSeconds": 75.97,
+      "exitCode": 125,
+      "renderer": "hardware",
+      "console": "series-x",
+      "prewarmLibrary": false,
+      "prewarmIndices": [
+        null
+      ],
+      "hostPhysicalReserveMiB": 0,
+      "hostCommitReserveMiB": 4096,
+      "jobCommitLimitBytes": 23622320128,
+      "peakJobCommitBytes": 23150866432,
+      "warmCacheFrom": null,
+      "pipelineWorkers": 1,
+      "textureNoWait": true,
+      "stopReason": "job commit reserve",
+      "restoredPackagePaths": 151,
+      "precompile": {
+        "requested": false,
+        "known": null,
+        "previouslyProcessed": null,
+        "previouslyBad": null,
+        "selected": null,
+        "processes": null,
+        "completed": false,
+        "processed": null,
+        "refused": null,
+        "childFailures": null,
+        "elapsedSeconds": null
+      },
+      "pipelineCacheEvents": [
+        {
+          "timestamp": "2026-11-26T09:07:59.134275Z",
+          "event": "loaded",
+          "bytes": 228048
+        }
+      ],
+      "allSamples": {
+        "count": 12,
+        "firstTimestamp": "2026-11-26T09:08:04.981741Z",
+        "lastTimestamp": "2026-11-26T09:09:06.776091Z",
+        "fps": {
+          "count": 12,
+          "minimum": 0.8,
+          "median": 30,
+          "maximum": 31.3
+        },
+        "frameMs": {
+          "count": 12,
+          "minimum": 31.9,
+          "median": 33.349999999999994,
+          "maximum": 1258.4
+        },
+        "prepareMs": {
+          "count": 12,
+          "minimum": 0.5,
+          "median": 3.9,
+          "maximum": 829
+        },
+        "copyMs": {
+          "count": 12,
+          "minimum": 0.1,
+          "median": 0.1,
+          "maximum": 72.2
+        },
+        "textureMs": {
+          "count": 12,
+          "minimum": 0,
+          "median": 1.1,
+          "maximum": 47.5
+        },
+        "gpuMs": {
+          "count": 12,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 18.3
+        },
+        "readbackMs": {
+          "count": 12,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 24.4
+        },
+        "drawsPerFrame": {
+          "count": 12,
+          "minimum": 3,
+          "median": 10.5,
+          "maximum": 8061
+        },
+        "droppedWithoutPipeline": {
+          "count": 12,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 3568
+        },
+        "pipelinesBeingMade": {
+          "count": 12,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 167
+        },
+        "droppedIndirect": {
+          "count": 12,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 2092
+        }
+      },
+      "jobProcesses": [
+        {
+          "processId": 16844,
+          "sampledPeakPrivateBytes": 23136100352,
+          "sampledPeakWorkingSetBytes": 18055884800,
+          "lastSample": {
+            "elapsedMs": 69031,
+            "processId": 16844,
+            "privateBytes": 23136100352,
+            "workingSetBytes": 18055884800
+          }
+        },
+        {
+          "processId": 240,
+          "sampledPeakPrivateBytes": 1208320,
+          "sampledPeakWorkingSetBytes": 7966720,
+          "lastSample": {
+            "elapsedMs": 69031,
+            "processId": 240,
+            "privateBytes": 1171456,
+            "workingSetBytes": 7946240
+          }
+        },
+        {
+          "processId": 15148,
+          "sampledPeakPrivateBytes": 10371072,
+          "sampledPeakWorkingSetBytes": 15740928,
+          "lastSample": {
+            "elapsedMs": 69031,
+            "processId": 15148,
+            "privateBytes": 10272768,
+            "workingSetBytes": 15704064
+          }
+        }
+      ],
+      "availablePhysicalBytesAtStop": null,
+      "allocationFailureMessages": 0,
+      "deviceRemovalMessages": 0,
+      "directPipelineMeasurements": [],
+      "visibleGameplayVerified": false,
+      "playerInputResponseVerified": false,
+      "requestedSeconds": 240,
+      "adapter": "AMD Radeon RX 9060 XT",
+      "driver": "32.0.32029.2010",
+      "dredMode": "light",
+      "shadowWindowKiB": 256,
+      "shadowBarMiB": 0,
+      "guardElapsedSeconds": 69.031,
+      "launcherElapsedSeconds": 75.97,
+      "runtimeResultBeforeCleanup": 126,
+      "cleanupFailure": true,
+      "cleanupFailureHresult": "0x80070020",
+      "profileCleanupRetry": {
+        "timestampUtc": "2026-11-26T09:17:21.9178451Z",
+        "hresult": "0x00000000",
+        "succeeded": true,
+        "postRunCleanupOnly": true,
+        "originalRunMetadataUnchanged": true
+      },
+      "jobCommitReserveMiB": 512,
+      "jobCommitBytesAtStop": 23147544576,
+      "jobStopThresholdBytes": 23085449216,
+      "timedMemory": {
+        "count": 63,
+        "interpretation": "Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks.",
+        "sampledPeakPrivateBytes": 23079059456,
+        "lastSample": {
+          "timestamp": "2026-11-26T09:09:07.008657Z",
+          "elapsed_ms": 62026,
+          "frame": 1505,
+          "private_bytes": 23079059456,
+          "working_set_bytes": 18211713024,
+          "physical_free_bytes": 405553152,
+          "commit_free_bytes": 14094589952,
+          "rust_bytes": 1415035342,
+          "host_lists": 1409,
+          "host_idle_lists": 46,
+          "host_inflight_flights": null,
+          "host_inflight_lists": null,
+          "host_landed_flights": 64,
+          "host_landed_lists": 415,
+          "host_landing_active": true,
+          "retired_objects": 151336,
+          "retired_resources": 151072,
+          "retired_any": 264,
+          "retired_front_submission": 6194,
+          "retired_back_submission": 6284,
+          "submissions_started": 6258,
+          "submissions_finished": 6254,
+          "submissions_queued": 29,
+          "list_scratch_bytes": 236978176,
+          "list_spare_bytes": 74186752,
+          "list_upload_bytes": 884272,
+          "host_texture_count": 24723,
+          "host_texture_bytes": 5099094016,
+          "shadow_count": 8412,
+          "shadow_bytes": 3837367570,
+          "shadow_card_bytes": 886571008,
+          "shadow_before_bytes": 197968,
+          "shadow_window_card_bytes": 84082688,
+          "shadow_window_mapped_card_bytes": 0,
+          "staging_count": 2172,
+          "staging_bytes": 379578594,
+          "texture_pool_bytes": 3087007744,
+          "staging_pool_bytes": 536870912,
+          "shader_container_bytes": 197809200,
+          "translated_shader_bytes": 126096482,
+          "pipeline_library_bytes": 228048,
+          "made_upload_count": 359,
+          "made_upload_bytes": 2487402640,
+          "made_shared_count": 9028,
+          "made_shared_bytes": 4674797568,
+          "made_card_count": 1584,
+          "made_card_bytes": 1312096816
+        }
+      },
+      "representativeOwnershipSample": {
+        "timestamp": "2026-11-26T09:09:04.007191Z",
+        "elapsed_ms": 59025,
+        "frame": 1502,
+        "private_bytes": 22304010240,
+        "working_set_bytes": 17780674560,
+        "physical_free_bytes": 565911552,
+        "commit_free_bytes": 14670647296,
+        "rust_bytes": 1408298555,
+        "host_lists": 1401,
+        "host_idle_lists": 35,
+        "host_inflight_flights": 0,
+        "host_inflight_lists": 0,
+        "host_landed_flights": 64,
+        "host_landed_lists": 451,
+        "host_landing_active": false,
+        "retired_objects": 182160,
+        "retired_resources": 181927,
+        "retired_any": 233,
+        "retired_front_submission": 6118,
+        "retired_back_submission": 6206,
+        "submissions_started": 6180,
+        "submissions_finished": 6179,
+        "submissions_queued": 26,
+        "list_scratch_bytes": 231997440,
+        "list_spare_bytes": 110624768,
+        "list_upload_bytes": 612352,
+        "host_texture_count": 23835,
+        "host_texture_bytes": 4842323968,
+        "shadow_count": 8524,
+        "shadow_bytes": 4170550482,
+        "shadow_card_bytes": 886571008,
+        "shadow_before_bytes": 197968,
+        "shadow_window_card_bytes": 84082688,
+        "shadow_window_mapped_card_bytes": 0,
+        "staging_count": 3211,
+        "staging_bytes": 255928454,
+        "texture_pool_bytes": null,
+        "staging_pool_bytes": 335544320,
+        "shader_container_bytes": 197809200,
+        "translated_shader_bytes": 125978603,
+        "pipeline_library_bytes": 228048,
+        "made_upload_count": 325,
+        "made_upload_bytes": 2280364128,
+        "made_shared_count": 8799,
+        "made_shared_bytes": 4520103424,
+        "made_card_count": 1124,
+        "made_card_bytes": 1289000496
+      },
+      "ownershipInterpretation": "These independently sampled owner buckets are not exhaustive or atomic. Null means unavailable while a lock was busy, not zero. Retired resource references are not counts of unique leaked resources. Completed submissions still use the unchanged 64-submission quarantine.",
+      "videoMemory": {
+        "count": 14,
+        "lastSample": {
+          "timestamp": "2026-11-26T09:09:06.785021Z",
+          "localBudgetMiB": 15419,
+          "localUsedMiB": 7151,
+          "sharedBudgetMiB": 15578,
+          "sharedUsedMiB": 7408
+        },
+        "interpretation": "DXGI process local/shared usage and changing budgets in MiB; not installed capacity or an additional amount to sum with private bytes. Shared usage does not by itself prove VRAM eviction."
+      },
+      "lastWorldIntervalSamples": [
+        {
+          "timestamp": "2026-11-26T09:09:00.538561Z",
+          "fps": 1.1,
+          "frameMs": 918.7,
+          "prepareMs": 182.3,
+          "copyMs": 71.9,
+          "textureMs": 4.2,
+          "gpuMs": 13.5,
+          "readbackMs": 8.7,
+          "drawsPerFrame": 1133,
+          "droppedWithoutPipeline": 1268,
+          "pipelinesBeingMade": 142,
+          "droppedIndirect": 259
+        },
+        {
+          "timestamp": "2026-11-26T09:09:06.776091Z",
+          "fps": 0.8,
+          "frameMs": 1258.4,
+          "prepareMs": 829,
+          "copyMs": 72.2,
+          "textureMs": 47.5,
+          "gpuMs": 18.3,
+          "readbackMs": 24.4,
+          "drawsPerFrame": 8061,
+          "droppedWithoutPipeline": 3568,
+          "pipelinesBeingMade": 167,
+          "droppedIndirect": 2092
+        }
+      ],
+      "captureObservation": "Private window capture near 65 seconds shows a recognizable character and street, houses, fence, trees and power lines, but very dark rendering. Caption: 2 FPS, 521.7 ms/frame, 2755 draws/frame. Stable gameplay and player response were not verified.",
+      "captureCaption": {
+        "approximateElapsedSeconds": 65,
+        "fps": 2,
+        "frameTimeMs": 521.7,
+        "drawsPerFrame": 2755
+      },
+      "recognizableWorldGeometryObserved": true,
+      "stableGameplayVerified": false,
+      "scheduledGameplayInputReached": false,
+      "manualCloseArrivedAfterProcessEnded": true,
+      "audio": {
+        "measuredSeconds": 45.0,
+        "sampleRateHz": 48000,
+        "channels": 2,
+        "pcmPeak": 9798,
+        "pcmRms": 1018.3502661474096,
+        "channelPeaks": [
+          9798,
+          9715
+        ],
+        "speakerOutputVerified": false,
+        "gameplayAudioVerified": false,
+        "capturedNonSilentStereo": true
+      },
+      "eventLogCheck": {
+        "from": "2026-11-26T01:07:57.2618584-08:00",
+        "through": "2026-11-26T01:17:31.7476621-08:00",
+        "system4101Status": "read-no-matches",
+        "displayResetEventsObserved": 0,
+        "application1000Status": "read-no-matches",
+        "victoryApplicationCrashEventsObserved": 0,
+        "limitation": "No matching events were found in this interval; absence does not prove driver stability or identify every failure mode."
+      },
+      "interpretation": "Recognizable world geometry is a rendering advance over the preceding dark green/black capture. The run still ended at the job commit notification before scheduled input. Memory pressure and stable first-mission gameplay remain unresolved; neither interval FPS nor non-silent captured PCM establishes playable gameplay.",
+      "lastWorldPreparationBreakdown": {
+        "timestamp": "2026-11-26T09:09:06.776091Z",
+        "cpuPreparationMsPerFrame": 829.0,
+        "gpuMsPerFrame": 18.3,
+        "listStepsMsPerFrame": 781.0,
+        "heapBufferPassesPerFrame": 2.0,
+        "heapBufferPassMsPerFrame": 592.6,
+        "interpretation": "Overlapping instrumented timings, not additive or a complete GPU-utilization measurement. Light DRED emitted no marker-formatting metric; no quantified marker-formatting speedup is claimed."
+      }
+    },
+    "localSourceCommit": "6e11a9abc1060c1c1fbfb6f5546eeb5c6d4114cb",
+    "changes": [
+      {
+        "revision": "8c7f5732b2df5f351769e7749bb4a40000991c41",
+        "result": "Implemented per-host-buffer COPY_DEST transition deduplication and bounded, nonblocking retained-owner sampling.",
+        "upstreamReference": "https://github.com/avatarmanz/VIctory-7900XTX/commit/773d902f16d523c431925a319d6b430dedcba157"
+      },
+      {
+        "revision": "6e11a9abc1060c1c1fbfb6f5546eeb5c6d4114cb",
+        "result": "Narrow RGBA32 typed buffer view compatibility fix with authored Radeon semantic coverage; other integer format widths and atomic behavior were not broadly remapped.",
+        "upstreamReference": "https://github.com/fxceless/victory-fork/commit/f6a09d3ba4ca425e71429ddbcb43b18ad507202a"
+      },
+      {
+        "result": "Launcher selected existing light DRED breadcrumbs/page-fault reporting without full per-command marker formatting."
+      }
+    ],
+    "tests": {
+      "radeonSemanticProbePassed": 2,
+      "descriptorPassed": 47,
+      "drawPassed": 7,
+      "drawIgnored": 1
+    },
+    "optimizedBuildPassed": true,
+    "latestUpstreamReviewed": {
+      "7900xtx": "722c0e1ce1e80bd045ba63ecb88c440041233fea",
+      "fxceless": "f6a09d3ba4ca425e71429ddbcb43b18ad507202a"
+    },
+    "windowAliasPrototype": {
+      "integrated": false,
+      "enabled": false,
+      "status": "Withheld in an isolated worktree.",
+      "reason": "A larger backing can change descriptor logical bounds and alignment-dependent exact-copy decisions. Descriptor-aware bounds preservation is required before this can be treated as a safe memory-only optimization.",
+      "gameplaySavingsVerified": false
+    },
+    "memoryLeakResolved": false
   }
 }
