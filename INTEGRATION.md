@@ -385,3 +385,25 @@ remain. An authored pixel-edge regression also passed 18 cases on Radeon and
 These results validate the tested shader semantics, not first-mission rendering
 or a gameplay performance improvement. Translator changes require fresh
 content-keyed shader/pipeline preparation before the next title comparison.
+
+[The table-binding plan patch](runtimes/patches/victory-table-binding-plan.patch)
+applies next, producing `1337a9a`. It adapts avatarmanz `46e3297` to precompute
+immutable shader descriptor metadata. Declaration order, duplicate-descriptor
+selection, live indexed roots and the existing descriptor leases remain intact.
+Its four regressions include an independent comparison against the old scan
+algorithm and 3,840 boundary combinations.
+
+[The sparse-texture patch](runtimes/patches/victory-sparse-texture-discovery.patch)
+follows, producing `988ed8f`. It adapts DexNom `921d8d3` to recognize committed
+interior pages even when both ends of a texture reservation are absent. The old
+implementation reproduced a zero-versus-65,536-byte failure on an authored
+allocation. Remap-queue overflow now rescans registered spans instead of losing
+invalidation notifications. Six focused tests cover sparse/decommitted pages,
+guard/no-access memory, arithmetic bounds, range merging and overflow coverage.
+Existing view tracking, upload ordering and GPU retirement remain unchanged.
+
+The combined GPU regression batch passed 26 unique tests in 29 executions, with
+no failures or skips. These changes are not yet credited with reduced title RAM
+or higher FPS. In particular, finding additional legitimate textures can increase
+resource usage. [The upstream review](docs/upstream-rendering-review-20261126.md)
+records the exact four reviewed heads, selected changes and exclusions.
