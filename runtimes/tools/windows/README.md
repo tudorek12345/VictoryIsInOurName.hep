@@ -29,8 +29,12 @@ two Cargo jobs to leave CPU headroom for other applications. The explicit profil
 
 `-QueuedSubmit:$false` selects synchronous submission for a comparison.
 `-TextureNoWait` remains opt-in for fault-safe texture reads during remapping.
-Queued submission demonstrated about 30 FPS through the intro and loading; this
-is not evidence of 30 FPS gameplay. `-DiagnosticKeys` supplies a bounded local input script and is
+`-TrimIdleTextures` selects the existing shorter texture-retention policy for
+comparisons; it remains off because the Series X comparison still hit the RAM
+reserve. It preserves resource references and retirement checks.
+Queued submission demonstrated about 30 FPS in many intro/loading intervals,
+but the Series X tests also recorded 2.6-5.4 FPS loading intervals; stable 30 FPS
+loading and gameplay are not established. `-DiagnosticKeys` supplies a bounded local input script and is
 included in the run metadata. Closing the game ends its associated runner.
 
 The source checkout name `amd7900-series-s` is historical; `-Console` selects
@@ -53,6 +57,12 @@ destinations and reparse paths. It never transfers compiled shaders or marks
 them warm across runtime versions. For the subsequent title test,
 `-WarmCacheFrom <warm-run-id>` requires the identical executable, console and
 renderer. Warm-up can fail; check its actual completion and failure counts.
+The current warmer persists translated shader files and exercises the driver's
+cache. It does not serialize a shared Victory pipeline library from its compiler
+children. A copied cache directory alone is not proof of host-pipeline reuse;
+compare the subsequent title's actual `loaded` and `made` counters. Keep the
+physical/commit reserves in force during warm-up; a 6 GiB job cap and two processes
+are used for the local precompile comparison while OBS remains open.
 
 Read a run with:
 
@@ -66,6 +76,9 @@ values are sampled intervals, not a whole-run average or a one-percent low.
 Guarded runs sample private and resident memory for each job process every five
 seconds and once before termination. Decoder/compiler children are included;
 the report keeps each process's sampled maximum separate from the job peak.
+`timedMemory` includes the independent one-second sampler even when a frame
+stalls. `pipelineCacheEvents` retains actual library loads/new compilations;
+`precompile` keeps completion, refusal and child-failure counts distinct.
 Optional phase evidence is a local JSON array with `label`, `evidence`,
 `startUtc` and `endUtc`; assign a phase only after inspecting its captures.
 Device-removal message counts do not replace checking Windows events.

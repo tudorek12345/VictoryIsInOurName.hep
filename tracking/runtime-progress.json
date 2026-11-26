@@ -405,5 +405,647 @@
       "No matching Windows events or runtime device-removal message is not proof of driver health.",
       "The last detailed memory census preceded the final burst; list counts and cumulative private-byte growth during list creation do not identify its allocator."
     ]
+  },
+  "seriesXComparison20261125": {
+    "adapter": "AMD Radeon RX 9060 XT",
+    "driver": "32.0.32029.2010",
+    "obsRunning": true,
+    "upstreamReviewed": {
+      "7900xtx": "9c23e8dd40cac6fb4a2aa8c804587e7c2e2a5853",
+      "fxceless": "46bf5351707b1697c04e5d871c30973ebaa3e973"
+    },
+    "runs": [
+      {
+        "runId": "original-20261125-221029-b0b8a4d0",
+        "timestamp": "2026-11-25T22:10:32.4779872-08:00",
+        "runtimeRevision": "0001d4b947e17640b919b4ec37e9a49413f235b8",
+        "runtimeSha256": "375F72F49DC0EBE3CAAAC8EFBE68A4E6BD299038BE99D79CBADF29A934E6415A",
+        "console": "series-x",
+        "pipelineWorkers": 2,
+        "textureNoWait": false,
+        "trimIdleTextures": false,
+        "stopReason": "physical memory reserve",
+        "exitCode": 126,
+        "requestedSeconds": 240,
+        "elapsedSeconds": 104.4,
+        "lastGuardSampleElapsedSeconds": 100.61,
+        "peakJobCommitBytes": 19172069376,
+        "availablePhysicalBytesAtStop": 2640969728,
+        "hostPhysicalReserveMiB": 3072,
+        "hostCommitReserveMiB": 4096,
+        "restoredPackagePaths": 151,
+        "frameStatistics": {
+          "count": 17,
+          "firstTimestamp": "2026-11-26T06:10:39.307046Z",
+          "lastTimestamp": "2026-11-26T06:12:05.010439Z",
+          "fps": {
+            "count": 17,
+            "minimum": 2.6,
+            "median": 30,
+            "maximum": 32.5
+          },
+          "frameMs": {
+            "count": 17,
+            "minimum": 30.8,
+            "median": 33.3,
+            "maximum": 386.1
+          },
+          "prepareMs": {
+            "count": 17,
+            "minimum": 0.4,
+            "median": 4.3,
+            "maximum": 275.9
+          },
+          "copyMs": {
+            "count": 17,
+            "minimum": 0.1,
+            "median": 0.1,
+            "maximum": 1.5
+          },
+          "textureMs": {
+            "count": 17,
+            "minimum": 0,
+            "median": 3.4,
+            "maximum": 273.5
+          },
+          "gpuMs": {
+            "count": 17,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0.3
+          },
+          "readbackMs": {
+            "count": 17,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "drawsPerFrame": {
+            "count": 17,
+            "minimum": 3,
+            "median": 5,
+            "maximum": 55
+          },
+          "droppedWithoutPipeline": {
+            "count": 17,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 9
+          },
+          "pipelinesBeingMade": {
+            "count": 17,
+            "minimum": 967,
+            "median": 1088,
+            "maximum": 1204
+          },
+          "droppedIndirect": {
+            "count": 17,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "scope": "Interval samples only; median is not whole-run FPS, a 1% low, or gameplay performance."
+        },
+        "timedMemorySamples": 95,
+        "lastTimedMemorySample": {
+          "timestamp": "2026-11-26T06:12:13.365611Z",
+          "elapsed_ms": 94058,
+          "frame": 1956,
+          "private_bytes": 18881687552,
+          "working_set_bytes": 14044147712,
+          "physical_free_bytes": 2922029056,
+          "commit_free_bytes": 17677578240,
+          "rust_bytes": 1137129966,
+          "host_lists": 1061,
+          "list_scratch_bytes": 23592960,
+          "list_spare_bytes": 0,
+          "list_upload_bytes": 17557856,
+          "host_texture_count": 26598,
+          "host_texture_bytes": 5178916864,
+          "shadow_count": 3503,
+          "shadow_bytes": 1657012538,
+          "shadow_card_bytes": 881786880,
+          "shadow_before_bytes": 15424,
+          "shadow_window_card_bytes": 84017152,
+          "shadow_window_mapped_card_bytes": 0,
+          "staging_count": 570,
+          "staging_bytes": 113881605,
+          "texture_pool_bytes": 3489660928,
+          "staging_pool_bytes": 201326592,
+          "shader_container_bytes": 197812392,
+          "translated_shader_bytes": 9776133,
+          "pipeline_library_bytes": 0,
+          "made_upload_count": 94,
+          "made_upload_bytes": 1204795576,
+          "made_shared_count": 3532,
+          "made_shared_bytes": 1887525376,
+          "made_card_count": 177,
+          "made_card_bytes": 1240391456
+        },
+        "jobProcesses": [
+          {
+            "processId": 19684,
+            "sampledPeakPrivateBytes": 19160592384,
+            "sampledPeakWorkingSetBytes": 14322462720,
+            "lastSample": {
+              "elapsedMs": 100610,
+              "processId": 19684,
+              "privateBytes": 19160592384,
+              "workingSetBytes": 14322462720
+            }
+          },
+          {
+            "processId": 18928,
+            "sampledPeakPrivateBytes": 1216512,
+            "sampledPeakWorkingSetBytes": 8548352,
+            "lastSample": {
+              "elapsedMs": 100610,
+              "processId": 18928,
+              "privateBytes": 1179648,
+              "workingSetBytes": 8527872
+            }
+          },
+          {
+            "processId": 9124,
+            "sampledPeakPrivateBytes": 10317824,
+            "sampledPeakWorkingSetBytes": 15708160,
+            "lastSample": {
+              "elapsedMs": 100610,
+              "processId": 9124,
+              "privateBytes": 10272768,
+              "workingSetBytes": 15691776
+            }
+          }
+        ],
+        "audio": {
+          "sampleRateHz": 48000,
+          "channels": 2,
+          "measuredSeconds": 45.0,
+          "measuredSampleValues": 4320000,
+          "pcmPeak": 9798,
+          "pcmRms": 996.448429178368,
+          "channelPeaks": [
+            9798,
+            9715
+          ],
+          "speakerOutputVerified": false,
+          "gameplayAudioVerified": false,
+          "measurement": "First 45 seconds of declared RIFF PCM data, excluding bytes beyond the declared RIFF extent."
+        },
+        "captureFrames": [
+          1,
+          2,
+          4,
+          8,
+          16,
+          32,
+          64,
+          128,
+          256,
+          512,
+          780,
+          1024,
+          1700
+        ],
+        "runtimeDeviceRemovalMessages": 0,
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false,
+        "windowsEvents": {
+          "queryStartUtc": "2026-11-26T06:10:25Z",
+          "queryEndUtc": "2026-11-26T06:17:35Z",
+          "display4101Count": 0,
+          "application1000Count": 0,
+          "scope": "Combined window of these three runs; both queries returned no matching events."
+        },
+        "captureObservation": "Frame 1700 shows a dark loading screen with a visible spinner; no later requested world capture was reached."
+      },
+      {
+        "runId": "original-20261125-221338-9b62cc71",
+        "timestamp": "2026-11-25T22:13:42.4052841-08:00",
+        "runtimeRevision": "0001d4b947e17640b919b4ec37e9a49413f235b8",
+        "runtimeSha256": "375F72F49DC0EBE3CAAAC8EFBE68A4E6BD299038BE99D79CBADF29A934E6415A",
+        "console": "series-x",
+        "pipelineWorkers": 2,
+        "textureNoWait": false,
+        "trimIdleTextures": true,
+        "stopReason": "physical memory reserve",
+        "exitCode": 126,
+        "requestedSeconds": 240,
+        "elapsedSeconds": 76.75,
+        "lastGuardSampleElapsedSeconds": 73.047,
+        "peakJobCommitBytes": 20524072960,
+        "availablePhysicalBytesAtStop": 2098233344,
+        "hostPhysicalReserveMiB": 3072,
+        "hostCommitReserveMiB": 4096,
+        "restoredPackagePaths": 151,
+        "frameStatistics": {
+          "count": 12,
+          "firstTimestamp": "2026-11-26T06:13:49.280722Z",
+          "lastTimestamp": "2026-11-26T06:14:47.047881Z",
+          "fps": {
+            "count": 12,
+            "minimum": 5.4,
+            "median": 30,
+            "maximum": 30
+          },
+          "frameMs": {
+            "count": 12,
+            "minimum": 33.3,
+            "median": 33.3,
+            "maximum": 186.3
+          },
+          "prepareMs": {
+            "count": 12,
+            "minimum": 0.4,
+            "median": 1.2,
+            "maximum": 46.8
+          },
+          "copyMs": {
+            "count": 12,
+            "minimum": 0.1,
+            "median": 0.1,
+            "maximum": 2.1
+          },
+          "textureMs": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0.7,
+            "maximum": 43
+          },
+          "gpuMs": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0.1
+          },
+          "readbackMs": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0.1
+          },
+          "drawsPerFrame": {
+            "count": 12,
+            "minimum": 3,
+            "median": 5.5,
+            "maximum": 46
+          },
+          "droppedWithoutPipeline": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 2
+          },
+          "pipelinesBeingMade": {
+            "count": 12,
+            "minimum": 965,
+            "median": 1060.5,
+            "maximum": 1202
+          },
+          "droppedIndirect": {
+            "count": 12,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "scope": "Interval samples only; median is not whole-run FPS, a 1% low, or gameplay performance."
+        },
+        "timedMemorySamples": 67,
+        "lastTimedMemorySample": {
+          "timestamp": "2026-11-26T06:14:55.315278Z",
+          "elapsed_ms": 66034,
+          "frame": 1672,
+          "private_bytes": 19019411456,
+          "working_set_bytes": 14259916800,
+          "physical_free_bytes": 3572047872,
+          "commit_free_bytes": 17122353152,
+          "rust_bytes": 1142861777,
+          "host_lists": 1061,
+          "list_scratch_bytes": 23855104,
+          "list_spare_bytes": 0,
+          "list_upload_bytes": 17557856,
+          "host_texture_count": 25018,
+          "host_texture_bytes": 5061607424,
+          "shadow_count": 3566,
+          "shadow_bytes": 1901130502,
+          "shadow_card_bytes": 886571008,
+          "shadow_before_bytes": 15424,
+          "shadow_window_card_bytes": 83886080,
+          "shadow_window_mapped_card_bytes": 0,
+          "staging_count": 897,
+          "staging_bytes": 106320513,
+          "texture_pool_bytes": 3422552064,
+          "staging_pool_bytes": 469762048,
+          "shader_container_bytes": 197812392,
+          "translated_shader_bytes": 9097446,
+          "pipeline_library_bytes": 0,
+          "made_upload_count": 88,
+          "made_upload_bytes": 1199041120,
+          "made_shared_count": 3593,
+          "made_shared_bytes": 2131908864,
+          "made_card_count": 172,
+          "made_card_bytes": 1244912928
+        },
+        "jobProcesses": [
+          {
+            "processId": 6364,
+            "sampledPeakPrivateBytes": 20512423936,
+            "sampledPeakWorkingSetBytes": 15732785152,
+            "lastSample": {
+              "elapsedMs": 73047,
+              "processId": 6364,
+              "privateBytes": 20512423936,
+              "workingSetBytes": 15732785152
+            }
+          },
+          {
+            "processId": 10968,
+            "sampledPeakPrivateBytes": 1220608,
+            "sampledPeakWorkingSetBytes": 8552448,
+            "lastSample": {
+              "elapsedMs": 73047,
+              "processId": 10968,
+              "privateBytes": 1179648,
+              "workingSetBytes": 8531968
+            }
+          },
+          {
+            "processId": 25192,
+            "sampledPeakPrivateBytes": 10338304,
+            "sampledPeakWorkingSetBytes": 15716352,
+            "lastSample": {
+              "elapsedMs": 73047,
+              "processId": 25192,
+              "privateBytes": 10309632,
+              "workingSetBytes": 15699968
+            }
+          }
+        ],
+        "audio": {
+          "sampleRateHz": 48000,
+          "channels": 2,
+          "measuredSeconds": 45.0,
+          "measuredSampleValues": 4320000,
+          "pcmPeak": 9798,
+          "pcmRms": 996.7986833217582,
+          "channelPeaks": [
+            9798,
+            9716
+          ],
+          "speakerOutputVerified": false,
+          "gameplayAudioVerified": false,
+          "measurement": "First 45 seconds of declared RIFF PCM data, excluding bytes beyond the declared RIFF extent."
+        },
+        "captureFrames": [
+          1,
+          2,
+          4,
+          8,
+          16,
+          32,
+          64,
+          128,
+          256,
+          512,
+          780,
+          1024
+        ],
+        "runtimeDeviceRemovalMessages": 0,
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false,
+        "windowsEvents": {
+          "queryStartUtc": "2026-11-26T06:10:25Z",
+          "queryEndUtc": "2026-11-26T06:17:35Z",
+          "display4101Count": 0,
+          "application1000Count": 0,
+          "scope": "Combined window of these three runs; both queries returned no matching events."
+        },
+        "captureObservation": "No requested capture at frame 1700 or later was reached; gameplay is unverified."
+      },
+      {
+        "runId": "original-20261125-221552-ad2c0fab",
+        "timestamp": "2026-11-25T22:15:58.2612838-08:00",
+        "runtimeRevision": "0001d4b947e17640b919b4ec37e9a49413f235b8",
+        "runtimeSha256": "375F72F49DC0EBE3CAAAC8EFBE68A4E6BD299038BE99D79CBADF29A934E6415A",
+        "console": "series-x",
+        "pipelineWorkers": 1,
+        "textureNoWait": true,
+        "trimIdleTextures": false,
+        "stopReason": "physical memory reserve",
+        "exitCode": 126,
+        "requestedSeconds": 240,
+        "elapsedSeconds": 87.56,
+        "lastGuardSampleElapsedSeconds": 83.875,
+        "peakJobCommitBytes": 20233179136,
+        "availablePhysicalBytesAtStop": 2748256256,
+        "hostPhysicalReserveMiB": 3072,
+        "hostCommitReserveMiB": 4096,
+        "restoredPackagePaths": 151,
+        "frameStatistics": {
+          "count": 14,
+          "firstTimestamp": "2026-11-26T06:16:06.041074Z",
+          "lastTimestamp": "2026-11-26T06:17:14.908492Z",
+          "fps": {
+            "count": 14,
+            "minimum": 3.7,
+            "median": 30,
+            "maximum": 32.3
+          },
+          "frameMs": {
+            "count": 14,
+            "minimum": 30.9,
+            "median": 33.3,
+            "maximum": 273.9
+          },
+          "prepareMs": {
+            "count": 14,
+            "minimum": 0.4,
+            "median": 0.6499999999999999,
+            "maximum": 21.9
+          },
+          "copyMs": {
+            "count": 14,
+            "minimum": 0.1,
+            "median": 0.1,
+            "maximum": 1.3
+          },
+          "textureMs": {
+            "count": 14,
+            "minimum": 0,
+            "median": 0.2,
+            "maximum": 12.5
+          },
+          "gpuMs": {
+            "count": 14,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0.1
+          },
+          "readbackMs": {
+            "count": 14,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "drawsPerFrame": {
+            "count": 14,
+            "minimum": 3,
+            "median": 6,
+            "maximum": 58
+          },
+          "droppedWithoutPipeline": {
+            "count": 14,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 3
+          },
+          "pipelinesBeingMade": {
+            "count": 14,
+            "minimum": 981,
+            "median": 1063,
+            "maximum": 1232
+          },
+          "droppedIndirect": {
+            "count": 14,
+            "minimum": 0,
+            "median": 0,
+            "maximum": 0
+          },
+          "scope": "Interval samples only; median is not whole-run FPS, a 1% low, or gameplay performance."
+        },
+        "timedMemorySamples": 77,
+        "lastTimedMemorySample": {
+          "timestamp": "2026-11-26T06:17:22.076183Z",
+          "elapsed_ms": 76034,
+          "frame": 2034,
+          "private_bytes": 19059228672,
+          "working_set_bytes": 14258651136,
+          "physical_free_bytes": 3787730944,
+          "commit_free_bytes": 17298153472,
+          "rust_bytes": 1140160669,
+          "host_lists": 1021,
+          "list_scratch_bytes": 13369344,
+          "list_spare_bytes": 0,
+          "list_upload_bytes": 17557856,
+          "host_texture_count": 26550,
+          "host_texture_bytes": 5088083968,
+          "shadow_count": 3623,
+          "shadow_bytes": 2114574570,
+          "shadow_card_bytes": 886571008,
+          "shadow_before_bytes": 0,
+          "shadow_window_card_bytes": 83886080,
+          "shadow_window_mapped_card_bytes": 0,
+          "staging_count": 864,
+          "staging_bytes": 140418542,
+          "texture_pool_bytes": 3422552064,
+          "staging_pool_bytes": 671088640,
+          "shader_container_bytes": 197812392,
+          "translated_shader_bytes": 6883537,
+          "pipeline_library_bytes": 0,
+          "made_upload_count": 89,
+          "made_upload_bytes": 1315208944,
+          "made_shared_count": 3644,
+          "made_shared_bytes": 2325041920,
+          "made_card_count": 158,
+          "made_card_bytes": 1244372192
+        },
+        "jobProcesses": [
+          {
+            "processId": 23356,
+            "sampledPeakPrivateBytes": 20221685760,
+            "sampledPeakWorkingSetBytes": 15415373824,
+            "lastSample": {
+              "elapsedMs": 83875,
+              "processId": 23356,
+              "privateBytes": 20221685760,
+              "workingSetBytes": 15415373824
+            }
+          },
+          {
+            "processId": 15992,
+            "sampledPeakPrivateBytes": 1220608,
+            "sampledPeakWorkingSetBytes": 8548352,
+            "lastSample": {
+              "elapsedMs": 83875,
+              "processId": 15992,
+              "privateBytes": 1179648,
+              "workingSetBytes": 8527872
+            }
+          },
+          {
+            "processId": 18948,
+            "sampledPeakPrivateBytes": 10293248,
+            "sampledPeakWorkingSetBytes": 15704064,
+            "lastSample": {
+              "elapsedMs": 83875,
+              "processId": 18948,
+              "privateBytes": 10289152,
+              "workingSetBytes": 15704064
+            }
+          }
+        ],
+        "audio": {
+          "sampleRateHz": 48000,
+          "channels": 2,
+          "measuredSeconds": 45.0,
+          "measuredSampleValues": 4320000,
+          "pcmPeak": 9798,
+          "pcmRms": 988.7909579452837,
+          "channelPeaks": [
+            9798,
+            9716
+          ],
+          "speakerOutputVerified": false,
+          "gameplayAudioVerified": false,
+          "measurement": "First 45 seconds of declared RIFF PCM data, excluding bytes beyond the declared RIFF extent."
+        },
+        "captureFrames": [
+          1,
+          2,
+          4,
+          8,
+          16,
+          32,
+          64,
+          128,
+          256,
+          512,
+          780,
+          1024,
+          1500,
+          1700,
+          1800,
+          1900,
+          1950,
+          2000
+        ],
+        "runtimeDeviceRemovalMessages": 0,
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false,
+        "windowsEvents": {
+          "queryStartUtc": "2026-11-26T06:10:25Z",
+          "queryEndUtc": "2026-11-26T06:17:35Z",
+          "display4101Count": 0,
+          "application1000Count": 0,
+          "scope": "Combined window of these three runs; both queries returned no matching events."
+        },
+        "captureObservation": "Frame 2000 still shows a dark loading screen with a bottom-right spinner; no visible world."
+      }
+    ],
+    "defaultConsole": "series-x",
+    "defaultRenderer": "hardware",
+    "defaultPipelineWorkers": 2,
+    "textureNoWaitDefault": false,
+    "trimIdleTexturesDefault": false,
+    "interpretation": [
+      "Every run stopped at the unchanged physical-memory reserve; none completed the requested four minutes.",
+      "Many intro/loading interval samples reached 30 FPS, but severe loading dips remain.",
+      "The shorter texture-retention policy did not resolve world-entry memory pressure.",
+      "The nonblocking-read run reduced the worst sampled texture preparation from 273.5 to 12.5 ms, but used one compiler worker; this is not isolated causal attribution.",
+      "Timed counters overlap and must not be summed. made_* fields are cumulative, null pool values mean unavailable.",
+      "No matching device-removal log or Windows event is not proof of driver health.",
+      "Captured non-silent PCM does not establish audible speaker output, correct synchronization or gameplay audio.",
+      "Visible controllable gameplay and stable 30 FPS remain unverified."
+    ]
   }
 }

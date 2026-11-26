@@ -29,6 +29,7 @@ param(
     [switch]$MenuPicture,
     [switch]$QueuedSubmit,
     [switch]$TextureNoWait,
+    [switch]$TrimIdleTextures,
 
     [switch]$CaptureAudio,
     [switch]$MovieAudio = $true,
@@ -105,6 +106,9 @@ if ($QueuedSubmit -and ($VictorySource -ne 'amd7900-series-s' -or $GpuTiming)) {
 }
 if ($TextureNoWait -and -not $amdFork) {
     throw 'TextureNoWait requires the AMD fork with fault-safe texture reads.'
+}
+if ($TrimIdleTextures -and -not $amdFork) {
+    throw 'TrimIdleTextures requires the AMD fork idle-texture policy.'
 }
 if ($MemorySamples -and ($useXcl -or $VictorySource -ne 'amd7900-series-s')) {
     throw 'MemorySamples requires the Series S candidate with timed memory diagnostics.'
@@ -358,6 +362,7 @@ try {
             if ($MemoryStats -or $MemorySamples) { $arguments += @('--env', 'VICTORY_MEMORY_STATS=1') }
             if ($MemorySamples) { $arguments += @('--env', 'VICTORY_MEMORY_SAMPLE=1') }
             if ($TextureNoWait) { $arguments += @('--env', 'VICTORY_TEXTURE_NO_WAIT=1') }
+            if ($TrimIdleTextures) { $arguments += @('--env', 'VICTORY_TEXTURE_KEEP=0') }
             if ($Renderer -eq 'warp' -and $VictorySource -ne 'review') {
                 $arguments += @('--env', 'VICTORY_D3D12_WARP=1')
             }
@@ -440,6 +445,7 @@ try {
             warmCacheFrom = if ($WarmCacheFrom) { $WarmCacheFrom } else { $null }
             queuedSubmit = [bool]$QueuedSubmit
             textureNoWait = [bool]$TextureNoWait
+            trimIdleTextures = [bool]$TrimIdleTextures
             menuPicture = [bool]$MenuPicture
             memoryStats = [bool]($MemoryStats -or $MemorySamples)
             memorySamples = [bool]$MemorySamples

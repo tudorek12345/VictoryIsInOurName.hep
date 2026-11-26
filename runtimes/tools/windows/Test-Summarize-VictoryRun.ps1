@@ -80,6 +80,33 @@ Job memory sample: elapsed_ms=5000 pid=11 private_bytes=300 working_set_bytes=15
     $parentSample=@($r.jobProcesses | Where-Object processId -eq 10)[0]
     Assert ($r.jobProcessMemorySamples -eq 3 -and $r.jobProcesses.Count -eq 2 -and $parentSample.sampledPeakPrivateBytes -eq 200 -and $parentSample.sampledPeakWorkingSetBytes -eq 80 -and $parentSample.lastSample.elapsedMs -eq 5000) 'Job members and sampled memory peaks must remain separate.'
     $passed++
+    Write-Text $victory @"
+${esc}[2m2026-01-01T00:00:01Z${esc}[0m memory sample (retained except made_*; pool None means unavailable) elapsed_ms=0 frame=9 private_bytes=4000000000 rust_bytes=100 host_texture_bytes=200 texture_pool_bytes=Some(300) staging_pool_bytes=None made_upload_bytes=123
+2026-01-01T00:00:02Z memory sample (retained except made_*; pool None means unavailable) elapsed_ms=1000 frame=9 private_bytes=6000000000 rust_bytes=120 host_texture_bytes=250 texture_pool_bytes=None staging_pool_bytes=Some(0) made_upload_bytes=456
+2026-01-01T00:00:03Z memory sample (retained except made_*; pool None means unavailable) frame=9
+"@
+    $r=Report
+    Assert ($r.allSamples.count -eq 0 -and $r.timedMemory.count -eq 2 -and $r.timedMemory.sampledPeakPrivateBytes -eq 6000000000 -and $r.timedMemory.lastSample.frame -eq 9) 'Timed memory growth during a stalled frame must be retained without frame samples.'
+    Assert ($r.timedMemory.samples[0].texture_pool_bytes -eq 300 -and $null -eq $r.timedMemory.samples[0].staging_pool_bytes -and $null -eq $r.timedMemory.lastSample.texture_pool_bytes -and $r.timedMemory.lastSample.staging_pool_bytes -eq 0) 'Unavailable pool snapshots must stay distinct from zero.'
+    Assert ($r.timedMemory.lastSample.made_upload_bytes -eq 456 -and $r.timedMemory.interpretation -match 'do not sum' -and -not $r.timedMemory.lastSample.PSObject.Properties['total_bytes']) 'Cumulative and overlapping memory counters must not be added.'
+    $passed++
+    Write-Text $victory ''
+    $r=Report
+    Assert ($r.timedMemory.count -eq 0 -and $null -eq $r.timedMemory.sampledPeakPrivateBytes -and $null -eq $r.timedMemory.lastSample) 'An absent timer sample must not imply zero memory use.'
+    $passed++
+    Write-Text $victory @'
+100 pipelines known, 10 made before (abcd1234), 2 bad; 20 to make, 2 processes
+2026-01-01T00:00:01Z host pipeline library loaded bytes=4096 mapped=true
+2026-01-01T00:00:02Z host pipeline library saved bytes=8192 early=20 made=4 loaded=15 started_early=20
+'@
+    $r=Report
+    Assert ($r.precompile.requested -and -not $r.precompile.completed -and $r.precompile.selected -eq 20 -and $null -eq $r.precompile.refused) 'A started warmer must not be counted as completed or free of failures.'
+    Assert ($r.pipelineCacheEvents.Count -eq 2 -and $r.pipelineCacheEvents[0].event -eq 'loaded' -and $r.pipelineCacheEvents[1].loaded -eq 15 -and $r.pipelineCacheEvents[1].made -eq 4) 'Actual cache loads and new pipeline creation must remain distinct.'
+    $passed++
+    Add-Content -LiteralPath $victory -Value "`n19 made in 123 s (3 have no host pipeline, 1 ended their process); ms each: median 1.0"
+    $r=Report
+    Assert ($r.precompile.completed -and $r.precompile.processed -eq 19 -and $r.precompile.refused -eq 3 -and $r.precompile.childFailures -eq 1) 'A warmer completion must retain refused pipelines and child failures separately.'
+    $passed++
     Write-Output "$passed synthetic diagnostic-summary checks passed."
 } finally {
     [Threading.Thread]::CurrentThread.CurrentCulture=$culture
