@@ -57,6 +57,7 @@ $metadata = if (Test-Path -LiteralPath $diagFile -PathType Leaf) { Get-Content -
 $samples = New-Object 'System.Collections.Generic.List[object]'
 $memory = New-Object 'System.Collections.Generic.List[object]'
 $timedMemory = New-Object 'System.Collections.Generic.List[object]'
+$videoMemory = New-Object 'System.Collections.Generic.List[object]'
 $pipelineCache = New-Object 'System.Collections.Generic.List[object]'
 $precompile = [ordered]@{ requested=$false; known=$null; previouslyProcessed=$null; previouslyBad=$null; selected=$null; processes=$null; completed=$false; processed=$null; refused=$null; childFailures=$null; elapsedSeconds=$null }
 $jobMemory = New-Object 'System.Collections.Generic.List[object]'
@@ -107,13 +108,18 @@ Read-LinesShared (Join-Path $logDir 'victory.log') {
     if ($line -match 'memory: (\d+) MB private \((\d+) MB of it in memory; the PC has (\d+) MB free and (\d+) MB left to commit\)') {
         $memory.Add([pscustomobject]@{logLine=$lineNumber;timestamp=$timestamp;privateMiB=[long]$Matches[1];residentPrivateMiB=[long]$Matches[2];availablePhysicalMiB=[long]$Matches[3];availableCommitMiB=[long]$Matches[4]})
     }
-    if ($line.Contains('memory sample (retained except made_*; pool None means unavailable)')) {
+    # Host::log_video_memory shifts bytes by 20 despite its historical MB label.
+    # Preserve local/shared budgets separately; they overlap process accounting.
+    if ($line -match "video memory as the system counts it, .*: the card's own: budget (\d+) MB, in use (\d+) MB, \d+ MB could still be reserved, \d+ MB reserved; the PC's shared with the card: budget (\d+) MB, in use (\d+) MB") {
+        $videoMemory.Add([pscustomobject]@{timestamp=$timestamp;localBudgetMiB=[uint64]$Matches[1];localUsedMiB=[uint64]$Matches[2];sharedBudgetMiB=[uint64]$Matches[3];sharedUsedMiB=[uint64]$Matches[4]})
+    }
+    if ($line.Contains('memory sample (retained except made_*;')) {
         # Keep the runtime's names and units. None is an unavailable try_lock,
         # not an empty pool. These overlapping counters must never be summed.
         $fields=[ordered]@{logLine=$lineNumber;timestamp=$timestamp}
-        foreach ($field in [regex]::Matches($line, '\b(?<key>[a-z][a-z0-9_]*)=(?<value>Some\(\d+\)|None|\d+)(?=\s|$)')) {
+        foreach ($field in [regex]::Matches($line, '\b(?<key>[a-z][a-z0-9_]*)=(?<value>Some\((?:\d+|true|false)\)|None|\d+)(?=\s|$)')) {
             $value=$field.Groups['value'].Value
-            $fields[$field.Groups['key'].Value]=if ($value -eq 'None') { $null } else { [uint64]($value -replace '^Some\((\d+)\)$','$1') }
+            $fields[$field.Groups['key'].Value]=if ($value -eq 'None') { $null } elseif ($value -eq 'Some(true)') { $true } elseif ($value -eq 'Some(false)') { $false } else { [uint64]($value -replace '^Some\((\d+)\)$','$1') }
         }
         if ($fields.Contains('elapsed_ms') -and $fields.Contains('private_bytes')) {
             $timedMemory.Add([pscustomobject]$fields)
@@ -189,6 +195,11 @@ $report = [ordered]@{
     restoredPackagePaths=$state.restoredPaths; zeroCapabilityAppContainerVerified=$state.zeroCapabilityAppContainerVerified
     allSamples=(SampleSummary $samples.ToArray()); tailSamples=@($samples | Select-Object -Last $TailSamples)
     memorySamples=$memory.Count; lastMemorySample=($memory | Select-Object -Last 1)
+    videoMemory=[ordered]@{
+        count=$videoMemory.Count
+        lastSample=($videoMemory | Select-Object -Last 1)
+        interpretation='DXGI process local/shared usage and changing budgets in MiB; not installed capacity or an additional amount to sum with private bytes. Shared usage does not by itself prove VRAM eviction.'
+    }
     timedMemory=[ordered]@{
         count=$timedMemory.Count
         interpretation='Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks.'
@@ -205,7 +216,7 @@ $report = [ordered]@{
     deviceRemovalMessages=$state.deviceRemovedMessages; allocationFailureMessages=$state.allocationFailureMessages
     phaseEvidence=@($phaseGroups.ToArray()); warnings=@($warnings.ToArray())
 }
-if ($IncludeSamples) { $report['samples']=$samples.ToArray(); $report.timedMemory['samples']=$timedMemory.ToArray() }
+if ($IncludeSamples) { $report['samples']=$samples.ToArray(); $report.timedMemory['samples']=$timedMemory.ToArray(); $report.videoMemory['samples']=$videoMemory.ToArray() }
 $json=$report | ConvertTo-Json -Depth 12
 if ($OutFile) { [IO.File]::WriteAllText([IO.Path]::GetFullPath($OutFile), $json + "`n", (New-Object Text.UTF8Encoding($false))) }
 if ($AsObject) { [pscustomobject]$report } else { $json }

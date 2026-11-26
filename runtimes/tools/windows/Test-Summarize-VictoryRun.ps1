@@ -133,6 +133,24 @@ DeleteAppContainerProfile failed for Synthetic (0x80070020)
     Write-Text $runner ''
     Assert (-not (Report).allocationFailureAtJobLimit) 'An allocation error alone must not imply reaching the job limit.'
     $passed++
+    Write-Text $victory @'
+2026-01-01T00:00:01Z video memory as the system counts it, synthetic: the card's own: budget 16000 MB, in use 7000 MB, 100 MB could still be reserved, 0 MB reserved; the PC's shared with the card: budget 15000 MB, in use 6000 MB, 100 MB could still be reserved, 0 MB reserved
+2026-01-01T00:00:02Z video memory as the system counts it, synthetic: the card's own: budget 14000 MB, in use 8000 MB, 100 MB could still be reserved, 0 MB reserved; the PC's shared with the card: budget 15000 MB, in use 0 MB, 100 MB could still be reserved, 0 MB reserved
+'@
+    $r=Report
+    Assert ($r.videoMemory.count -eq 2 -and $r.videoMemory.samples[0].sharedUsedMiB -eq 6000 -and $r.videoMemory.lastSample.localBudgetMiB -eq 14000 -and $r.videoMemory.lastSample.localUsedMiB -eq 8000 -and $r.videoMemory.lastSample.sharedUsedMiB -eq 0) 'Changing DXGI budgets and zero shared usage must remain distinct from capacity or missing data.'
+    $passed++
+    Write-Text $victory ''
+    $r=Report
+    Assert ($r.videoMemory.count -eq 0 -and $null -eq $r.videoMemory.lastSample) 'Absent DXGI samples must remain unknown.'
+    $passed++
+    Write-Text $victory @'
+2026-01-01T00:00:01Z memory sample (retained except made_*; owner/pool None means unknown; owner buckets are not exhaustive) elapsed_ms=1000 private_bytes=100 host_idle_lists=Some(512) host_inflight_lists=None host_landing_active=Some(true) retired_resources=Some(800) submissions_finished=52
+2026-01-01T00:00:02Z memory sample (retained except made_*; owner/pool None means unknown; owner buckets are not exhaustive) elapsed_ms=2000 private_bytes=110 host_idle_lists=None host_inflight_lists=Some(0) host_landing_active=Some(false) retired_resources=Some(0) submissions_finished=53
+'@
+    $r=Report
+    Assert ($r.timedMemory.count -eq 2 -and $r.timedMemory.samples[0].host_idle_lists -eq 512 -and $null -eq $r.timedMemory.samples[0].host_inflight_lists -and $r.timedMemory.samples[0].host_landing_active -eq $true -and $r.timedMemory.lastSample.host_landing_active -eq $false -and $r.timedMemory.lastSample.host_inflight_lists -eq 0 -and $null -eq $r.timedMemory.lastSample.host_idle_lists) 'Busy ownership snapshots and landing flags must preserve unknown, false and zero separately.'
+    $passed++
     Write-Output "$passed synthetic diagnostic-summary checks passed."
 } finally {
     [Threading.Thread]::CurrentThread.CurrentCulture=$culture
