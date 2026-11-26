@@ -61,6 +61,8 @@ $videoMemory = New-Object 'System.Collections.Generic.List[object]'
 $pipelineCache = New-Object 'System.Collections.Generic.List[object]'
 $displayModes = New-Object 'System.Collections.Generic.List[object]'
 $swapchains = New-Object 'System.Collections.Generic.List[object]'
+$thinUploadTail = New-Object 'System.Collections.Generic.Queue[object]'
+$thinUploadState = @{ count=0; maximum=$null; last=$null }
 $precompile = [ordered]@{ requested=$false; known=$null; previouslyProcessed=$null; previouslyBad=$null; selected=$null; processes=$null; completed=$false; processed=$null; refused=$null; childFailures=$null; elapsedSeconds=$null }
 $jobMemory = New-Object 'System.Collections.Generic.List[object]'
 $state = @{
@@ -95,6 +97,18 @@ Read-LinesShared (Join-Path $logDir 'victory.log') {
     param($line,$lineNumber)
     $timestamp = $null
     if ($line -match '^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))') { $timestamp=$Matches[1] }
+    if ($line.Contains('list calls translated by threads of ours per frame (VICTORY_THIN):') -and
+        $line -match '; pending uploads reclaimed (\d+(?:\.\d+)?)\s*$') {
+        # The runtime divides this count by frames in its reporting interval.
+        # Keep only a bounded tail even with IncludeSamples; these are not bytes.
+        $value = Number $Matches[1]
+        $sample = [pscustomobject]@{logLine=$lineNumber;timestamp=$timestamp;reclaimedUploadsPerFrame=$value}
+        $thinUploadState.count++
+        if ($null -eq $thinUploadState.maximum -or $value -gt $thinUploadState.maximum) { $thinUploadState.maximum=$value }
+        $thinUploadState.last=$sample
+        $thinUploadTail.Enqueue($sample)
+        if ($thinUploadTail.Count -gt $TailSamples) { $null=$thinUploadTail.Dequeue() }
+    }
     if ($line -match '\b(display mode reported to the title|presenting to a window)\s+width=(\d+)\s+height=(\d+)') {
         $kind = $Matches[1]
         $size = [pscustomobject]@{ logLine=$lineNumber; timestamp=$timestamp; width=[int]$Matches[2]; height=[int]$Matches[3] }
@@ -216,6 +230,12 @@ $report = [ordered]@{
     restoredPackagePaths=$state.restoredPaths; zeroCapabilityAppContainerVerified=$state.zeroCapabilityAppContainerVerified
     allSamples=(SampleSummary $samples.ToArray()); tailSamples=@($samples | Select-Object -Last $TailSamples)
     memorySamples=$memory.Count; lastMemorySample=($memory | Select-Object -Last 1)
+    thinUploadReclamation=[ordered]@{
+        count=$thinUploadState.count; units='uploads/frame'
+        sampledMaximumUploadsPerFrame=$thinUploadState.maximum
+        lastSample=$thinUploadState.last; tailSamples=@($thinUploadTail.ToArray())
+        interpretation='Interval-average reclaimed pending-upload counts per frame, not bytes or a cumulative upload total. Maximum covers matching log samples; only the bounded tail is retained. Missing samples are unknown, not zero. This counter alone does not establish a leak cause or memory savings.'
+    }
     videoMemory=[ordered]@{
         count=$videoMemory.Count
         lastSample=($videoMemory | Select-Object -Last 1)

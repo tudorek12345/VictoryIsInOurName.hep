@@ -169,6 +169,21 @@ DeleteAppContainerProfile failed for Synthetic (0x80070020)
     $r=Report
     Assert ($r.resolution.observedSwapchain.height -eq 2160 -and $null -eq $r.resolution.swapchainMatchesRequest) 'An observed output without a request is not a mode mismatch.'
     $passed++
+    $thin='list calls translated by threads of ours per frame (VICTORY_THIN): 20 in 1.0 ms (all threads), 2.0 lists, 3.0 pieces; left in the middle 0.00'
+    Write-Text $victory "2026-01-01T00:00:01Z INFO victory_gpu::list::thin: $thin"
+    $r=Report
+    Assert ($r.thinUploadReclamation.count -eq 0 -and $null -eq $r.thinUploadReclamation.sampledMaximumUploadsPerFrame -and $null -eq $r.thinUploadReclamation.lastSample -and $r.thinUploadReclamation.tailSamples.Count -eq 0) 'Old thin lines without reclamation must remain unknown, not zero.'
+    $passed++
+    Write-Text $victory ("${esc}[2m2026-01-01T00:00:01Z${esc}[0m INFO victory_gpu::list::thin: $thin; pending uploads reclaimed 3.50`n2026-01-01T00:00:02Z INFO victory_gpu::list::thin: $thin; pending uploads reclaimed 1.25`n2026-01-01T00:00:03Z INFO victory_gpu::list::thin: $thin; pending uploads reclaimed 2.75")
+    $r=& $helper -Run synthetic -StageRoot $root -AsObject -IncludeSamples -TailSamples 2
+    $reclaimed=$r.thinUploadReclamation
+    Assert ($reclaimed.count -eq 3 -and $reclaimed.units -eq 'uploads/frame' -and $reclaimed.sampledMaximumUploadsPerFrame -eq 3.5 -and $reclaimed.lastSample.reclaimedUploadsPerFrame -eq 2.75 -and $reclaimed.lastSample.logLine -eq 3 -and $reclaimed.lastSample.timestamp -eq '2026-01-01T00:00:03Z' -and $reclaimed.tailSamples.Count -eq 2 -and $reclaimed.tailSamples[0].logLine -eq 2) 'Thin upload summaries must preserve source positions and interval units, keep a bounded tail, and compute the maximum across all matching samples.'
+    Assert ($reclaimed.interpretation -match 'not bytes' -and $reclaimed.interpretation -match 'does not establish a leak cause' -and -not $reclaimed.Contains('totalBytes') -and -not $reclaimed.Contains('samples')) 'Reclamation rates must not imply bytes, leak attribution or unbounded sample storage.'
+    $passed++
+    Write-Text $victory "$thin; pending uploads reclaimed 0.00"
+    $r=Report
+    Assert ($r.thinUploadReclamation.count -eq 1 -and $r.thinUploadReclamation.sampledMaximumUploadsPerFrame -eq 0 -and $r.thinUploadReclamation.lastSample.reclaimedUploadsPerFrame -eq 0 -and $r.thinUploadReclamation.lastSample.logLine -eq 1 -and $null -eq $r.thinUploadReclamation.lastSample.timestamp) 'An observed zero upload rate must remain zero while a missing timestamp stays unknown.'
+    $passed++
     Write-Output "$passed synthetic diagnostic-summary checks passed."
 } finally {
     [Threading.Thread]::CurrentThread.CurrentCulture=$culture
