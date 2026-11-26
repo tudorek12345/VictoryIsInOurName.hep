@@ -303,5 +303,107 @@
       "Pipeline creation is not visible or controllable gameplay.",
       "Synthetic tests do not establish all-title compatibility."
     ]
+  },
+  "queryIdentityTitleRun20261125": {
+    "timestamp": "2026-11-25T21:49:59.4776677-08:00",
+    "runId": "original-20261125-214957-fcfdb53f",
+    "runtimeRevision": "33cbd2fd81c28fc5302bc66496c83377f363d1f3",
+    "runtimeCheckoutDirty": false,
+    "runtimeSha256": "CEE3504C1D1485330CA68AEC7B07F1D3631E550B9815E9A2B0F13160BDD516FF",
+    "stagedExecutableHashVerified": true,
+    "adapter": "AMD Radeon RX 9060 XT",
+    "driver": "32.0.32029.2010",
+    "console": "series-s",
+    "queuedSubmission": true,
+    "pipelineWorkers": 2,
+    "observedStages": [
+      "intro and setup screens",
+      "loading with visible spinner",
+      "black last captured frame"
+    ],
+    "captureEvidence": [
+      {
+        "frame": 780,
+        "observation": "UI text-size setup rendered."
+      },
+      {
+        "frame": 1700,
+        "timestampUtc": "2026-11-26T05:50:59.866858Z",
+        "observation": "Dark loading screen with a visible bottom-right spinner."
+      },
+      {
+        "frame": 2048,
+        "timestampUtc": "2026-11-26T05:51:16.547320Z",
+        "observation": "Entirely black image; world geometry is not visible."
+      }
+    ],
+    "sampledPreGameplayPerformance": {
+      "intervalSamples": 14,
+      "minimumFps": 24.1,
+      "medianFps": 30.0,
+      "maximumFps": 30.0,
+      "worstSampleFrameMs": 41.5,
+      "worstSamplePreparationMs": 16.0,
+      "worstSampleTexturePreparationMs": 14.5,
+      "scope": "Intro, setup and loading interval samples; not whole-run FPS, a 1% low or gameplay performance."
+    },
+    "audio": {
+      "capturedNonSilentStereo": true,
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "bitsPerSample": 16,
+      "measuredSeconds": 45,
+      "measuredSampleValues": 4320000,
+      "first45SecondsPcmPeak": 9798,
+      "first45SecondsPcmRms": 995.4980604686075,
+      "first45SecondsChannelPeaks": [
+        9798,
+        9715
+      ],
+      "first45SecondsChannelRms": [
+        953.7737569416321,
+        1035.5425618307356
+      ],
+      "measurement": "RIFF chunk parsing; first 45 seconds of declared PCM data, excluding trailing bytes beyond the declared RIFF size.",
+      "speakerOutputVerified": false,
+      "gameplayAudioVerified": false
+    },
+    "requestedSeconds": 240,
+    "launcherElapsedSeconds": 87.42,
+    "lastGuardSampleElapsedSeconds": 83.718,
+    "exitCode": 126,
+    "exitReason": "physical-memory reserve guard",
+    "jobCommitLimitBytes": 25769803776,
+    "peakJobCommitBytes": 16419287040,
+    "hostPhysicalReserveMiB": 3072,
+    "hostCommitReserveMiB": 4096,
+    "availablePhysicalBytesAtStop": 2931027968,
+    "jobProcessMemory": {
+      "mainFinalPrivateBytes": 16403329024,
+      "mainFinalWorkingSetBytes": 14414143488,
+      "childProcessCount": 2,
+      "childrenCombinedFinalPrivateBytes": 11464704,
+      "mainPrivateBytesAt81Point687Seconds": 13675954176,
+      "mainPrivateGrowthFinal2Point031SecondsBytes": 2727374848,
+      "scope": "Per-process guard samples attribute the late growth to the main runtime process; its allocating subsystem remains unproven."
+    },
+    "packagePathsRestored": 151,
+    "windowsEvents": {
+      "queryStartUtc": "2026-11-26T05:49:57Z",
+      "queryEndUtc": "2026-11-26T05:51:30Z",
+      "display4101Count": 0,
+      "application1000Count": 0,
+      "queryResult": "Both queries completed with no matching events."
+    },
+    "runtimeDeviceRemovalMessages": 0,
+    "visibleGameplayVerified": false,
+    "playerInputResponseVerified": false,
+    "limitations": [
+      "The four-minute request ended at the physical-memory floor before scheduled gameplay input.",
+      "The latest black capture does not establish world rendering or controllable gameplay.",
+      "Non-silent captured PCM does not verify audible speaker output, complete sound or gameplay audio.",
+      "No matching Windows events or runtime device-removal message is not proof of driver health.",
+      "The last detailed memory census preceded the final burst; list counts and cumulative private-byte growth during list creation do not identify its allocator."
+    ]
   }
 }
