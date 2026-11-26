@@ -90,6 +90,13 @@ Optional phase evidence is a local JSON array with `label`, `evidence`,
 `startUtc` and `endUtc`; assign a phase only after inspecting its captures.
 Device-removal message counts do not replace checking Windows events.
 
+`Sample-VictoryHostMemory.ps1 -Run <active-run-id> -StageRoot <local-stage>`
+records available physical RAM, system commit and paging counters every five
+seconds in a local JSONL file. It observes the machine without changing limits
+or processes, stops when the launcher writes finalized metadata (also on manual
+close), and has its own bounded deadline. Start it after the run directory
+exists. These are system totals, not allocations attributable solely to Victory.
+
 The two `Test-*.ps1` scripts use synthetic files only. The runner's additional
 tests are documented in `isolated-run/README.md`.
 
