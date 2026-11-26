@@ -13,7 +13,7 @@ $metadata = Get-Content -LiteralPath (Join-Path $seed 'logs\diagnostics.json') -
 $engine = Join-Path $seed 'bin\victory.exe'
 $checkout = & git -C $repo rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the current runtime source.' }
-$dirty = [bool](& git -C $repo status --porcelain --untracked-files=no)
+$dirty = [bool](& git -C $repo status --porcelain --untracked-files=normal)
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the current runtime source.' }
 if ($dirty -or $metadata.checkoutDirty -ne $false -or $metadata.checkout -ne $checkout -or
     $metadata.backend -ne 'victory' -or $metadata.victorySource -ne 'amd7900-series-s' -or

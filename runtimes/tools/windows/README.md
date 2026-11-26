@@ -78,13 +78,17 @@ For a controlled comparison, `-BuiltRuntimeFrom <successful-run-id>` uses the
 recorded executable only after verifying its SHA-256 and the exact current clean
 AMD source revision. Normal launches still build current source. This avoids
 discarding a prepared cache because a same-source rebuild changed PE bytes.
-`Test-VictoryBuiltRuntime.ps1` exercises seven acceptance/rejection cases with
-authored text fixtures, including changed source and tampered executable bytes.
+`Test-VictoryBuiltRuntime.ps1` exercises nine acceptance/rejection cases with
+authored text fixtures, including changed or untracked source and tampered
+executable bytes. Ignored local assets do not invalidate a clean checkout.
 
 `Install-VictoryWarmCache.ps1 -Run <completed-warm-run-id>` installs a fully
 successful Series X hardware preparation into the normal shortcut's cache. It
 requires the current clean source, holds the launcher lease, rejects reparse
-paths, backs up replaced caches, and preserves saved profile data. The runtime
+paths, stages both caches before activation, backs up replaced caches, and
+preserves saved profile data. Activation failures restore both old caches and
+their provenance. Nine authored transaction checks cover copy, activation and
+provenance failures, dry runs, an occupied lease and a source junction. The runtime
 still validates its translation/driver fingerprint when opening those caches.
 Use `-CommitMiB 6144` for bounded offline preparation. Setting
 `-HostReserveMiB 0` disables only the physical floor, never the commit guard.

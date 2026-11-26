@@ -217,7 +217,7 @@ try {
     if (-not $snapshot) {
         $checkout = (& git -C $repo rev-parse HEAD)
         if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the runtime checkout.' }
-        $checkoutDirty = [bool](& git -C $repo status --porcelain --untracked-files=no)
+        $checkoutDirty = [bool](& git -C $repo status --porcelain --untracked-files=normal)
         if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the runtime checkout.' }
     }
     if ($BuiltRuntimeFrom) {

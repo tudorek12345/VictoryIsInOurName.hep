@@ -8,9 +8,10 @@ $seed = Join-Path $fixture ('isolated-run\stage\' + $run)
 New-Item -ItemType Directory -Path $repo, (Join-Path $seed 'bin'), (Join-Path $seed 'logs') | Out-Null
 # This is plain authored text, never executed.
 Set-Content -LiteralPath (Join-Path $repo 'source.txt') -Value 'authored fixture'
+Set-Content -LiteralPath (Join-Path $repo '.gitignore') -Value 'local-asset.bin'
 Set-Content -LiteralPath (Join-Path $seed 'bin\victory.exe') -Value 'authored fixture bytes'
 & git -C $repo init -q
-& git -C $repo add source.txt
+& git -C $repo add source.txt .gitignore
 & git -C $repo -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm fixture
 if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed.' }
 $metadata = @{
@@ -46,6 +47,14 @@ $metadata.checkoutDirty = $false
 Set-Content -LiteralPath (Join-Path $repo 'source.txt') -Value 'changed source'
 Reject 'dirty current source'
 & git -C $repo checkout -- source.txt
+Set-Content -LiteralPath (Join-Path $repo 'untracked.rs') -Value '// authored untracked source'
+Reject 'untracked source'
+Move-Item -LiteralPath (Join-Path $repo 'untracked.rs') -Destination (Join-Path $fixture 'untracked.rs')
+Set-Content -LiteralPath (Join-Path $repo 'local-asset.bin') -Value 'authored ignored fixture'
+Save-Metadata
+$resolved = & $resolver -Run $run -LocalRoot $fixture
+if ($resolved -ne (Join-Path $seed 'bin\victory.exe')) { throw 'Ignored local asset changed the selected executable.' }
+Write-Output 'PASS ignored local asset remains allowed'
 Set-Content -LiteralPath (Join-Path $seed 'bin\victory.exe') -Value 'changed executable'
 Reject 'tampered staged executable'
-Write-Output "7 checks passed. Authored fixture retained at $fixture"
+Write-Output "9 checks passed. Authored fixture retained at $fixture"
