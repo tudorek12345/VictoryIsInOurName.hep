@@ -19,7 +19,7 @@ param(
     [int]$CommitMiB = 0,
 
     [ValidateRange(0, 32768)]
-    [int]$HostReserveMiB = 0,
+    [int]$HostReserveMiB = 3072,
 
     [switch]$PrepareOnly,
 
@@ -70,12 +70,20 @@ $ErrorActionPreference = 'Stop'
 $local = (Resolve-Path -LiteralPath $LocalRoot).Path
 $workspace = Split-Path -Parent $local
 $useXcl = $Backend -eq 'xcl'
+if (-not $useXcl -and -not $PSBoundParameters.ContainsKey('VictorySource')) {
+    $VictorySource = 'amd7900-series-s'
+}
 if ($useXcl -and $VictorySource -ne 'review') {
     throw 'VictorySource only applies to the Victory backend.'
 }
 $snapshot = $VictorySource -in 'amd7900', 'fxceless'
 $standalone = $snapshot -or $VictorySource -eq 'amd7900-series-s'
 $amdFork = $VictorySource -in 'amd7900', 'amd7900-series-s'
+if (-not $useXcl -and $VictorySource -eq 'amd7900-series-s' -and -not ($PrepareOnly -or $PrewarmPipelines)) {
+    if (-not $PSBoundParameters.ContainsKey('MenuPicture')) { $MenuPicture = $true }
+    if (-not $PSBoundParameters.ContainsKey('QueuedSubmit') -and -not $GpuTiming) { $QueuedSubmit = $true }
+    if (-not $PSBoundParameters.ContainsKey('PipelineWorkers')) { $PipelineWorkers = 2 }
+}
 if (($PipelineWorkers -or $PipelineBook -or $PrewarmPipelines) -and -not $amdFork) {
     throw 'Pipeline worker, recording and prewarm options require the AMD fork.'
 }
@@ -199,7 +207,7 @@ try {
             if ($useXcl) {
                 & $cargo +1.98.1 build --locked --release -p xcl
             } else {
-                & $cargo build --locked --jobs 4 --profile diag -p victory --features diagnostics
+                & $cargo build --locked --jobs 2 --profile diag -p victory --features diagnostics
             }
             $buildExitCode = $LASTEXITCODE
         } finally {

@@ -16,19 +16,21 @@ read-only package grants, zero-capability AppContainer and bounded job. It leave
 the Windows GPU watchdog unchanged. The memory reserve monitor is checked every
 500 ms; it cannot guarantee recovery from a driver hang.
 
-For the candidate checkout, the explicit launch profile is:
+Direct invocation now defaults to the Series S candidate on Radeon, with ordered
+submission, two pipeline workers and a 3 GiB physical-memory reserve. Builds use
+two Cargo jobs to leave CPU headroom for other applications. The explicit profile is:
 
 ```powershell
 .\Launch-Victory.ps1 -LocalRoot 'D:\BuildGTA$\victory-local' `
   -VictorySource amd7900-series-s -Console series-s -Renderer hardware `
   -Seconds 240 -HostReserveMiB 3072 -FreshState -MenuPicture `
-  -PipelineWorkers 2 -MemoryStats -CaptureAudio
+  -PipelineWorkers 2 -QueuedSubmit -MemoryStats -CaptureAudio
 ```
 
-`-QueuedSubmit` opts into ordered asynchronous submission. `-TextureNoWait`
-opts into the fork's fault-safe texture reads during remapping; neither option
-is enabled by this example. Use the recorded comparison results before changing
-the default. `-DiagnosticKeys` supplies a bounded local input script and is
+`-QueuedSubmit:$false` selects synchronous submission for a comparison.
+`-TextureNoWait` remains opt-in for fault-safe texture reads during remapping.
+Queued submission demonstrated about 30 FPS through the intro and loading; this
+is not evidence of 30 FPS gameplay. `-DiagnosticKeys` supplies a bounded local input script and is
 included in the run metadata. Closing the game ends its associated runner.
 
 `-PrewarmPipelines -PipelineBookFrom <run-id> -PipelineUseFrom <run-id>` creates a
@@ -65,3 +67,9 @@ index, not a portable shader identity) to `-PrewarmPipelines -FreshState
 -HostReserveMiB 3072`. Each index belongs to the exact recorded book. Inspect the
 reported `made` result and exit code; generating DXIL is not proof of successful
 pipeline creation. Offline crash logs remain in that run's local pipeline cache.
+
+`Create-VictoryShortcut.ps1 -LocalRoot <workspace-local>` refreshes the workspace
+shortcut to build and launch this candidate. It uses the existing local
+`Victory.ico` created from the package asset; the icon and package assets are
+not redistributed in this repository. The minimized launcher exits with the
+session, while diagnostics remain on disk.
