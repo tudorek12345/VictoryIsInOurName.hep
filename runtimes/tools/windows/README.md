@@ -49,6 +49,9 @@ Read a run with:
 
 The report distinguishes timers, memory guards and missing metadata. Timing
 values are sampled intervals, not a whole-run average or a one-percent low.
+Guarded runs sample private and resident memory for each job process every five
+seconds and once before termination. Decoder/compiler children are included;
+the report keeps each process's sampled maximum separate from the job peak.
 Optional phase evidence is a local JSON array with `label`, `evidence`,
 `startUtc` and `endUtc`; assign a phase only after inspecting its captures.
 Device-removal message counts do not replace checking Windows events.

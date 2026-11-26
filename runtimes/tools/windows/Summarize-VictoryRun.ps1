@@ -56,6 +56,7 @@ $diagFile = Join-Path $logDir 'diagnostics.json'
 $metadata = if (Test-Path -LiteralPath $diagFile -PathType Leaf) { Get-Content -LiteralPath $diagFile -Raw | ConvertFrom-Json } else { $null }
 $samples = New-Object 'System.Collections.Generic.List[object]'
 $memory = New-Object 'System.Collections.Generic.List[object]'
+$jobMemory = New-Object 'System.Collections.Generic.List[object]'
 $state = @{
     stopReason = 'not recorded'; stoppedPhysicalBytes=$null; stoppedCommitBytes=$null
     reservePhysicalBytes=$null; reserveCommitBytes=$null; peakJobCommitBytes=$null; jobCommitLimitBytes=$null
@@ -74,6 +75,9 @@ Read-LinesShared (Join-Path $logDir 'runner.log') {
     if ($line -match 'Verified restored package access rules on (\d+) paths') { $state.restoredPaths=[int]$Matches[1] }
     if ($line -match 'Verified zero-capability AppContainer and bounded job') { $state.zeroCapabilityAppContainerVerified=$true }
     if ($line -match 'Child result (\d+)') { $state.childResult=[long]$Matches[1] }
+    if ($line -match 'Job memory sample: elapsed_ms=(\d+) pid=(\d+) private_bytes=(\d+) working_set_bytes=(\d+)') {
+        $jobMemory.Add([pscustomobject]@{ elapsedMs=[long]$Matches[1]; processId=[int]$Matches[2]; privateBytes=[long]$Matches[3]; workingSetBytes=[long]$Matches[4] })
+    }
 }
 $framePattern = '(?<fps>\d+(?:\.\d+)?) fps, (?<frame>\d+(?:\.\d+)?) ms/frame \((?<prep>[\d.]+) preparing: copies (?<copy>[\d.]+) ms [\d.]+ MB, textures (?<texture>[\d.]+) ms [\d.]+ MB; (?<gpu>[\d.]+) on the GPU; (?<back>[\d.]+) copying back [\d.]+ MB\), (?<draws>[\d.]+) draws/frame, dropped (?<dropped>[\d.]+) without a host pipeline \((?<making>\d+) being made\) and (?<indirect>[\d.]+) indirect'
 Read-LinesShared (Join-Path $logDir 'victory.log') {
@@ -140,6 +144,10 @@ $report = [ordered]@{
     restoredPackagePaths=$state.restoredPaths; zeroCapabilityAppContainerVerified=$state.zeroCapabilityAppContainerVerified
     allSamples=(SampleSummary $samples.ToArray()); tailSamples=@($samples | Select-Object -Last $TailSamples)
     memorySamples=$memory.Count; lastMemorySample=($memory | Select-Object -Last 1)
+    jobProcessMemorySamples=$jobMemory.Count
+    jobProcesses=@($jobMemory | Group-Object processId | ForEach-Object {
+        [pscustomobject]@{ processId=[int]$_.Name; sampledPeakPrivateBytes=($_.Group | Measure-Object privateBytes -Maximum).Maximum; sampledPeakWorkingSetBytes=($_.Group | Measure-Object workingSetBytes -Maximum).Maximum; lastSample=$_.Group[-1] }
+    })
     deviceRemovalMessages=$state.deviceRemovedMessages; allocationFailureMessages=$state.allocationFailureMessages
     phaseEvidence=@($phaseGroups.ToArray()); warnings=@($warnings.ToArray())
 }

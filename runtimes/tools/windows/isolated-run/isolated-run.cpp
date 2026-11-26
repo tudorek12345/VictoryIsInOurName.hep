@@ -5,6 +5,7 @@
 #include <sddl.h>
 #include <userenv.h>
 #include <objbase.h>
+#include <psapi.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -510,11 +511,38 @@ DWORD run(const Options& options, const Profile& container) {
     std::wcout << L"Verified zero-capability AppContainer and bounded job. Child PID " << child.dwProcessId << std::endl;
     check(ResumeThread(thread.value) != DWORD(-1), L"Resume verified child");
 
-    const ULONGLONG deadline = GetTickCount64() + options.timeout_ms;
+    // Sample only members of this job. Include decoder/compiler children so a
+    // parent-only counter cannot hide the source of the job's memory pressure.
+    auto sample_job_memory = [&](ULONGLONG elapsed_ms) {
+        alignas(JOBOBJECT_BASIC_PROCESS_ID_LIST) unsigned char storage[
+            sizeof(JOBOBJECT_BASIC_PROCESS_ID_LIST) + 63 * sizeof(ULONG_PTR)]{};
+        auto* ids = reinterpret_cast<JOBOBJECT_BASIC_PROCESS_ID_LIST*>(storage);
+        if (!QueryInformationJobObject(job.value, JobObjectBasicProcessIdList,
+                                       ids, static_cast<DWORD>(sizeof(storage)), nullptr)) return;
+        for (DWORD n = 0; n < std::min(ids->NumberOfProcessIdsInList, DWORD{64}); ++n) {
+            const auto pid = static_cast<DWORD>(ids->ProcessIdList[n]);
+            Handle member(OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid));
+            PROCESS_MEMORY_COUNTERS_EX counters{};
+            counters.cb = sizeof(counters);
+            if (!member.value || !GetProcessMemoryInfo(member.value,
+                reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters))) continue;
+            std::wcout << L"Job memory sample: elapsed_ms=" << elapsed_ms << L" pid=" << pid
+                       << L" private_bytes=" << counters.PrivateUsage
+                       << L" working_set_bytes=" << counters.WorkingSetSize << std::endl;
+        }
+    };
+    const ULONGLONG began = GetTickCount64();
+    const ULONGLONG deadline = began + options.timeout_ms;
+    ULONGLONG next_sample = began;
     const bool guard_memory = options.reserve_physical_bytes || options.reserve_commit_bytes;
     DWORD result = 124;
     while (true) {
         if (guard_memory) {
+            const auto sample_at = GetTickCount64();
+            if (sample_at >= next_sample) {
+                sample_job_memory(sample_at - began);
+                next_sample = sample_at + 5000;
+            }
             MEMORYSTATUSEX memory{sizeof(MEMORYSTATUSEX)};
             check(GlobalMemoryStatusEx(&memory), L"Query available physical memory");
             if (memory.ullAvailPhys < options.reserve_physical_bytes) {
@@ -544,6 +572,7 @@ DWORD run(const Options& options, const Profile& container) {
             break;
         }
     }
+    if (guard_memory) sample_job_memory(GetTickCount64() - began);
     check(TerminateJobObject(job.value, result), L"Terminate remaining job processes");
     for (int attempt = 0; attempt != 200; ++attempt) {
         JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting{};

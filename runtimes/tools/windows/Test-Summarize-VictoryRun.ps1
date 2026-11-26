@@ -71,6 +71,15 @@ Job ended and stage grants were restored. Child result 126
     $readBack=Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
     Assert ($r.allSamples.count -eq 0 -and $r.stopReason -eq 'not recorded' -and $null -eq $r.launcherExitCode -and $readBack.schemaVersion -eq 1) 'An unfinished empty run must stay unknown and serialize as JSON.'
     $passed++
+    Write-Text $runner @'
+Job memory sample: elapsed_ms=0 pid=10 private_bytes=100 working_set_bytes=80
+Job memory sample: elapsed_ms=5000 pid=10 private_bytes=200 working_set_bytes=70
+Job memory sample: elapsed_ms=5000 pid=11 private_bytes=300 working_set_bytes=150
+'@
+    $r=Report
+    $parentSample=@($r.jobProcesses | Where-Object processId -eq 10)[0]
+    Assert ($r.jobProcessMemorySamples -eq 3 -and $r.jobProcesses.Count -eq 2 -and $parentSample.sampledPeakPrivateBytes -eq 200 -and $parentSample.sampledPeakWorkingSetBytes -eq 80 -and $parentSample.lastSample.elapsedMs -eq 5000) 'Job members and sampled memory peaks must remain separate.'
+    $passed++
     Write-Output "$passed synthetic diagnostic-summary checks passed."
 } finally {
     [Threading.Thread]::CurrentThread.CurrentCulture=$culture
