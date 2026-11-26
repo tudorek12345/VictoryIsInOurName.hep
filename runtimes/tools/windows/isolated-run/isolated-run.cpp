@@ -92,6 +92,7 @@ struct Options {
     SIZE_T commit_bytes = 0;
     ULONGLONG reserve_physical_bytes = 0;
     ULONGLONG reserve_commit_bytes = 0;
+    ULONGLONG reserve_job_bytes = 0;
     bool reuse_output = false;
 };
 
@@ -126,6 +127,7 @@ Options parse(int argc, wchar_t** argv) {
         else if (key == L"--commit-mib") options.commit_bytes = SIZE_T{1024 * 1024} * number(argv[i], 64, 131072);
         else if (key == L"--reserve-physical-mib") options.reserve_physical_bytes = 1048576ULL * number(argv[i], 512, 131072);
         else if (key == L"--reserve-commit-mib") options.reserve_commit_bytes = 1048576ULL * number(argv[i], 512, 131072);
+        else if (key == L"--reserve-job-mib") options.reserve_job_bytes = 1048576ULL * number(argv[i], 1, 131072);
         else if (key == L"--env") {
             const std::wstring entry = argv[i];
             const auto split = entry.find(L'=');
@@ -144,8 +146,11 @@ Options parse(int argc, wchar_t** argv) {
     if (options.program.empty() || options.log.empty() || options.output.empty() ||
         options.inputs.empty() || !options.timeout_ms || !options.commit_bytes) {
         throw Failure{L"Required: --program EXE --rx DIR [--rx DIR] --modify EMPTY_DIR --log NEW_FILE "
-                      L"--seconds N --commit-mib N [--reserve-physical-mib N] [--reserve-commit-mib N] [--reuse-output] "
+                      L"--seconds N --commit-mib N [--reserve-physical-mib N] [--reserve-commit-mib N] [--reserve-job-mib N] [--reuse-output] "
                       L"[--external-rx PACKAGE_DIR] [--env NAME=VALUE] [-- ARGS]"};
+    }
+    if (options.reserve_job_bytes >= options.commit_bytes) {
+        throw Failure{L"The job reserve must be smaller than the job commit limit"};
     }
     return options;
 }
@@ -439,6 +444,12 @@ std::wstring environment(const Options& options) {
     vars[L"SYSTEMROOT"] = vars[L"WINDIR"] = windows;
     vars[L"PATH"] = std::wstring(windows) + L"\\System32;" + windows;
     vars[L"TEMP"] = vars[L"TMP"] = vars[L"LOCALAPPDATA"] = options.output.native();
+    // AMD's D3D12 compiler uses this override rather than LOCALAPPDATA.
+    // Keep its cache inside the already writable run output. The inherited
+    // AppContainer ACL grants no access to the user's global driver cache.
+    const auto driver_cache = options.output / L"driver-cache";
+    fs::create_directories(driver_cache);
+    vars[L"AMD_SHADER_DISK_CACHE_PATH"] = driver_cache.native();
     std::wstring block;
     for (const auto& [key, value] : vars) {
         block += key + L"=" + value;
@@ -477,6 +488,16 @@ DWORD run(const Options& options, const Profile& container) {
         JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_JOB_MEMORY | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
     limits.ProcessMemoryLimit = limits.JobMemoryLimit = options.commit_bytes;
     check(SetInformationJobObject(job.value, JobObjectExtendedLimitInformation, &limits, sizeof(limits)), L"Set job commit limits");
+    Handle notices(options.reserve_job_bytes ? CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 1) : nullptr);
+    if (options.reserve_job_bytes) {
+        check(notices.value != nullptr, L"Create job memory notification port");
+        JOBOBJECT_ASSOCIATE_COMPLETION_PORT port{job.value, notices.value};
+        check(SetInformationJobObject(job.value, JobObjectAssociateCompletionPortInformation, &port, sizeof(port)), L"Associate job memory notification port");
+        JOBOBJECT_NOTIFICATION_LIMIT_INFORMATION notification{};
+        notification.LimitFlags = JOB_OBJECT_LIMIT_JOB_MEMORY;
+        notification.JobMemoryLimit = options.commit_bytes - options.reserve_job_bytes;
+        check(SetInformationJobObject(job.value, JobObjectNotificationLimitInformation, &notification, sizeof(notification)), L"Set job memory notification threshold");
+    }
 
     SECURITY_ATTRIBUTES inheritable{sizeof(inheritable), nullptr, TRUE};
     Handle log(CreateFileW(options.log.c_str(), FILE_APPEND_DATA | SYNCHRONIZE, FILE_SHARE_READ,
@@ -534,9 +555,31 @@ DWORD run(const Options& options, const Profile& container) {
     const ULONGLONG began = GetTickCount64();
     const ULONGLONG deadline = began + options.timeout_ms;
     ULONGLONG next_sample = began;
-    const bool guard_memory = options.reserve_physical_bytes || options.reserve_commit_bytes;
+    const bool guard_memory = options.reserve_physical_bytes || options.reserve_commit_bytes || options.reserve_job_bytes;
     DWORD result = 124;
     while (true) {
+        // Stop before the hard limit denies an allocation and Rust aborts.
+        // The notification covers every child, without guessing from RSS or
+        // adding overlapping allocations. The hard cap remains the backstop;
+        // this asynchronous notification cannot guarantee catching a burst.
+        bool job_pressure = false;
+        if (notices.value) {
+            DWORD message = 0;
+            ULONG_PTR key = 0;
+            OVERLAPPED* entry = nullptr;
+            while (GetQueuedCompletionStatus(notices.value, &message, &key, &entry, 0)) {
+                if (key != reinterpret_cast<ULONG_PTR>(job.value) || message != JOB_OBJECT_MSG_NOTIFICATION_LIMIT) continue;
+                JOBOBJECT_LIMIT_VIOLATION_INFORMATION violation{};
+                check(QueryInformationJobObject(job.value, JobObjectLimitViolationInformation, &violation, sizeof(violation), nullptr), L"Read job memory notification");
+                if (!(violation.ViolationLimitFlags & JOB_OBJECT_LIMIT_JOB_MEMORY)) continue;
+                std::wcout << L"Job commit guard reached. Committed bytes: " << violation.JobMemory
+                           << L"; stop threshold bytes: " << violation.JobMemoryLimit
+                           << L"; hard limit bytes: " << options.commit_bytes << L". Terminating job.\n";
+                job_pressure = true;
+                break;
+            }
+        }
+        if (job_pressure) { result = 126; break; }
         if (guard_memory) {
             const auto sample_at = GetTickCount64();
             if (sample_at >= next_sample) {
@@ -612,6 +655,8 @@ int wmain(int argc, wchar_t** argv) {
         grant(options.output, true);
         if (external) external->open(container.sid);
         const DWORD result = run(options, container);
+        // Report the runtime result even when profile deletion later fails.
+        std::wcout << L"Runtime result before cleanup " << result << L"\n";
         bool restored = true;
         if (external) restored &= external->restore();
         for (auto& access : grants) restored &= access->restore();

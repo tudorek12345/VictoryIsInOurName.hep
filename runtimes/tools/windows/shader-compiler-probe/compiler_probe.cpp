@@ -9,6 +9,7 @@
 #include <cwchar>
 #include <vector>
 #include <chrono>
+#include <fstream>
 
 using Microsoft::WRL::ComPtr;
 
@@ -99,11 +100,16 @@ int wmain(int argc, wchar_t** argv) {
     SetUnhandledExceptionFilter(crash);
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
+    const wchar_t* cache_path = nullptr;
+    if (argc >= 4 && !std::wcscmp(argv[argc - 2], L"--cache")) {
+        cache_path = argv[argc - 1];
+        argc -= 2;
+    }
     const bool mixed = argc == 3 && !std::wcscmp(argv[2], L"--mixed-array");
     const bool array16 = argc == 3 && !std::wcscmp(argv[2], L"--array16");
     const bool unbounded = (argc == 3 && !std::wcscmp(argv[2], L"--array")) || mixed;
     if (argc < 2 || argc > 3 || (argc == 3 && std::wcscmp(argv[2], L"--explicit") && !array16 && !unbounded)) {
-        std::fprintf(stderr, "usage: compiler_probe.exe SHADER.dxil [--explicit|--array16|--array|--mixed-array]\n");
+        std::fprintf(stderr, "usage: compiler_probe.exe SHADER.dxil [--explicit|--array16|--array|--mixed-array] [--cache PATH]\n");
         return 2;
     }
     const bool explicit_registers = argc == 3;
@@ -140,6 +146,9 @@ int wmain(int argc, wchar_t** argv) {
     ComPtr<ID3D12Device> device;
     hr = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
     if (FAILED(hr)) return failed("D3D12CreateDevice", hr);
+    D3D12_FEATURE_DATA_SHADER_CACHE cache_support{};
+    hr = device->CheckFeatureSupport(D3D12_FEATURE_SHADER_CACHE, &cache_support, sizeof(cache_support));
+    if (SUCCEEDED(hr)) std::printf("shader_cache_support=0x%x\n", cache_support.SupportFlags);
     D3D12_FEATURE_DATA_D3D12_OPTIONS1 waves{};
     hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &waves, sizeof(waves));
     if (SUCCEEDED(hr)) std::printf("wave_operations=%d lanes=%u..%u\n", waves.WaveOps,
@@ -183,6 +192,19 @@ int wmain(int argc, wchar_t** argv) {
     D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = root.Get();
     desc.CS = {bytes.data(), bytes.size()};
+    std::vector<unsigned char> cached;
+    if (cache_path) {
+        std::ifstream file(cache_path, std::ios::binary | std::ios::ate);
+        if (file) {
+            const auto size = file.tellg();
+            if (size <= 0 || size > 64 * 1024 * 1024) return failed("cache_size", E_INVALIDARG);
+            cached.resize(static_cast<size_t>(size));
+            file.seekg(0);
+            if (!file.read(reinterpret_cast<char*>(cached.data()), static_cast<std::streamsize>(cached.size()))) return failed("cache_read", E_FAIL);
+            desc.CachedPSO = {cached.data(), cached.size()};
+        }
+        std::printf("cached_input_bytes=%zu\n", cached.size());
+    }
     ComPtr<ID3D12PipelineState> pipeline;
     std::printf("step=CreateComputePipelineState begin\n");
     const auto start = std::chrono::steady_clock::now();
@@ -190,6 +212,14 @@ int wmain(int argc, wchar_t** argv) {
     const double elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now()-start).count();
     std::printf("step=CreateComputePipelineState result=0x%08lx elapsed_ms=%.3f\n",
                 static_cast<unsigned long>(hr), elapsed);
+    if (SUCCEEDED(hr) && cache_path) {
+        ComPtr<ID3DBlob> blob;
+        hr = pipeline->GetCachedBlob(&blob);
+        if (FAILED(hr)) return failed("GetCachedBlob", hr);
+        std::printf("cached_output_bytes=%zu\n", blob->GetBufferSize());
+        std::ofstream file(cache_path, std::ios::binary | std::ios::trunc);
+        if (!file.write(static_cast<const char*>(blob->GetBufferPointer()), static_cast<std::streamsize>(blob->GetBufferSize()))) return failed("cache_write", E_FAIL);
+    }
     // No command queue, allocator, command list, resources, dispatch or fence.
     return FAILED(hr) ? 1 : 0;
 }

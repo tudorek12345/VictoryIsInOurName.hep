@@ -46,3 +46,24 @@ The two simple split-nonuniform source variants were coalesced to the same DXIL 
 | `query-lane-identity-dimensions-only` | S_OK (3.606 ms) | none |
 
 Compiler success does not establish numerical equivalence, rendered output, stable gameplay, or absence of other driver bugs. These results motivate a narrow query-only translation workaround while retaining dimensions, loads, descriptor bounds and resource indices.
+
+## Cache reuse follow-up
+
+`build-cache-stress.py` authors a 2,048-branch compute shader; `Run-CacheProbe.ps1`
+creates its PSO without executing GPU commands. The test uses a 4 GiB job cap,
+4 GiB system-commit reserve and 60-second timeout, with no physical-memory floor.
+The generated shader and cached binary remain local.
+
+| Setup | First creation | Reuse in a new process |
+|---|---:|---:|
+| Original isolated runner | 3,128.839 ms | 3,050.335 ms |
+| Non-isolated authored control | 3,090.688 ms | 1.115 ms |
+| Isolated runner with private AMD cache | 3,419.573 ms | 1.079 ms |
+
+Copying the private driver cache into a fresh isolated output/profile loaded the
+PSO in 1.394 ms without an input `GetCachedBlob` file. That blob is only 954 bytes;
+the driver code cache must persist separately. `-DriverCacheFrom <probe-run-id>`
+validates identical probe and shader hashes before copying it. The runner supplies
+`AMD_SHADER_DISK_CACHE_PATH` within its writable output; global cache ACLs and
+AppContainer capabilities remain unchanged. This demonstrates compiler reuse,
+not gameplay performance or rendering correctness.

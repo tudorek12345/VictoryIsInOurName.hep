@@ -64,6 +64,7 @@ $state = @{
     stopReason = 'not recorded'; stoppedPhysicalBytes=$null; stoppedCommitBytes=$null
     reservePhysicalBytes=$null; reserveCommitBytes=$null; peakJobCommitBytes=$null; jobCommitLimitBytes=$null
     restoredPaths=$null; zeroCapabilityAppContainerVerified=$false; childResult=$null
+    runtimeResultBeforeCleanup=$null; cleanupFailure=$false; stoppedJobBytes=$null; jobStopThresholdBytes=$null
     adapter=$null; software=$null; vendorId=$null; vramMiB=$null
     deviceRemovedMessages=0; allocationFailureMessages=0; malformedFrameSamples=0
 }
@@ -73,11 +74,15 @@ Read-LinesShared (Join-Path $logDir 'runner.log') {
         $state.stopReason='physical memory reserve'; $state.stoppedPhysicalBytes=[long]$Matches[1]; $state.reservePhysicalBytes=[long]$Matches[2]
     } elseif ($line -match 'Host commit guard reached\. Available commit bytes: (\d+); reserve bytes: (\d+)') {
         $state.stopReason='system commit reserve'; $state.stoppedCommitBytes=[long]$Matches[1]; $state.reserveCommitBytes=[long]$Matches[2]
+    } elseif ($line -match 'Job commit guard reached\. Committed bytes: (\d+); stop threshold bytes: (\d+); hard limit bytes: (\d+)') {
+        $state.stopReason='job commit reserve'; $state.stoppedJobBytes=[long]$Matches[1]; $state.jobStopThresholdBytes=[long]$Matches[2]; $state.jobCommitLimitBytes=[long]$Matches[3]
     } elseif ($line -match 'Timeout reached\. Terminating job\.') { $state.stopReason='timer' }
     if ($line -match 'Peak job commit bytes: (\d+); limit bytes: (\d+)') { $state.peakJobCommitBytes=[long]$Matches[1]; $state.jobCommitLimitBytes=[long]$Matches[2] }
     if ($line -match 'Verified restored package access rules on (\d+) paths') { $state.restoredPaths=[int]$Matches[1] }
     if ($line -match 'Verified zero-capability AppContainer and bounded job') { $state.zeroCapabilityAppContainerVerified=$true }
     if ($line -match 'Child result (\d+)') { $state.childResult=[long]$Matches[1] }
+    if ($line -match 'Runtime result before cleanup (\d+)') { $state.runtimeResultBeforeCleanup=[long]$Matches[1] }
+    if ($line -match 'DeleteAppContainerProfile failed|Job termination did not finish|Failed to restore') { $state.cleanupFailure=$true }
     if ($line -match 'Job memory sample: elapsed_ms=(\d+) pid=(\d+) private_bytes=(\d+) working_set_bytes=(\d+)') {
         $jobMemory.Add([pscustomobject]@{ elapsedMs=[long]$Matches[1]; processId=[int]$Matches[2]; privateBytes=[long]$Matches[3]; workingSetBytes=[long]$Matches[4] })
     }
@@ -165,6 +170,9 @@ if (-not $state.adapter) { $warnings.Add('No actual adapter log record; the requ
 if ($phaseGroups.Count -eq 0) { $warnings.Add('No phase evidence supplied. These samples do not distinguish intro, menus, loading, or visible gameplay.') }
 if ($state.deviceRemovedMessages -eq 0) { $warnings.Add('No matching device-removal log message does not establish driver health; check Windows events for the run window.') }
 if ($precompile.requested -and -not $precompile.completed) { $warnings.Add('Precompilation has no completion summary. A successful launch or warm-done file does not establish that all requested host pipelines were created.') }
+$allocationAtLimit = $state.allocationFailureMessages -gt 0 -and $null -ne $state.jobCommitLimitBytes -and $state.peakJobCommitBytes -ge $state.jobCommitLimitBytes
+if ($allocationAtLimit) { $warnings.Add('The runtime logged an allocation failure and the job reached its hard cap. A later runner guard or cleanup exit must not hide that failure; the logs alone do not attribute every allocation to a subsystem.') }
+if ($state.cleanupFailure) { $warnings.Add('Cleanup reported a failure. Package access restoration and profile deletion are separate outcomes; the launcher exit code may describe cleanup instead of the runtime.') }
 $report = [ordered]@{
     schemaVersion=1; run=(Split-Path -Leaf $runPath); generatedAt=[DateTimeOffset]::UtcNow.ToString('o')
     interpretation='Interval samples only. Sample median is not whole-run FPS or a 1% low. CPU preparation is a subset of frame time. GPU time uses the runtime counter and may include waits; overlapping queued work must not be summed. Visible, responsive gameplay and audible output require independent evidence.'
@@ -172,9 +180,12 @@ $report = [ordered]@{
     requestedRenderer=$metadata.renderer; console=$metadata.console; adapter=$state.adapter; softwareAdapter=$state.software; vramMiB=$state.vramMiB
     elapsedSeconds=$metadata.elapsedSeconds; launcherExitCode=$metadata.exitCode
     stopReason=$state.stopReason; childResult=$state.childResult
+    runtimeResultBeforeCleanup=$state.runtimeResultBeforeCleanup; cleanupFailure=$state.cleanupFailure
+    allocationFailureAtJobLimit=$allocationAtLimit
     peakJobCommitBytes=$state.peakJobCommitBytes; jobCommitLimitBytes=$state.jobCommitLimitBytes
     availablePhysicalBytesAtStop=$state.stoppedPhysicalBytes; reservePhysicalBytes=$state.reservePhysicalBytes
     availableCommitBytesAtStop=$state.stoppedCommitBytes; reserveCommitBytes=$state.reserveCommitBytes
+    jobCommitBytesAtStop=$state.stoppedJobBytes; jobStopThresholdBytes=$state.jobStopThresholdBytes
     restoredPackagePaths=$state.restoredPaths; zeroCapabilityAppContainerVerified=$state.zeroCapabilityAppContainerVerified
     allSamples=(SampleSummary $samples.ToArray()); tailSamples=@($samples | Select-Object -Last $TailSamples)
     memorySamples=$memory.Count; lastMemorySample=($memory | Select-Object -Last 1)

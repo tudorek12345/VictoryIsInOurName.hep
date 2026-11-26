@@ -6,6 +6,7 @@
 #include <array>
 #include <cstring>
 #include <iostream>
+#include <vector>
 
 bool same_file(const wchar_t* path) {
     const HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
@@ -87,6 +88,21 @@ bool commit_denied() {
 }
 
 int wmain(int argc, wchar_t** argv) {
+    if (argc == 2 && std::wcscmp(argv[1], L"grow") == 0) {
+        // Small controlled allocations cross the warning threshold before
+        // the hard cap, without requiring system-wide memory pressure.
+        std::vector<void*> allocations;
+        for (unsigned i = 0; i != 40; ++i) {
+            auto* p = VirtualAlloc(nullptr, 1024 * 1024, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            if (!p) { std::cerr << "probe allocation failed\n"; return 20; }
+            allocations.push_back(p);
+            Sleep(100);
+        }
+        std::cout << "Waiting after controlled allocations" << std::endl;
+        Sleep(15000);
+        for (auto* p : allocations) VirtualFree(p, 0, MEM_RELEASE);
+        return 21;
+    }
     if (argc == 2 && std::wcscmp(argv[1], L"wait") == 0) {
         std::cout << "Waiting in test process" << std::endl;
         Sleep(15000);

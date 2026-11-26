@@ -8,9 +8,10 @@ $output = Join-Path $testRoot 'output'
 $timeoutOutput = Join-Path $testRoot 'timeout-output'
 $guardOutput = Join-Path $testRoot 'guard-output'
 $commitGuardOutput = Join-Path $testRoot 'commit-guard-output'
+$jobGuardOutput = Join-Path $testRoot 'job-guard-output'
 $private = Join-Path $testRoot 'private'
 $logs = Join-Path $testRoot 'logs'
-New-Item -ItemType Directory -Path $inputRoot, $output, $timeoutOutput, $guardOutput, $commitGuardOutput, $private, $logs -Force | Out-Null
+New-Item -ItemType Directory -Path $inputRoot, $output, $timeoutOutput, $guardOutput, $commitGuardOutput, $jobGuardOutput, $private, $logs -Force | Out-Null
 
 $inputFile = Join-Path $inputRoot 'seed.bin'
 $outFile = Join-Path $output 'new.bin'
@@ -22,7 +23,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'probe.exe') -Destination $progr
 [IO.File]::WriteAllText($inputFile, 'probe')
 [IO.File]::WriteAllText($privateFile, 'probe')
 $runner = Join-Path $PSScriptRoot $(if ($PhysicalGuard) { 'isolated-run-guard.exe' } else { 'isolated-run.exe' })
-$aclPaths = $inputRoot, $program, $inputFile, $output, $timeoutOutput, $guardOutput, $commitGuardOutput
+$aclPaths = $inputRoot, $program, $inputFile, $output, $timeoutOutput, $guardOutput, $commitGuardOutput, $jobGuardOutput
 $externalArgs = @()
 if ($ExternalPackage) {
     $runner = Join-Path $PSScriptRoot 'isolated-run-external-test.exe'
@@ -97,6 +98,13 @@ if ($PhysicalGuard) {
     if ($LASTEXITCODE -ne 126 -or -not ($messages | Select-String 'Host commit guard reached')) {
         throw 'The commit guard did not stop the probe.'
     }
+    Write-Output $messages
+    $jobLog = Join-Path $logs 'job-guard.log'
+    $messages = & $runner --program $program --rx $inputRoot @externalArgs --modify $jobGuardOutput --log $jobLog --seconds 10 --commit-mib 64 --reserve-job-mib 40 -- grow
+    if ($LASTEXITCODE -ne 126 -or -not ($messages | Select-String 'Job commit guard reached')) {
+        throw 'The job-memory notification did not stop the probe before its hard limit.'
+    }
+    if ((Get-Content -LiteralPath $jobLog -Raw) -match 'allocation failed') { throw 'The probe exhausted its hard limit before the notification.' }
     Write-Output $messages
 }
 $after = Get-AccessRules $aclPaths

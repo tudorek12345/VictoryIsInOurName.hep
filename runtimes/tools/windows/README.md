@@ -68,6 +68,12 @@ refused pipeline or failed checkpoint makes this mode return failure. Its
 `library checkpoint` lines distinguish creations, loads and bytes actually saved.
 A copied cache directory alone is not proof of fast host-pipeline reuse; compare
 load times and the subsequent title's actual `loaded` and `made` counters.
+The isolated runner sets `AMD_SHADER_DISK_CACHE_PATH` to its private writable
+`output/driver-cache`. `-WarmCacheFrom` copies this folder alongside the shader
+and pipeline caches after checking the executable and selected profile. The
+global user driver cache remains inaccessible. On the tested Radeon, this path
+reduced the six previously slow pipeline reloads to 19-244 ms each; sustained
+gameplay FPS still requires a title test.
 Use `-CommitMiB 6144` for bounded offline preparation. Setting
 `-HostReserveMiB 0` disables only the physical floor, never the commit guard.
 
@@ -89,6 +95,13 @@ stalls. `pipelineCacheEvents` retains actual library loads/new compilations;
 Optional phase evidence is a local JSON array with `label`, `evidence`,
 `startUtc` and `endUtc`; assign a phase only after inspecting its captures.
 Device-removal message counts do not replace checking Windows events.
+
+The launcher also sets a job notification up to 512 MiB below the existing hard
+cap. It requests termination before allocation denial, without reserving physical
+RAM. The asynchronous notification cannot guarantee catching a rapid burst.
+`runtimeResultBeforeCleanup`, `cleanupFailure` and `allocationFailureAtJobLimit`
+keep a later cleanup failure from hiding an earlier memory failure. A job stop
+records both its notification threshold and the hard limit.
 
 `Sample-VictoryHostMemory.ps1 -Run <active-run-id> -StageRoot <local-stage>`
 records available physical RAM, system commit and paging counters every five

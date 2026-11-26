@@ -204,3 +204,50 @@ translation and command-list structures. They have been inspected, not merged
 into Victory or claimed as local fixes. A standalone authored compute probe
 also tested `GetCachedBlob` (954 bytes); a tiny-shader test cannot establish that
 this alternative fixes multi-second world PSO loads.
+
+## Private AMD cache and selected shader validation fixes
+
+The next Series X run showed partial, dark world geometry and the user reported
+audible gameplay, followed by a freeze. It did not verify usable first-mission
+gameplay. Allocation errors began at the 24 GiB job cap, before a later system
+commit stop and AppContainer-profile cleanup error. All 151 package access paths
+were restored. The numeric report separates these outcomes instead of treating
+exit 125 as the cause of the runtime failure.
+
+The runner now gives AMD its own writable `output/driver-cache` through
+`AMD_SHADER_DISK_CACHE_PATH`. A controlled authored compute shader took about
+3.1 seconds on every isolated process without this path, but 1.1-1.4 ms on reuse
+with it. A new isolated run loaded six real pipelines in 19-244 ms each, versus
+5.9-8.3 seconds cold. The host pipeline library alone was insufficient: the
+driver's compiled-code cache also needed a writable location and persistence.
+Same-executable warm seeding copies both caches. No global AMD-cache permissions,
+AppContainer capabilities or Windows watchdog settings change. These compiler
+measurements are not a gameplay frame-rate result.
+
+Apply [the validation patch](runtimes/patches/victory-7900xtx-validation-fixes.patch)
+after the offline-library patch to reproduce candidate `ed6d475` from `dc9fd41`.
+Its eight files matched the independently applied patch chain byte for byte.
+The optimized build and 288 shader tests passed; four existing tests were ignored.
+The reviewed 7900XTX head was `39031cb400fb8f05aec27d164801fbc74166ca2d`;
+fxceless remained `46bf5351707b1697c04e5d871c30973ebaa3e973`.
+
+Selected changes retain upstream attribution:
+
+- `e70e031c`: raw native shader entries and failure-list diagnostics.
+- `0dc5d1be`: one interpolation mode per DXIL signature row.
+- `41d3184e`: array LOD queries use spatial coordinates, excluding the array slice.
+- `2d30943e`: iterate the live register set directly.
+
+The local Radeon query workaround and translator-source cache fingerprint remain.
+Experimental constant-heap and descriptor-store hooks, ray-tracing changes and
+the upstream version-only cache key were not imported. Upstream's reported
+roughly 35 GB private memory/64 GB recommendation is not a solution for this
+32 GB host with OBS.
+
+The physical reserve remains zero as requested. A Windows job notification now
+requests termination 512 MiB before the existing hard cap (less for small jobs).
+The 4 GiB system-commit floor and hard job limit remain active. A synthetic growth
+probe confirmed the notification stop before allocation failure; rapid bursts
+and system-wide paging can still outrun it. The summary records the runtime exit
+before cleanup and distinguishes allocation-at-cap, guard stops and cleanup
+failures. Nineteen summary checks and the runner isolation/guard checks passed.

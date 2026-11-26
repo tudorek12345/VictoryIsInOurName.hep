@@ -2802,5 +2802,558 @@
       "Frame samples do not establish stable 30 FPS or visible, controllable gameplay.",
       "PCM measurements do not establish audible speaker output or synchronization."
     ]
+  },
+  "uncappedPhysicalReserve20261125": {
+    "runId": "original-20261125-231554-dcc54bea",
+    "checkout": "dc9fd41e26907d2b94d24b07d7bbf16656fbb413",
+    "checkoutDirty": false,
+    "runtimeSha256": "718CC581BC4083CFAE981206D3F3E1F809528109CCBE7125CA5B977DE2E0B7AA",
+    "started": "2026-11-25T23:15:56.5442558-08:00",
+    "elapsedSeconds": 143.35,
+    "exitCode": 125,
+    "renderer": "hardware",
+    "console": "series-x",
+    "prewarmLibrary": false,
+    "prewarmIndices": [
+      null
+    ],
+    "hostPhysicalReserveMiB": 0,
+    "hostCommitReserveMiB": 4096,
+    "jobCommitLimitBytes": 25769803776,
+    "peakJobCommitBytes": 25770860544,
+    "warmCacheFrom": "original-20261125-225212-6a678211",
+    "pipelineWorkers": 1,
+    "textureNoWait": true,
+    "stopReason": "system commit reserve",
+    "restoredPackagePaths": 151,
+    "precompile": {
+      "requested": false,
+      "known": null,
+      "previouslyProcessed": null,
+      "previouslyBad": null,
+      "selected": null,
+      "processes": null,
+      "completed": false,
+      "processed": null,
+      "refused": null,
+      "childFailures": null,
+      "elapsedSeconds": null
+    },
+    "pipelineCacheEvents": [
+      {
+        "timestamp": "2026-11-26T07:15:58.410890Z",
+        "event": "loaded",
+        "bytes": 195052
+      },
+      {
+        "timestamp": "2026-11-26T07:16:18.498099Z",
+        "event": "saved",
+        "bytes": 0,
+        "early": 1404,
+        "made": 0,
+        "loaded": 170,
+        "started_early": 1153
+      },
+      {
+        "timestamp": "2026-11-26T07:16:39.025844Z",
+        "event": "saved",
+        "bytes": 0,
+        "early": 1404,
+        "made": 0,
+        "loaded": 306,
+        "started_early": 1155
+      },
+      {
+        "timestamp": "2026-11-26T07:16:59.080265Z",
+        "event": "saved",
+        "bytes": 0,
+        "early": 1404,
+        "made": 0,
+        "loaded": 382,
+        "started_early": 1417
+      },
+      {
+        "timestamp": "2026-11-26T07:17:19.229599Z",
+        "event": "saved",
+        "bytes": 196366,
+        "early": 1500,
+        "made": 9,
+        "loaded": 491,
+        "started_early": 1419
+      },
+      {
+        "timestamp": "2026-11-26T07:17:44.105834Z",
+        "event": "saved",
+        "bytes": 0,
+        "early": 1674,
+        "made": 9,
+        "loaded": 533,
+        "started_early": 1419
+      }
+    ],
+    "allSamples": {
+      "count": 20,
+      "firstTimestamp": "2026-11-26T07:16:03.843638Z",
+      "lastTimestamp": "2026-11-26T07:17:48.125573Z",
+      "fps": {
+        "count": 20,
+        "minimum": 1.2,
+        "median": 30,
+        "maximum": 30.1
+      },
+      "frameMs": {
+        "count": 20,
+        "minimum": 33.2,
+        "median": 33.3,
+        "maximum": 814.9
+      },
+      "prepareMs": {
+        "count": 20,
+        "minimum": 0.4,
+        "median": 4.45,
+        "maximum": 692.9
+      },
+      "copyMs": {
+        "count": 20,
+        "minimum": 0.1,
+        "median": 1,
+        "maximum": 36.1
+      },
+      "textureMs": {
+        "count": 20,
+        "minimum": 0,
+        "median": 2.3,
+        "maximum": 574.5
+      },
+      "gpuMs": {
+        "count": 20,
+        "minimum": 0,
+        "median": 0,
+        "maximum": 39.2
+      },
+      "readbackMs": {
+        "count": 20,
+        "minimum": 0,
+        "median": 0,
+        "maximum": 33.7
+      },
+      "drawsPerFrame": {
+        "count": 20,
+        "minimum": 3,
+        "median": 6,
+        "maximum": 767
+      },
+      "droppedWithoutPipeline": {
+        "count": 20,
+        "minimum": 0,
+        "median": 0,
+        "maximum": 1576
+      },
+      "pipelinesBeingMade": {
+        "count": 20,
+        "minimum": 847,
+        "median": 1015.5,
+        "maximum": 1148
+      },
+      "droppedIndirect": {
+        "count": 20,
+        "minimum": 0,
+        "median": 0,
+        "maximum": 2812
+      }
+    },
+    "jobProcesses": [
+      {
+        "processId": 27120,
+        "sampledPeakPrivateBytes": 25725669376,
+        "sampledPeakWorkingSetBytes": 19493638144,
+        "lastSample": {
+          "elapsedMs": 114390,
+          "processId": 27120,
+          "privateBytes": 25706176512,
+          "workingSetBytes": 18466701312
+        }
+      },
+      {
+        "processId": 19828,
+        "sampledPeakPrivateBytes": 1220608,
+        "sampledPeakWorkingSetBytes": 8548352,
+        "lastSample": {
+          "elapsedMs": 114390,
+          "processId": 19828,
+          "privateBytes": 1183744,
+          "workingSetBytes": 6852608
+        }
+      },
+      {
+        "processId": 30524,
+        "sampledPeakPrivateBytes": 10326016,
+        "sampledPeakWorkingSetBytes": 15683584,
+        "lastSample": {
+          "elapsedMs": 114390,
+          "processId": 30524,
+          "privateBytes": 10293248,
+          "workingSetBytes": 15663104
+        }
+      }
+    ],
+    "availablePhysicalBytesAtStop": null,
+    "allocationFailureMessages": 328,
+    "deviceRemovalMessages": 0,
+    "directPipelineMeasurements": [],
+    "visibleGameplayVerified": false,
+    "playerInputResponseVerified": false,
+    "allocationFailureAtJobLimit": true,
+    "cleanupFailure": true,
+    "availableCommitBytesAtStop": 44388352,
+    "reserveCommitBytes": 4294967296,
+    "timedMemory": {
+      "count": 106,
+      "sampledPeakPrivateBytes": 25726242816,
+      "lastSample": {
+        "timestamp": "2026-11-26T07:17:48.893359Z",
+        "elapsed_ms": 105049,
+        "frame": 2026,
+        "private_bytes": 25662136320,
+        "working_set_bytes": 18342371328,
+        "physical_free_bytes": 1784623104,
+        "commit_free_bytes": 12069675008,
+        "rust_bytes": 1351927780,
+        "host_lists": 1564,
+        "list_scratch_bytes": 141819904,
+        "list_spare_bytes": 78905344,
+        "list_upload_bytes": 459264,
+        "host_texture_count": 33500,
+        "host_texture_bytes": 6734610432,
+        "shadow_count": 4063,
+        "shadow_bytes": 3784238774,
+        "shadow_card_bytes": 891158528,
+        "shadow_before_bytes": 179424,
+        "shadow_window_card_bytes": 84082688,
+        "shadow_window_mapped_card_bytes": 0,
+        "staging_count": 145,
+        "staging_bytes": 44259290,
+        "texture_pool_bytes": 4563402752,
+        "staging_pool_bytes": 671088640,
+        "shader_container_bytes": 197817852,
+        "translated_shader_bytes": 11535384,
+        "pipeline_library_bytes": 195052,
+        "made_upload_count": 553,
+        "made_upload_bytes": 2613411544,
+        "made_shared_count": 5268,
+        "made_shared_bytes": 4889984512,
+        "made_card_count": 3464,
+        "made_card_bytes": 1398225856
+      },
+      "interpretation": "Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks."
+    },
+    "hostMemory": {
+      "samples": 20,
+      "minimumAvailablePhysicalBytes": 33554432,
+      "maximumCommittedBytes": 86704910336,
+      "minimumAvailableCommitBytes": 5699252224,
+      "maximumPageReadsPerSecond": 10182,
+      "interpretation": "System totals sampled about every five seconds; not attributable solely to Victory. Sampling stalled during pressure. The runner separately observed a smaller commit reserve."
+    },
+    "captureObservation": "Frame 1950 is almost black. Frame 2000 shows a partial, dark world with large missing regions. This is not correct or controllable gameplay verification.",
+    "userObservation": "User reports gameplay loaded with working audio, fragmented visibility, followed by a crash and system freeze.",
+    "audio": {
+      "measuredSeconds": 45.0,
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "pcmPeak": 9798,
+      "pcmRms": 995.4637916915821,
+      "channelPeaks": [
+        9798,
+        9715
+      ],
+      "speakerOutputVerified": false,
+      "gameplayAudioVerified": false
+    },
+    "windowsEvents": {
+      "checkedStartUtc": "2026-11-26T07:15:50Z",
+      "checkedEndUtc": "2026-11-26T07:19:00Z",
+      "display4101Count": 0,
+      "victoryApplication1000Count": 1,
+      "exceptionCode": "0xc0000409",
+      "interpretation": "WER also reported older LiveKernelEvent dumps from previous dates; their report timestamps do not establish a new GPU reset in this run. The user-observed freeze remains material."
+    },
+    "failureSequence": [
+      "Texture-pool allocation errors began before termination (0x8007000E).",
+      "A host compute pipeline was refused for out-of-memory, despite successful shader translation.",
+      "A 1 MiB Rust allocation failed and job peak reached the 24 GiB hard limit.",
+      "The runner later observed only 44,388,352 bytes of available commit, below its 4 GiB reserve.",
+      "All 151 package access paths were restored; AppContainer profile deletion failed with a sharing violation, so launcher exit 125 is a cleanup result."
+    ]
+  },
+  "upstreamValidation20261125": {
+    "reviewed": {
+      "7900xtx": "39031cb400fb8f05aec27d164801fbc74166ca2d",
+      "fxceless": "46bf5351707b1697c04e5d871c30973ebaa3e973"
+    },
+    "candidate": "ed6d4750b33c176523ba55f9c311f7a6d6aebe59",
+    "selectedCommits": [
+      "e70e031cf969f10cbc91d25bd7713c523c3ad83e",
+      "0dc5d1be486a06c2d1b1c9bd597222e668517cbf",
+      "41d3184eafc83997a923c662dce794b711127d66",
+      "2d30943e0480aeacace469aae76910b86cdaa18b"
+    ],
+    "optimizedShaderTests": {
+      "passed": 288,
+      "failed": 0,
+      "ignored": 4
+    },
+    "diagnosticsBuild": "passed",
+    "gameplayValidated": false,
+    "notImported": "Experimental descriptor-store and constants-heap hooks, ray-tracing descriptor changes, and the upstream version-only shader-cache key. The local translator source fingerprint remains intact."
+  },
+  "privateDriverCacheProbe20261125": {
+    "adapter": "Radeon RX 9060 XT",
+    "driver": "32.0.32029.2010",
+    "authoredBranches": 2048,
+    "shaderBytes": 198316,
+    "cachedBlobBytes": 954,
+    "gpuCommandsExecuted": false,
+    "before": {
+      "isolatedColdMs": 3128.839,
+      "isolatedReuseMs": 3050.335
+    },
+    "controlOutsideIsolation": {
+      "coldMs": 3090.688,
+      "reuseMs": 1.115
+    },
+    "privateDriverCache": {
+      "coldMs": 3419.573,
+      "reuseMs": 1.079,
+      "copiedToFreshRunMs": 1.394
+    },
+    "change": "AMD_SHADER_DISK_CACHE_PATH points inside the writable output/driver-cache folder; same-runtime warm seeding includes that private folder.",
+    "interpretation": "This authored compiler probe validates cache reuse, not gameplay FPS. No global driver cache permissions, Windows watchdog or AppContainer capability changes.",
+    "realPipelineRuns": [
+      {
+        "runId": "original-20261125-233307-d1a3cbd6",
+        "checkout": "ed6d4750b33c176523ba55f9c311f7a6d6aebe59",
+        "checkoutDirty": false,
+        "runtimeSha256": "BF70C86B3FAF3847ECA020C23F66A6ACE5175853D52D31DC1A3F015D0E7A7806",
+        "started": "2026-11-25T23:33:12.6835667-08:00",
+        "elapsedSeconds": 44.61,
+        "exitCode": 0,
+        "renderer": "hardware",
+        "console": "series-x",
+        "prewarmLibrary": true,
+        "prewarmIndices": [
+          51362,
+          51343,
+          51368,
+          51380,
+          51410,
+          51416
+        ],
+        "hostPhysicalReserveMiB": 0,
+        "hostCommitReserveMiB": 4096,
+        "jobCommitLimitBytes": 6442450944,
+        "peakJobCommitBytes": 636235776,
+        "warmCacheFrom": null,
+        "pipelineWorkers": null,
+        "textureNoWait": false,
+        "stopReason": "not recorded",
+        "restoredPackagePaths": 151,
+        "precompile": {
+          "requested": false,
+          "known": null,
+          "previouslyProcessed": null,
+          "previouslyBad": null,
+          "selected": null,
+          "processes": null,
+          "completed": false,
+          "processed": null,
+          "refused": null,
+          "childFailures": null,
+          "elapsedSeconds": null
+        },
+        "pipelineCacheEvents": [
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 6,
+            "loaded": 0,
+            "saved_bytes": 1748
+          }
+        ],
+        "allSamples": {
+          "count": 0
+        },
+        "jobProcesses": [
+          {
+            "processId": 21628,
+            "sampledPeakPrivateBytes": 576405504,
+            "sampledPeakWorkingSetBytes": 557101056,
+            "lastSample": {
+              "elapsedMs": 40828,
+              "processId": 21628,
+              "privateBytes": 389779456,
+              "workingSetBytes": 367538176
+            }
+          },
+          {
+            "processId": 9564,
+            "sampledPeakPrivateBytes": 1208320,
+            "sampledPeakWorkingSetBytes": 7942144,
+            "lastSample": {
+              "elapsedMs": 40828,
+              "processId": 9564,
+              "privateBytes": 1171456,
+              "workingSetBytes": 7921664
+            }
+          }
+        ],
+        "availablePhysicalBytesAtStop": null,
+        "allocationFailureMessages": 0,
+        "deviceRemovalMessages": 0,
+        "directPipelineMeasurements": [
+          {
+            "index": 51362,
+            "elapsedMs": 8334.29,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51343,
+            "elapsedMs": 7296.77,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51368,
+            "elapsedMs": 7795.09,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51380,
+            "elapsedMs": 7508.97,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51410,
+            "elapsedMs": 6956.14,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51416,
+            "elapsedMs": 5891.81,
+            "createdSuccessfully": true
+          }
+        ],
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false
+      },
+      {
+        "runId": "original-20261125-233720-3803a78f",
+        "checkout": "ed6d4750b33c176523ba55f9c311f7a6d6aebe59",
+        "checkoutDirty": false,
+        "runtimeSha256": "BF70C86B3FAF3847ECA020C23F66A6ACE5175853D52D31DC1A3F015D0E7A7806",
+        "started": "2026-11-25T23:37:21.2078147-08:00",
+        "elapsedSeconds": 1.22,
+        "exitCode": 0,
+        "renderer": "hardware",
+        "console": "series-x",
+        "prewarmLibrary": true,
+        "prewarmIndices": [
+          51362,
+          51343,
+          51368,
+          51380,
+          51410,
+          51416
+        ],
+        "hostPhysicalReserveMiB": 0,
+        "hostCommitReserveMiB": 4096,
+        "jobCommitLimitBytes": 6442450944,
+        "peakJobCommitBytes": 209850368,
+        "warmCacheFrom": "original-20261125-233307-d1a3cbd6",
+        "pipelineWorkers": null,
+        "textureNoWait": false,
+        "stopReason": "not recorded",
+        "restoredPackagePaths": 151,
+        "precompile": {
+          "requested": false,
+          "known": null,
+          "previouslyProcessed": null,
+          "previouslyBad": null,
+          "selected": null,
+          "processes": null,
+          "completed": false,
+          "processed": null,
+          "refused": null,
+          "childFailures": null,
+          "elapsedSeconds": null
+        },
+        "pipelineCacheEvents": [
+          {
+            "timestamp": "2026-11-26T07:37:21.909267Z",
+            "event": "loaded",
+            "bytes": 1748
+          },
+          {
+            "timestamp": null,
+            "event": "offline-checkpoint",
+            "made": 0,
+            "loaded": 6,
+            "saved_bytes": 0
+          }
+        ],
+        "allSamples": {
+          "count": 0
+        },
+        "jobProcesses": [
+          {
+            "processId": 21456,
+            "sampledPeakPrivateBytes": 5586944,
+            "sampledPeakWorkingSetBytes": 2555904,
+            "lastSample": {
+              "elapsedMs": 0,
+              "processId": 21456,
+              "privateBytes": 5586944,
+              "workingSetBytes": 2555904
+            }
+          }
+        ],
+        "availablePhysicalBytesAtStop": null,
+        "allocationFailureMessages": 0,
+        "deviceRemovalMessages": 0,
+        "directPipelineMeasurements": [
+          {
+            "index": 51362,
+            "elapsedMs": 243.52,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51343,
+            "elapsedMs": 19.07,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51368,
+            "elapsedMs": 22.76,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51380,
+            "elapsedMs": 20.24,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51410,
+            "elapsedMs": 23.57,
+            "createdSuccessfully": true
+          },
+          {
+            "index": 51416,
+            "elapsedMs": 39.47,
+            "createdSuccessfully": true
+          }
+        ],
+        "visibleGameplayVerified": false,
+        "playerInputResponseVerified": false
+      }
+    ]
   }
 }

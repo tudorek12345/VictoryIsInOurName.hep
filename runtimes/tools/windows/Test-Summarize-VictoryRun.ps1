@@ -112,6 +112,27 @@ ${esc}[2m2026-01-01T00:00:01Z${esc}[0m memory sample (retained except made_*; po
     $checkpoints=@($r.pipelineCacheEvents | Where-Object event -eq 'offline-checkpoint')
     Assert ($checkpoints.Count -eq 2 -and $checkpoints[0].made -eq 6 -and $checkpoints[0].saved_bytes -eq 4096 -and $checkpoints[1].loaded -eq 6 -and $checkpoints[1].saved_bytes -eq 0) 'Offline checkpoints must distinguish created pipelines, library reuse and bytes actually written.'
     $passed++
+    Write-Text $runner @'
+Job commit guard reached. Committed bytes: 5500000000; stop threshold bytes: 5400000000; hard limit bytes: 6000000000. Terminating job.
+Runtime result before cleanup 126
+DeleteAppContainerProfile failed for Synthetic (0x80070020)
+'@
+    Write-Text $victory ''
+    $r=Report
+    Assert ($r.stopReason -eq 'job commit reserve' -and $r.jobCommitBytesAtStop -eq 5500000000 -and $r.jobStopThresholdBytes -eq 5400000000 -and $r.runtimeResultBeforeCleanup -eq 126 -and $r.cleanupFailure -and -not $r.allocationFailureAtJobLimit) 'Job notification and cleanup failures must be recorded separately.'
+    $passed++
+    Write-Text $runner @'
+Host commit guard reached. Available commit bytes: 100000; reserve bytes: 4294967296. Terminating job.
+Peak job commit bytes: 6000000000; limit bytes: 6000000000
+DeleteAppContainerProfile failed for Synthetic (0x80070020)
+'@
+    Write-Text $victory 'memory allocation of 1048576 bytes failed'
+    $r=Report
+    Assert ($r.allocationFailureAtJobLimit -and $r.allocationFailureMessages -eq 1 -and $r.stopReason -eq 'system commit reserve' -and $r.cleanupFailure -and $null -eq $r.runtimeResultBeforeCleanup) 'An allocation failure at the hard cap must not be hidden by a later guard or cleanup failure.'
+    $passed++
+    Write-Text $runner ''
+    Assert (-not (Report).allocationFailureAtJobLimit) 'An allocation error alone must not imply reaching the job limit.'
+    $passed++
     Write-Output "$passed synthetic diagnostic-summary checks passed."
 } finally {
     [Threading.Thread]::CurrentThread.CurrentCulture=$culture

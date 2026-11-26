@@ -9,11 +9,21 @@
 
 `isolated-run.exe` launches a staged local Windows executable with a fresh AppContainer profile containing zero capability SIDs. It checks the suspended child’s token and job assignment before resuming. A private job limits committed memory for each process and the entire job and terminates remaining processes on close. The runner returns the child’s exit code, `124` on timeout, or `125` for a runner error. Output and errors go to the same new log. Child stdin is empty and the environment contains the Windows paths, temporary paths, and VICTORY variables explicitly supplied.
 
+AMD's disk compiler cache uses a private writable `driver-cache` directory inside
+the output root through `AMD_SHADER_DISK_CACHE_PATH`. Global user-cache access
+and AppContainer capabilities remain unchanged.
+
+`--reserve-job-mib N` requests termination before the existing hard job cap.
+Windows job notifications include all children and are checked by the 500 ms
+guard loop. This is not a physical-memory reserve and cannot guarantee catching
+allocation bursts. The runtime result is recorded before profile/ACL cleanup.
+
 ```text
 isolated-run.exe --program EXE --rx DIRECTORY [--rx DIRECTORY ...]
                  --modify EMPTY_DIRECTORY --log NEW_FILE
                  --seconds 1..3600 --commit-mib 64..131072
                  [--reserve-physical-mib N] [--reserve-commit-mib N]
+                 [--reserve-job-mib N]
                  [--external-rx PACKAGE_DIRECTORY]
                  [--env VICTORY_NAME=VALUE ...] -- [PROGRAM_ARGS ...]
 ```

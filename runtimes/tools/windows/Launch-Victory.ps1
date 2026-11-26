@@ -302,7 +302,11 @@ try {
                     Copy-Item -LiteralPath $source -Destination (Join-Path $seededCache $kind) -Recurse
                 }
             }
-            Write-Host "Seeded shader and pipeline cache from $WarmCacheFrom"
+            $driverSeed = Join-Path $seed 'output\driver-cache'
+            if (Test-Path -LiteralPath $driverSeed -PathType Container) {
+                Copy-Item -LiteralPath $driverSeed -Destination (Join-Path $output 'driver-cache') -Recurse
+            }
+            Write-Host "Seeded shader, pipeline and available private driver cache from $WarmCacheFrom"
             if ($PrewarmPipelines -and -not (Test-Path -LiteralPath (Join-Path $seededCache 'pipelines\known-pipelines.bin'))) {
                 throw 'The selected seed has no saved pipeline book.'
             }
@@ -341,6 +345,10 @@ try {
             $arguments += @('--reserve-physical-mib', $HostReserveMiB)
         }
         $arguments += @('--reserve-commit-mib', '4096')
+        # A notification before the existing hard cap avoids an allocation
+        # abort where possible; this does not reserve physical RAM.
+        $jobReserveMiB = [Math]::Min(512, [Math]::Floor($CommitMiB / 8))
+        $arguments += @('--reserve-job-mib', $jobReserveMiB)
         if ($useXcl) {
             $adapter = if ($Renderer -eq 'warp') { 'warp' } else { 'radeon' }
             $arguments += @(
@@ -485,6 +493,7 @@ try {
             availableCommitBytesAtStart = $available
             hostPhysicalReserveMiB = $HostReserveMiB
             hostCommitReserveMiB = 4096
+            jobCommitReserveMiB = $jobReserveMiB
             jobCommitLimitBytes = [long]$CommitMiB * 1MB
             peakJobCommitBytes = $peakBytes
             exitCode = $exitCode
@@ -494,8 +503,8 @@ try {
         }
         if (Test-Path -LiteralPath $captureDir) { $summary['captures'] = $captureDir }
         $summary | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $logs 'diagnostics.json') -Encoding utf8
-        if ($exitCode -eq 126 -and $HostReserveMiB) {
-            Write-Warning 'The host memory guard ended this session.'
+        if ($exitCode -eq 126) {
+            Write-Warning 'A memory guard ended this session; see the recorded physical, system-commit or job-commit reason.'
         } elseif ($exitCode -eq 124) {
             Write-Host "$Backend reached the configured session time limit."
         } elseif ($exitCode -ne 0) {
