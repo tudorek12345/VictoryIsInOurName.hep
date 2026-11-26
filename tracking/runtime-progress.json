@@ -4911,5 +4911,230 @@
       "Mapped-VRAM buffers remain opt-in; no change was made to the pagefile, Windows watchdog or GPU retirement lifetime.",
       "The original package remains unchanged. Raw logs, audio, captures, pipeline books and generated shaders stay local."
     ]
+  },
+  "dynamicDescriptorLifetime20261126": {
+    "run": {
+      "runId": "original-20261126-004118-20b9fe10",
+      "checkout": "598715903ee6bcd095b47a6433545b28e3e8ab03",
+      "checkoutDirty": false,
+      "runtimeSha256": "A18FC317B885D5ACB218F92944F9F993C51F6E55819B799BA582A62F1CFB974B",
+      "started": "2026-11-26T00:41:18.1838395-08:00",
+      "elapsedSeconds": 73.03,
+      "exitCode": 126,
+      "renderer": "hardware",
+      "console": "series-x",
+      "prewarmLibrary": false,
+      "prewarmIndices": [
+        null
+      ],
+      "hostPhysicalReserveMiB": 0,
+      "hostCommitReserveMiB": 4096,
+      "jobCommitLimitBytes": 23622320128,
+      "peakJobCommitBytes": 23249711104,
+      "warmCacheFrom": null,
+      "pipelineWorkers": 1,
+      "textureNoWait": true,
+      "stopReason": "job commit reserve",
+      "restoredPackagePaths": 151,
+      "precompile": {
+        "requested": false,
+        "known": null,
+        "previouslyProcessed": null,
+        "previouslyBad": null,
+        "selected": null,
+        "processes": null,
+        "completed": false,
+        "processed": null,
+        "refused": null,
+        "childFailures": null,
+        "elapsedSeconds": null
+      },
+      "pipelineCacheEvents": [
+        {
+          "timestamp": "2026-11-26T08:41:20.153101Z",
+          "event": "loaded",
+          "bytes": 228048
+        }
+      ],
+      "allSamples": {
+        "count": 10,
+        "firstTimestamp": "2026-11-26T08:41:25.987818Z",
+        "lastTimestamp": "2026-11-26T08:42:22.063265Z",
+        "fps": {
+          "count": 10,
+          "minimum": 1.1,
+          "median": 30,
+          "maximum": 30
+        },
+        "frameMs": {
+          "count": 10,
+          "minimum": 33.3,
+          "median": 33.3,
+          "maximum": 892.7
+        },
+        "prepareMs": {
+          "count": 10,
+          "minimum": 0.6,
+          "median": 3.15,
+          "maximum": 144.3
+        },
+        "copyMs": {
+          "count": 10,
+          "minimum": 0.1,
+          "median": 0.1,
+          "maximum": 54
+        },
+        "textureMs": {
+          "count": 10,
+          "minimum": 0.1,
+          "median": 1.7000000000000002,
+          "maximum": 8.6
+        },
+        "gpuMs": {
+          "count": 10,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 12.8
+        },
+        "readbackMs": {
+          "count": 10,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 5.2
+        },
+        "drawsPerFrame": {
+          "count": 10,
+          "minimum": 3,
+          "median": 10.5,
+          "maximum": 816
+        },
+        "droppedWithoutPipeline": {
+          "count": 10,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 478
+        },
+        "pipelinesBeingMade": {
+          "count": 10,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 13
+        },
+        "droppedIndirect": {
+          "count": 10,
+          "minimum": 0,
+          "median": 0,
+          "maximum": 59
+        }
+      },
+      "jobProcesses": [
+        {
+          "processId": 18612,
+          "sampledPeakPrivateBytes": 23238238208,
+          "sampledPeakWorkingSetBytes": 19200892928,
+          "lastSample": {
+            "elapsedMs": 67422,
+            "processId": 18612,
+            "privateBytes": 23238238208,
+            "workingSetBytes": 19200892928
+          }
+        },
+        {
+          "processId": 7768,
+          "sampledPeakPrivateBytes": 1224704,
+          "sampledPeakWorkingSetBytes": 7974912,
+          "lastSample": {
+            "elapsedMs": 67422,
+            "processId": 7768,
+            "privateBytes": 1187840,
+            "workingSetBytes": 7954432
+          }
+        },
+        {
+          "processId": 2512,
+          "sampledPeakPrivateBytes": 10317824,
+          "sampledPeakWorkingSetBytes": 15712256,
+          "lastSample": {
+            "elapsedMs": 67422,
+            "processId": 2512,
+            "privateBytes": 10285056,
+            "workingSetBytes": 15691776
+          }
+        }
+      ],
+      "availablePhysicalBytesAtStop": null,
+      "allocationFailureMessages": 0,
+      "deviceRemovalMessages": 0,
+      "directPipelineMeasurements": [],
+      "visibleGameplayVerified": false,
+      "playerInputResponseVerified": false,
+      "timedMemory": {
+        "count": 61,
+        "sampledPeakPrivateBytes": 22960377856,
+        "lastSample": {
+          "timestamp": "2026-11-26T08:42:26.047028Z",
+          "elapsed_ms": 60059,
+          "frame": 1356,
+          "private_bytes": 22960377856,
+          "working_set_bytes": 19088654336,
+          "physical_free_bytes": 834371584,
+          "commit_free_bytes": 15105134592,
+          "rust_bytes": 1436413090,
+          "host_lists": 1296,
+          "list_scratch_bytes": 225443840,
+          "list_spare_bytes": 118751232,
+          "list_upload_bytes": 153088,
+          "host_texture_count": 27021,
+          "host_texture_bytes": 5632819200,
+          "shadow_count": 9183,
+          "shadow_bytes": 4086617654,
+          "shadow_card_bytes": 886571008,
+          "shadow_before_bytes": 183264,
+          "shadow_window_card_bytes": 84082688,
+          "shadow_window_mapped_card_bytes": 0,
+          "staging_count": 1019,
+          "staging_bytes": 66179398,
+          "texture_pool_bytes": 3489660928,
+          "staging_pool_bytes": 268435456,
+          "shader_container_bytes": 197809200,
+          "translated_shader_bytes": 126766888,
+          "pipeline_library_bytes": 228048,
+          "made_upload_count": 347,
+          "made_upload_bytes": 2743434904,
+          "made_shared_count": 9468,
+          "made_shared_bytes": 4367996160,
+          "made_card_count": 1087,
+          "made_card_bytes": 1286105536
+        },
+        "interpretation": "Independent timer samples, including frame stalls. Byte counters overlap; do not sum them. made_* counters are cumulative, other allocation counters are retained. Missing fields and null pool values are unknown, not zero. Card-side counters may include shared-memory fallbacks."
+      },
+      "captureObservation": "45-second capture shows loading artwork at 22 FPS; 65-second capture is dark green/black with 1 FPS and 816 draws/frame. No recognizable world or player response verified.",
+      "dredMode": "full-markers",
+      "fullMarkerFormattingMsPerFrame": 455.9,
+      "audio": {
+        "measuredSeconds": 45.0,
+        "sampleRateHz": 48000,
+        "channels": 2,
+        "pcmPeak": 9799,
+        "pcmRms": 1030.1804567360866,
+        "channelPeaks": [
+          9799,
+          9716
+        ],
+        "speakerOutputVerified": false,
+        "gameplayAudioVerified": false
+      },
+      "displayResetEventsObserved": 0,
+      "victoryApplicationCrashEventsObserved": 0,
+      "eventCheckLimitation": "Windows System event 4101 and Victory Application event 1000 checked from run start through analysis; their absence does not prove driver stability.",
+      "interpretation": "The dynamic-resource lifetime defect is corrected, but this run still reaches the 22 GiB job notification. No net memory saving is established. Markers and missing pipelines contribute to the world-entry frame cost; the rendering defect remains unresolved."
+    },
+    "localSourceCommit": "598715903ee6bcd095b47a6433545b28e3e8ab03",
+    "tests": {
+      "descriptorPassed": 46,
+      "drawPassed": 7,
+      "drawIgnored": 1
+    },
+    "optimizedBuildPassed": true
   }
 }

@@ -119,6 +119,13 @@ Optional phase evidence is a local JSON array with `label`, `evidence`,
 `startUtc` and `endUtc`; assign a phase only after inspecting its captures.
 Device-removal message counts do not replace checking Windows events.
 
+The active Radeon candidate uses `VICTORY_D3D12_DRED=light`: GPU crash
+breadcrumbs and page-fault information stay enabled, while per-command text
+markers are omitted. In the 26 November world-entry sample, full marker
+formatting cost about 456 ms per frame. Use `-FullGpuMarkers` only for a bounded
+marker investigation. Metadata records `dredMode`; the setting does not change
+Windows' GPU watchdog or memory limits.
+
 The launcher also sets a job notification up to 512 MiB below the existing hard
 cap. It requests termination before allocation denial, without reserving physical
 RAM. The asynchronous notification cannot guarantee catching a rapid burst.

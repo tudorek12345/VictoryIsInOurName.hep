@@ -36,6 +36,7 @@ param(
     [switch]$MemoryStats,
     [switch]$MemorySamples,
     [switch]$GpuTiming,
+    [switch]$FullGpuMarkers,
     [switch]$SplitGpuLists,
     [switch]$MissionTrace,
     [ValidateRange(0, 128)]
@@ -390,7 +391,7 @@ try {
                 '--env', "VICTORY_GAME_DIR=$package",
                 '--env', ('VICTORY_CACHE_DIR=' + (Join-Path $output 'cache')),
                 '--env', ('VICTORY_DATA_DIR=' + (Join-Path $output 'data')),
-                '--env', 'VICTORY_D3D12_DRED=1',
+                '--env', ('VICTORY_D3D12_DRED=' + $(if ($VictorySource -eq 'amd7900-series-s' -and -not $FullGpuMarkers) { 'light' } else { '1' })),
                 '--env', "VICTORY_D3D12_ADAPTER=$adapter",
                 '--env', "VICTORY_LOG=$logFilter"
             )
@@ -483,6 +484,7 @@ try {
             warmCacheFrom = if ($WarmCacheFrom) { $WarmCacheFrom } else { $null }
             builtRuntimeFrom = if ($BuiltRuntimeFrom) { $BuiltRuntimeFrom } else { $null }
             queuedSubmit = [bool]$QueuedSubmit
+            dredMode = if ($useXcl) { 'xcl-enabled' } elseif ($VictorySource -eq 'amd7900-series-s' -and -not $FullGpuMarkers) { 'light' } else { 'full-markers' }
             textureNoWait = [bool]$TextureNoWait
             trimIdleTextures = [bool]$TrimIdleTextures
             menuPicture = [bool]$MenuPicture
