@@ -1,4 +1,7 @@
+
 streaming now at https://rumble.com/v7ixhj8-vi-victoryisinourname.hep-repo.html?mref=4r2t6m&mc=bzeiw
+<img width="2366" height="1312" alt="image" src="https://github.com/user-attachments/assets/efc9fc86-3982-4671-8007-e16867529d15" />
+
 <img width="2363" height="1281" alt="image" src="https://github.com/user-attachments/assets/23f12951-f439-49a1-93be-fda45e436559" />
 
 <img width="1562" height="842" alt="image lucia where we should go" src="https://github.com/user-attachments/assets/40907987-9d7e-4cba-afde-b8ab5f5a12f6" /> Latest Progress check. 11/25/2026 7AM EST, LUCIA, SHADERS INTEGRATED, Not playable but reaching gameplay treshold stabilization.
