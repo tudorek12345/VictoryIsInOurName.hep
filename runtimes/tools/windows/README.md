@@ -121,8 +121,13 @@ seconds in a local JSONL file. It observes the machine without changing limits
 or processes, stops when the launcher writes finalized metadata (also on manual
 close), and has its own bounded deadline. Start it after the run directory
 exists. These are system totals, not allocations attributable solely to Victory.
+Add `-PagingDiagnostics` to record allocated/used MiB for each active pagefile
+and D: read/write latency, queue length and throughput. This makes one additional
+counter sample per interval; unavailable localized counters are marked unknown.
+Hard page reads can include executable or mapped-file reads, so they do not
+alone establish pagefile traffic or identify the drive responsible.
 
-The two `Test-*.ps1` scripts use synthetic files only. The runner's additional
+The `Test-*.ps1` scripts use synthetic files only. The runner's additional
 tests are documented in `isolated-run/README.md`.
 
 For a bounded compiler reproduction, add `-PrewarmIndices 51362` (an example

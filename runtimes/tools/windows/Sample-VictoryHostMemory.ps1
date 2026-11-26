@@ -5,7 +5,8 @@ param(
     [string]$Run,
     [string]$StageRoot = (Join-Path $PSScriptRoot 'isolated-run\stage'),
     [ValidateRange(1, 3600)] [int]$MaxSeconds = 300,
-    [ValidateRange(1, 60)] [int]$IntervalSeconds = 5
+    [ValidateRange(1, 60)] [int]$IntervalSeconds = 5,
+    [switch]$PagingDiagnostics
 )
 
 # Read-only host telemetry. Never changes a guard, process, driver or resource.
@@ -32,6 +33,25 @@ try {
             pageReadsPerSecond = [uint64]$memory.PageReadsPersec
             pageWritesPerSecond = [uint64]$memory.PageWritesPersec
             launcherFinalized = [bool](Test-Path -LiteralPath $finished -PathType Leaf)
+        }
+        if ($PagingDiagnostics) {
+            $row.pagefiles = @(Get-CimInstance Win32_PageFileUsage | ForEach-Object {
+                [ordered]@{name=$_.Name; allocatedMiB=$_.AllocatedBaseSize; usedMiB=$_.CurrentUsage; peakUsedMiB=$_.PeakUsage}
+            })
+            try {
+                $diskCounters = Get-Counter -Counter @(
+                    '\LogicalDisk(D:)\Avg. Disk sec/Read', '\LogicalDisk(D:)\Avg. Disk sec/Write',
+                    '\LogicalDisk(D:)\Current Disk Queue Length', '\LogicalDisk(D:)\Disk Read Bytes/sec',
+                    '\LogicalDisk(D:)\Disk Write Bytes/sec', '\LogicalDisk(D:)\% Disk Time'
+                ) -ErrorAction Stop
+                $row.driveD = @($diskCounters.CounterSamples | ForEach-Object {
+                    [ordered]@{counter=($_.Path -replace '^.*\\logicaldisk\(d:\)\\',''); value=$_.CookedValue; status=$_.Status}
+                })
+            } catch {
+                # Counter names can differ on localized Windows. Missing data
+                # must remain unknown rather than silently reporting zero I/O.
+                $row.driveDCountersUnavailable = $true
+            }
         }
         $writer.WriteLine(($row | ConvertTo-Json -Compress))
         $writer.Flush()
