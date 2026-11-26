@@ -59,6 +59,8 @@ $memory = New-Object 'System.Collections.Generic.List[object]'
 $timedMemory = New-Object 'System.Collections.Generic.List[object]'
 $videoMemory = New-Object 'System.Collections.Generic.List[object]'
 $pipelineCache = New-Object 'System.Collections.Generic.List[object]'
+$displayModes = New-Object 'System.Collections.Generic.List[object]'
+$swapchains = New-Object 'System.Collections.Generic.List[object]'
 $precompile = [ordered]@{ requested=$false; known=$null; previouslyProcessed=$null; previouslyBad=$null; selected=$null; processes=$null; completed=$false; processed=$null; refused=$null; childFailures=$null; elapsedSeconds=$null }
 $jobMemory = New-Object 'System.Collections.Generic.List[object]'
 $state = @{
@@ -93,6 +95,11 @@ Read-LinesShared (Join-Path $logDir 'victory.log') {
     param($line,$lineNumber)
     $timestamp = $null
     if ($line -match '^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))') { $timestamp=$Matches[1] }
+    if ($line -match '\b(display mode reported to the title|presenting to a window)\s+width=(\d+)\s+height=(\d+)') {
+        $kind = $Matches[1]
+        $size = [pscustomobject]@{ logLine=$lineNumber; timestamp=$timestamp; width=[int]$Matches[2]; height=[int]$Matches[3] }
+        if ($kind -eq 'display mode reported to the title') { $displayModes.Add($size) } else { $swapchains.Add($size) }
+    }
     $match = [regex]::Match($line, $framePattern)
     if ($match.Success) {
         $g=$match.Groups
@@ -179,11 +186,25 @@ if ($precompile.requested -and -not $precompile.completed) { $warnings.Add('Prec
 $allocationAtLimit = $state.allocationFailureMessages -gt 0 -and $null -ne $state.jobCommitLimitBytes -and $state.peakJobCommitBytes -ge $state.jobCommitLimitBytes
 if ($allocationAtLimit) { $warnings.Add('The runtime logged an allocation failure and the job reached its hard cap. A later runner guard or cleanup exit must not hide that failure; the logs alone do not attribute every allocation to a subsystem.') }
 if ($state.cleanupFailure) { $warnings.Add('Cleanup reported a failure. Package access restoration and profile deletion are separate outcomes; the launcher exit code may describe cleanup instead of the runtime.') }
+$lastDisplay = $displayModes | Select-Object -Last 1
+$lastSwapchain = $swapchains | Select-Object -Last 1
+$swapchainMatchesRequest = $null
+if ($metadata.requestedGuestDisplayMode -and $lastSwapchain) {
+    $swapchainMatchesRequest = ('{0}x{1}' -f $lastSwapchain.width, $lastSwapchain.height) -eq $metadata.requestedGuestDisplayMode
+    if (-not $swapchainMatchesRequest) { $warnings.Add('The observed swapchain does not match the requested guest display mode. This is not a verified lower-resolution rendering test.') }
+}
 $report = [ordered]@{
     schemaVersion=1; run=(Split-Path -Leaf $runPath); generatedAt=[DateTimeOffset]::UtcNow.ToString('o')
     interpretation='Interval samples only. Sample median is not whole-run FPS or a 1% low. CPU preparation is a subset of frame time. GPU time uses the runtime counter and may include waits; overlapping queued work must not be summed. Visible, responsive gameplay and audible output require independent evidence.'
     checkout=$metadata.checkout; checkoutDirty=$metadata.checkoutDirty; runtimeSha256=$metadata.runtimeSha256
     requestedRenderer=$metadata.renderer; console=$metadata.console; adapter=$state.adapter; softwareAdapter=$state.software; vramMiB=$state.vramMiB
+    resolution=[ordered]@{
+        requestedGuestDisplayMode=$metadata.requestedGuestDisplayMode
+        legacyPresentationOnly=$metadata.legacy720pPresentationOnly
+        reportedGuestDisplay=$lastDisplay; observedSwapchain=$lastSwapchain
+        swapchainMatchesRequest=$swapchainMatchesRequest
+        interpretation='The guest display report, swapchain and internal render targets are different. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown.'
+    }
     elapsedSeconds=$metadata.elapsedSeconds; launcherExitCode=$metadata.exitCode
     stopReason=$state.stopReason; childResult=$state.childResult
     runtimeResultBeforeCleanup=$state.runtimeResultBeforeCleanup; cleanupFailure=$state.cleanupFailure

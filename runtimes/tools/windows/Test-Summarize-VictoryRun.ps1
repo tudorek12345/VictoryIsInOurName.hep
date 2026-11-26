@@ -151,6 +151,24 @@ DeleteAppContainerProfile failed for Synthetic (0x80070020)
     $r=Report
     Assert ($r.timedMemory.count -eq 2 -and $r.timedMemory.samples[0].host_idle_lists -eq 512 -and $null -eq $r.timedMemory.samples[0].host_inflight_lists -and $r.timedMemory.samples[0].host_landing_active -eq $true -and $r.timedMemory.lastSample.host_landing_active -eq $false -and $r.timedMemory.lastSample.host_inflight_lists -eq 0 -and $null -eq $r.timedMemory.lastSample.host_idle_lists) 'Busy ownership snapshots and landing flags must preserve unknown, false and zero separately.'
     $passed++
+    Write-Text $metadata '{"requestedGuestDisplayMode":"1920x1080","legacy720pPresentationOnly":false}'
+    Write-Text $victory ("${esc}[2m2026-01-01T00:00:01Z${esc}[0m display mode reported to the title width=1920 height=1080`n2026-01-01T00:00:02Z presenting to a window width=3840 height=2160 format=28")
+    $r=Report
+    Assert ($r.resolution.reportedGuestDisplay.width -eq 1920 -and $r.resolution.observedSwapchain.width -eq 3840 -and $r.resolution.swapchainMatchesRequest -eq $false -and @($r.warnings | Where-Object { $_ -match 'not a verified lower-resolution' }).Count -eq 1) 'A guest mode request must not masquerade as actual lower-resolution rendering.'
+    $passed++
+    Write-Text $victory 'presenting to a window width=1920 height=1080 format=28'
+    $r=Report
+    Assert ($r.resolution.swapchainMatchesRequest -eq $true -and $null -eq $r.resolution.reportedGuestDisplay -and $r.resolution.interpretation -match 'does not prove every pass') 'Matching output size must not imply internal render-target sizes.'
+    $passed++
+    Write-Text $victory ''
+    $r=Report
+    Assert ($null -eq $r.resolution.observedSwapchain -and $null -eq $r.resolution.swapchainMatchesRequest) 'Absent swapchain observations must stay unknown.'
+    $passed++
+    Write-Text $metadata '{}'
+    Write-Text $victory 'presenting to a window width=3840 height=2160 format=28'
+    $r=Report
+    Assert ($r.resolution.observedSwapchain.height -eq 2160 -and $null -eq $r.resolution.swapchainMatchesRequest) 'An observed output without a request is not a mode mismatch.'
+    $passed++
     Write-Output "$passed synthetic diagnostic-summary checks passed."
 } finally {
     [Threading.Thread]::CurrentThread.CurrentCulture=$culture
