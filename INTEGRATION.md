@@ -439,3 +439,36 @@ rotation-like bits 1). After correction, the optimized formats library passed
 regression covers all eight modes, invalid rotation-like bits in nonrotating
 modes, and valid rotated endpoint packing. No game streams or tables are added.
 This establishes a decoder correction, not a measured FPS, RAM or gameplay fix.
+
+## Optional checked guest-output experiment
+
+[The checked output patch](runtimes/patches/victory-checked-guest-output.patch)
+applies next, producing `f690d6f`. It adapts the output-setting portion of
+[avatarmanz f63b4b12](https://github.com/avatarmanz/VIctory-7900XTX/commit/f63b4b12c556ff123c6fd591d8380dba2f17c8ff)
+without the render-scale, FidelityFX, upscaler or frame-rate experiments.
+It is disabled unless `VICTORY_OUTPUT` requests one of five supported dimensions.
+The launcher exposes `-GuestOutput 1920x1080` only with `-FreshState`, separately
+from display-mode advertising and menu presentation. It rejects preparation-mode
+and conflicting resolution requests. Normal launches remain unchanged.
+
+The loader validates the original executable hash, both mapped instruction-range
+digests, image bounds and executable-page permissions before any writes. It
+backs up the ranges, restores permissions and flushes the instruction cache;
+failure rolls back and returns an error before title execution. Original game
+bytes are not published and neither the package nor cached image is modified.
+
+Unlike the upstream unconditional pool-assertion bypass, this adaptation retains
+the conditional unsigned check and trap. Local read-only analysis established
+that the result is remaining capacity, computed from the original capacity,
+cursor and pool base. Allowing remaining bytes up to the original capacity
+supports smaller output while still rejecting unsigned overrun/underflow. The
+allocator's separate per-allocation bounds check is untouched. Native 4K retains
+the original assertion. The original pool capacity is not enlarged or reduced.
+
+Ten authored loader tests passed, including rollback failure paths, range/hash
+rejection, relative instruction targets, pool-boundary arithmetic, and a real
+Windows virtual-memory protection/restoration test. The launcher resolver passed
+21 checks; 17 existing display-option and 20 current-cache preparation checks
+also passed. These tests establish the experiment's validation and failure
+behavior. A title run must independently confirm changed render-target sizes,
+memory and frame timing; the option alone does not establish an improvement.

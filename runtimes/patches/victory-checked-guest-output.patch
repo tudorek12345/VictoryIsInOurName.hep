@@ -1,0 +1,810 @@
+From f690d6fbd6e879cbc185c4abb4cb5fca52dc64ad Mon Sep 17 00:00:00 2001
+From: tudorek12345 <44846825+tudorek12345@users.noreply.github.com>
+Date: Thu, 26 Nov 2026 03:24:52 -0800
+Subject: [PATCH] Add checked transactional guest-output experiment with pool
+ bounds retained
+
+Adapt only the title output-setting path from avatarmanz f63b4b12. Default off, verify original-image and mapped-range digests, rollback on failure and stop before title execution. Preserve the pool allocation check and conditional unsigned remaining-capacity bound rather than importing an unconditional bypass. Ten authored loader tests pass, including real Windows memory-protection restoration. The original package is never changed.
+---
+ apps/victory/src/run.rs                       |   9 +
+ crates/victory-loader/src/lib.rs              |   1 +
+ crates/victory-loader/src/resolution.rs       | 416 ++++++++++++++++++
+ crates/victory-loader/src/resolution/tests.rs | 324 ++++++++++++++
+ 4 files changed, 750 insertions(+)
+ create mode 100644 crates/victory-loader/src/resolution.rs
+ create mode 100644 crates/victory-loader/src/resolution/tests.rs
+
+diff --git a/apps/victory/src/run.rs b/apps/victory/src/run.rs
+index 6706904..9803677 100644
+--- a/apps/victory/src/run.rs
++++ b/apps/victory/src/run.rs
+@@ -55,6 +55,7 @@ pub fn run(
+     let cfg = victory_core::Config::load()?;
+     let original = std::fs::read(exe).with_context(|| format!("reading {}", exe.display()))?;
+     let prepared = victory_loader::prepare(&original)?;
++    let original_hash = prepared.original_hash;
+     let hash = prepared.original_hash.to_hex();
+     match victory_game::identify(&hash) {
+         Some(build) => println!("build          {} ({hash})", build.label),
+@@ -165,6 +166,14 @@ pub fn run(
+     show(&exe_name, image.bind_imports(&with_dlls, policy)?);
+     if execute {
+         let size = image.info().size_of_image as usize;
++        // SAFETY: the original hash was captured before mapping; the image
++        // stays mapped and no title code has run. A partial/unsupported
++        // output patch is fatal here, before spawn_main can execute it.
++        let output = unsafe { victory_loader::resolution::apply_asked(image.base(), size, &original_hash) }
++            .context("applying requested guest output before title execution")?;
++        if let victory_loader::resolution::ApplyOutcome::Applied { width, height } = output {
++            println!("guest output   {width}x{height}; native render scale unchanged");
++        }
+         // SAFETY: the image stays mapped, and nothing of it has run yet.
+         unsafe { victory_loader::write_sites::apply_asked(&image_name, image.base(), size) };
+     }
+diff --git a/crates/victory-loader/src/lib.rs b/crates/victory-loader/src/lib.rs
+index c99eba4..de2eaad 100644
+--- a/crates/victory-loader/src/lib.rs
++++ b/crates/victory-loader/src/lib.rs
+@@ -26,6 +26,7 @@ mod console_insn;
+ mod crash;
+ pub mod prepare;
+ pub(crate) mod publish;
++pub mod resolution;
+ pub mod resolve;
+ #[cfg(all(windows, feature = "diagnostics"))]
+ mod profile;
+diff --git a/crates/victory-loader/src/resolution.rs b/crates/victory-loader/src/resolution.rs
+new file mode 100644
+index 0000000..239d9cc
+--- /dev/null
++++ b/crates/victory-loader/src/resolution.rs
+@@ -0,0 +1,416 @@
++//! Opt-in guest output size, applied before any title code runs.
++//!
++//! Adapted from avatarmanz/VIctory-7900XTX f63b4b12's output-only path.
++//! This changes live settings through the title's screen-size setter, not
++//! merely the host window. Its existing render scale and upscaler remain
++//! unchanged. The back-buffer pool keeps its original capacity.
++//!
++//! Original title bytes are deliberately absent: both the original image
++//! and the mapped ranges are identified by cryptographic digests. A request
++//! is an all-or-error transaction; an error must prevent title execution.
++//! Only the mapped image changes, never the package or cached image file.
++//! The title may subsequently serialize the chosen size to its own settings,
++//! so comparisons should use an isolated fresh profile.
++
++pub const MODES: [(u32, u32); 5] = [
++    (1280, 720),
++    (1664, 936),
++    (1920, 1080),
++    (2560, 1440),
++    (3840, 2160),
++];
++const ORIGINAL_BLAKE3: &str = "b99f876b74d4a77f03af5f878223b27bd647b5c35a79d5decd9f716504239e93";
++const OUTPUT_AT: usize = 0x224352b;
++const OUTPUT_LEN: usize = 61;
++const POOL_AT: usize = 0x247af25;
++const SET_SCREEN_SIZE: usize = 0x2478130;
++const SCREEN_HEIGHT: usize = 0xa9438d0;
++const HEIGHT_CHANGED: usize = 0xd8c3a0;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ApplyOutcome {
++    Disabled,
++    Applied { width: u32, height: u32 },
++}
++
++#[derive(Debug, thiserror::Error)]
++#[error("guest output: {0}")]
++pub struct ResolutionError(String);
++
++fn error(message: impl Into<String>) -> ResolutionError {
++    ResolutionError(message.into())
++}
++
++pub fn parse_output(spec: &str) -> Option<(u32, u32)> {
++    let (w, h) = spec.trim().split_once(['x', 'X'])?;
++    let size = (w.trim().parse().ok()?, h.trim().parse().ok()?);
++    MODES.contains(&size).then_some(size)
++}
++
++struct Patch {
++    at: usize,
++    len: usize,
++    expected: String,
++    write_offset: usize,
++    code: Vec<u8>,
++}
++
++struct Plan {
++    width: u32,
++    height: u32,
++    patches: Vec<Patch>,
++}
++
++fn plan(requested: Option<&str>, original: &str) -> Result<Option<Plan>, ResolutionError> {
++    let Some(spec) = requested else {
++        return Ok(None);
++    };
++    let (width, height) = parse_output(spec).ok_or_else(|| {
++        error("VICTORY_OUTPUT must be 1280x720, 1664x936, 1920x1080, 2560x1440 or 3840x2160")
++    })?;
++    if original != ORIGINAL_BLAKE3 {
++        return Err(error(
++            "VICTORY_OUTPUT does not support this original executable's BLAKE3",
++        ));
++    }
++    Ok(Some(Plan {
++        width,
++        height,
++        patches: vec![
++            Patch {
++                at: OUTPUT_AT,
++                len: OUTPUT_LEN,
++                expected: "f25c4444265c7e41c845ebd73928cab5d62069ebfa4ed6e90a59053d65ab0963".into(),
++                write_offset: 0,
++                code: output_code(width, height),
++            },
++            Patch {
++                at: POOL_AT,
++                len: 9,
++                expected: "a82361972f2771864a7cf22c0b00e9e84aef1572c945d0c5d93dc3a24177f5b2".into(),
++                write_offset: 0,
++                // At lower sizes more unused space is expected. Keep the
++                // unsigned capacity bound and trap, replacing only the
++                // near-full invariant. Native 4K retains its original check.
++                code: if (width, height) == (3840, 2160) {
++                    vec![]
++                } else {
++                    pool_code()
++                },
++            },
++        ],
++    }))
++}
++
++fn rel(to: usize, next: usize) -> [u8; 4] {
++    // All callers use the fixed offsets of this one verified image.
++    i32::try_from(to as i64 - next as i64)
++        .expect("fixed image relative address")
++        .to_le_bytes()
++}
++
++/// Authored replacement: update the settings, call the normal size setter,
++/// and notify the existing height-change handler only when height changed.
++fn output_code(width: u32, height: u32) -> Vec<u8> {
++    let mut code = vec![0xb8]; // mov eax, width
++    code.extend(width.to_le_bytes());
++    code.extend([0x89, 0x86, 0x04, 0x02, 0, 0]); // mov [rsi+204h], eax
++    code.push(0xbf); // mov edi, height
++    code.extend(height.to_le_bytes());
++    code.extend([0x89, 0xbe, 0x08, 0x02, 0, 0]); // mov [rsi+208h], edi
++    code.extend([0x8b, 0x2d]); // mov ebp, [screen height]
++    code.extend(rel(SCREEN_HEIGHT, OUTPUT_AT + code.len() + 4));
++    code.extend([0x89, 0xc1, 0x89, 0xfa, 0xe8]); // arguments; call setter
++    code.extend(rel(SET_SCREEN_SIZE, OUTPUT_AT + code.len() + 4));
++    code.extend([0x39, 0xfd, 0x74, 20]); // cmp ebp, edi; je end
++    code.extend([0xb1, 1, 0xe8]); // mov cl, 1; call height changed
++    code.extend(rel(HEIGHT_CHANGED, OUTPUT_AT + code.len() + 4));
++    code.extend([0xeb, 11]); // jmp end
++    code.resize(OUTPUT_LEN, 0xcc); // unreachable padding
++    code
++}
++
++/// The caller's stack record holds cursor at +0x70 and original capacity
++/// (64/82 MiB) at +0x78. Its allocator callback advances only the cursor and
++/// separately checks each allocation against base+capacity; that code is
++/// unchanged. Here RAX = capacity - (cursor-base), modulo u64. Checking it
++/// against capacity permits unused space while still trapping an overrun
++/// or cursor-before-base. Unlike an unconditional jump, this keeps a bound.
++fn pool_code() -> Vec<u8> {
++    vec![
++        0x48, 0x3b, 0x44, 0x24, 0x78, // cmp rax, [rsp+78h]
++        0x76, 0x02, // jbe original continuation at +9
++        0xcc, // trap if unsigned remaining exceeds capacity
++        0x90, // padding; only reached if a debugger resumes the trap
++    ]
++}
++
++/// Small injected interface makes every transaction failure reproducible
++/// with authored memory; tests never require or execute title code.
++trait Memory {
++    type Protection: Copy;
++    fn read(&mut self, at: usize, len: usize) -> Result<Vec<u8>, String>;
++    fn writable(&mut self, at: usize, len: usize) -> Result<Self::Protection, String>;
++    fn write(&mut self, at: usize, bytes: &[u8]) -> Result<(), String>;
++    fn restore(&mut self, at: usize, len: usize, old: Self::Protection) -> Result<(), String>;
++    fn flush(&mut self, at: usize, len: usize) -> Result<(), String>;
++}
++
++fn range(at: usize, len: usize, size: usize) -> Result<std::ops::Range<usize>, ResolutionError> {
++    let end = at
++        .checked_add(len)
++        .filter(|&end| end <= size)
++        .ok_or_else(|| error("patch range is outside the mapped image"))?;
++    if len == 0 {
++        return Err(error("empty patch range"));
++    }
++    Ok(at..end)
++}
++
++fn transaction<M: Memory>(
++    memory: &mut M,
++    size: usize,
++    patches: &[Patch],
++) -> Result<(), ResolutionError> {
++    let mut backups = Vec::with_capacity(patches.len());
++    // Validate every footprint and digest BEFORE changing any protection.
++    for (i, patch) in patches.iter().enumerate() {
++        let span = range(patch.at, patch.len, size)?;
++        if patch
++            .write_offset
++            .checked_add(patch.code.len())
++            .is_none_or(|end| end > patch.len)
++        {
++            return Err(error("replacement extends outside its verified range"));
++        }
++        if patches[..i]
++            .iter()
++            .any(|p| p.at < span.end && span.start < p.at + p.len)
++        {
++            return Err(error("overlapping patch ranges"));
++        }
++        let bytes = memory.read(patch.at, patch.len).map_err(error)?;
++        if bytes.len() != patch.len || blake3::hash(&bytes).to_hex().as_str() != patch.expected {
++            return Err(error(format!(
++                "mapped bytes differ at +{:#x}; nothing patched",
++                patch.at
++            )));
++        }
++        backups.push(bytes);
++    }
++    let mut protected = Vec::with_capacity(patches.len());
++    for (i, patch) in patches
++        .iter()
++        .enumerate()
++        .filter(|(_, p)| !p.code.is_empty())
++    {
++        match memory.writable(patch.at, patch.len) {
++            Ok(old) => protected.push((i, old)),
++            Err(reason) => {
++                let mut failures = vec![reason];
++                for &(j, old) in protected.iter().rev() {
++                    let p = &patches[j];
++                    if let Err(e) = memory.restore(p.at, p.len, old) {
++                        failures.push(e);
++                    }
++                }
++                return Err(error(failures.join("; ")));
++            }
++        }
++    }
++    let apply = (|| -> Result<(), String> {
++        for &(i, _) in &protected {
++            let p = &patches[i];
++            memory.write(p.at + p.write_offset, &p.code)?;
++        }
++        for &(i, _) in &protected {
++            let p = &patches[i];
++            memory.flush(p.at, p.len)?;
++        }
++        for &(i, old) in protected.iter().rev() {
++            let p = &patches[i];
++            memory.restore(p.at, p.len, old)?;
++        }
++        Ok(())
++    })();
++    if let Err(reason) = apply {
++        // A write can fail after a partial copy in the test backend. Some
++        // pages may already be read-only again. Reacquire each page, restore
++        // its saved bytes, flush, and restore its ORIGINAL protection token.
++        // If the OS also refuses cleanup, report it and still never execute.
++        let mut failures = vec![reason];
++        for &(i, old) in protected.iter().rev() {
++            let p = &patches[i];
++            match memory.writable(p.at, p.len) {
++                Ok(_) => {
++                    if let Err(e) = memory.write(p.at, &backups[i]) {
++                        failures.push(format!("rollback: {e}"));
++                    }
++                    if let Err(e) = memory.flush(p.at, p.len) {
++                        failures.push(format!("rollback: {e}"));
++                    }
++                }
++                Err(e) => failures.push(format!("rollback: {e}")),
++            }
++            if let Err(e) = memory.restore(p.at, p.len, old) {
++                failures.push(format!("rollback: {e}"));
++            }
++        }
++        return Err(error(failures.join("; ")));
++    }
++    Ok(())
++}
++
++#[cfg(windows)]
++struct MappedImage {
++    base: usize,
++    size: usize,
++}
++
++#[cfg(windows)]
++impl MappedImage {
++    fn address(&self, at: usize, len: usize) -> Result<usize, String> {
++        range(at, len, self.size).map_err(|e| e.to_string())?;
++        let address = self.base.checked_add(at).ok_or("image address overflow")?;
++        address.checked_add(len).ok_or("image end overflow")?;
++        Ok(address)
++    }
++
++    fn readable(&self, at: usize, len: usize) -> Result<usize, String> {
++        use windows_sys::Win32::System::Memory::{
++            MEM_COMMIT, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE,
++            PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, VirtualQuery,
++        };
++        let address = self.address(at, len)?;
++        let mut info: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
++        // SAFETY: VirtualQuery inspects the address without dereferencing it.
++        if unsafe { VirtualQuery(address as *const _, &mut info, std::mem::size_of_val(&info)) }
++            == 0
++        {
++            return Err(format!("VirtualQuery: {}", std::io::Error::last_os_error()));
++        }
++        let end = (info.BaseAddress as usize)
++            .checked_add(info.RegionSize)
++            .ok_or("region end overflow")?;
++        if info.State != MEM_COMMIT
++            || info.AllocationBase as usize != self.base
++            || !matches!(
++                info.Protect & 0xff,
++                PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY
++            )
++            || info.Protect & PAGE_GUARD != 0
++            || address + len > end
++        {
++            return Err("patch is not in one readable executable region of this image".into());
++        }
++        Ok(address)
++    }
++}
++
++#[cfg(windows)]
++impl Memory for MappedImage {
++    type Protection = u32;
++    fn read(&mut self, at: usize, len: usize) -> Result<Vec<u8>, String> {
++        let address = self.readable(at, len)?;
++        // SAFETY: committed readable image range checked above; caller keeps
++        // the mapping alive, with no concurrent title execution or mutation.
++        Ok(unsafe { std::slice::from_raw_parts(address as *const u8, len) }.to_vec())
++    }
++    fn writable(&mut self, at: usize, len: usize) -> Result<u32, String> {
++        use windows_sys::Win32::System::Memory::{PAGE_EXECUTE_READWRITE, VirtualProtect};
++        let address = self.readable(at, len)?;
++        let mut old = 0;
++        // SAFETY: one validated executable region, no title execution yet.
++        if unsafe { VirtualProtect(address as *const _, len, PAGE_EXECUTE_READWRITE, &mut old) }
++            == 0
++        {
++            Err(format!(
++                "VirtualProtect writable: {}",
++                std::io::Error::last_os_error()
++            ))
++        } else {
++            Ok(old)
++        }
++    }
++    fn write(&mut self, at: usize, bytes: &[u8]) -> Result<(), String> {
++        let address = self.address(at, bytes.len())?;
++        // SAFETY: transaction acquired this range's write permission first.
++        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), address as *mut u8, bytes.len()) };
++        Ok(())
++    }
++    fn restore(&mut self, at: usize, len: usize, old: u32) -> Result<(), String> {
++        use windows_sys::Win32::System::Memory::VirtualProtect;
++        let address = self.address(at, len)?;
++        let mut ignored = 0;
++        // SAFETY: original token and range from a successful writable call.
++        if unsafe { VirtualProtect(address as *const _, len, old, &mut ignored) } == 0 {
++            Err(format!(
++                "VirtualProtect restore: {}",
++                std::io::Error::last_os_error()
++            ))
++        } else {
++            Ok(())
++        }
++    }
++    fn flush(&mut self, at: usize, len: usize) -> Result<(), String> {
++        use windows_sys::Win32::System::{
++            Diagnostics::Debug::FlushInstructionCache, Threading::GetCurrentProcess,
++        };
++        let address = self.address(at, len)?;
++        // SAFETY: live current-process mapping; no title code has run yet.
++        if unsafe { FlushInstructionCache(GetCurrentProcess(), address as *const _, len) } == 0 {
++            Err(format!(
++                "FlushInstructionCache: {}",
++                std::io::Error::last_os_error()
++            ))
++        } else {
++            Ok(())
++        }
++    }
++}
++
++/// Read the opt-in environment request; every error prevents title execution.
++///
++/// # Safety
++/// `base..base+size` is this original executable's live mapped image, whose
++/// original file hash is `original`. No title code runs or modifies it yet.
++#[cfg(windows)]
++pub unsafe fn apply_asked(
++    base: usize,
++    size: usize,
++    original: &blake3::Hash,
++) -> Result<ApplyOutcome, ResolutionError> {
++    let requested = match std::env::var("VICTORY_OUTPUT") {
++        Ok(spec) => Some(spec),
++        Err(std::env::VarError::NotPresent) => None,
++        Err(_) => return Err(error("VICTORY_OUTPUT is not Unicode")),
++    };
++    let Some(plan) = plan(requested.as_deref(), original.to_hex().as_str())? else {
++        return Ok(ApplyOutcome::Disabled);
++    };
++    // Validate all referenced globals/call targets in addition to code ranges.
++    for (at, len) in [
++        (SET_SCREEN_SIZE, 1),
++        (HEIGHT_CHANGED, 1),
++        (SCREEN_HEIGHT, 4),
++    ] {
++        range(at, len, size)?;
++        base.checked_add(at)
++            .and_then(|a| a.checked_add(len))
++            .ok_or_else(|| error("target address overflow"))?;
++    }
++    let mut image = MappedImage { base, size };
++    transaction(&mut image, size, &plan.patches)?;
++    tracing::info!(
++        width = plan.width,
++        height = plan.height,
++        "guest output: sites verified; output applied; native scale unchanged"
++    );
++    Ok(ApplyOutcome::Applied {
++        width: plan.width,
++        height: plan.height,
++    })
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/victory-loader/src/resolution/tests.rs b/crates/victory-loader/src/resolution/tests.rs
+new file mode 100644
+index 0000000..4fd794b
+--- /dev/null
++++ b/crates/victory-loader/src/resolution/tests.rs
+@@ -0,0 +1,324 @@
++use super::*;
++
++#[derive(Default)]
++struct Mock {
++    bytes: Vec<u8>,
++    writable: std::collections::BTreeMap<usize, bool>,
++    calls: Vec<&'static str>,
++    fail: Option<(&'static str, usize)>,
++    seen: usize,
++    persistent_restore_failure: bool,
++}
++
++impl Mock {
++    fn operation(&mut self, name: &'static str) -> Result<(), String> {
++        self.calls.push(name);
++        if self.fail.is_some_and(|(op, _)| op == name) {
++            self.seen += 1;
++            if self.fail.is_some_and(|(_, count)| self.seen == count) {
++                self.fail = None;
++                return Err(format!("injected {name}"));
++            }
++        }
++        Ok(())
++    }
++}
++
++impl Memory for Mock {
++    type Protection = bool;
++    fn read(&mut self, at: usize, len: usize) -> Result<Vec<u8>, String> {
++        self.operation("read")?;
++        Ok(self.bytes[at..at + len].to_vec())
++    }
++    fn writable(&mut self, at: usize, _: usize) -> Result<bool, String> {
++        self.operation("writable")?;
++        Ok(self.writable.insert(at, true).unwrap_or(false))
++    }
++    fn write(&mut self, at: usize, bytes: &[u8]) -> Result<(), String> {
++        assert!(
++            self.writable
++                .range(..=at)
++                .next_back()
++                .is_some_and(|(_, &v)| v)
++        );
++        // Even a partial write must be rolled back.
++        self.bytes[at] = bytes[0];
++        self.operation("write")?;
++        self.bytes[at..at + bytes.len()].copy_from_slice(bytes);
++        Ok(())
++    }
++    fn restore(&mut self, at: usize, _: usize, old: bool) -> Result<(), String> {
++        if self.persistent_restore_failure {
++            return Err("persistent restore failure".into());
++        }
++        self.operation("restore")?;
++        self.writable.insert(at, old);
++        Ok(())
++    }
++    fn flush(&mut self, _: usize, _: usize) -> Result<(), String> {
++        self.operation("flush")
++    }
++}
++
++fn fixture() -> (Mock, Vec<Patch>) {
++    let bytes: Vec<u8> = (0..128).map(|i| (i * 7 + 13) as u8).collect();
++    let patches = [(16, 16, 0, vec![1, 2, 3]), (80, 8, 2, vec![4])]
++        .into_iter()
++        .map(|(at, len, write_offset, code)| Patch {
++            at,
++            len,
++            write_offset,
++            code,
++            expected: blake3::hash(&bytes[at..at + len]).to_hex().to_string(),
++        })
++        .collect();
++    (
++        Mock {
++            bytes,
++            ..Mock::default()
++        },
++        patches,
++    )
++}
++
++#[test]
++fn disabled_and_invalid_requests_do_not_create_a_patch_plan() {
++    assert!(plan(None, "unknown build").unwrap().is_none());
++    assert!(plan(Some("1920x1080"), "unknown build").is_err());
++    for spec in [
++        "",
++        "1080p",
++        "0x0",
++        "1600x900",
++        "1920x1080x1",
++        "4294967296x1080",
++    ] {
++        assert!(plan(Some(spec), ORIGINAL_BLAKE3).is_err(), "{spec}");
++    }
++    for (w, h) in MODES {
++        assert_eq!(parse_output(&format!(" {w} X {h} ")), Some((w, h)));
++    }
++}
++
++#[test]
++fn native_output_keeps_the_pool_assertion_but_still_verifies_its_digest() {
++    let native = plan(Some("3840x2160"), ORIGINAL_BLAKE3).unwrap().unwrap();
++    assert_eq!(native.patches.len(), 2);
++    assert!(native.patches[1].code.is_empty());
++    let lower = plan(Some("1920x1080"), ORIGINAL_BLAKE3).unwrap().unwrap();
++    assert_eq!(
++        (
++            lower.patches[1].write_offset,
++            lower.patches[1].code.as_slice()
++        ),
++        (0, pool_code().as_slice())
++    );
++}
++
++#[test]
++fn output_instructions_keep_size_arguments_calls_and_conditional_notification() {
++    for (width, height) in MODES {
++        let c = output_code(width, height);
++        assert_eq!(c.len(), 61);
++        assert_eq!(u32::from_le_bytes(c[1..5].try_into().unwrap()), width);
++        assert_eq!(u32::from_le_bytes(c[12..16].try_into().unwrap()), height);
++        assert_eq!(&c[5..11], &[0x89, 0x86, 4, 2, 0, 0]);
++        assert_eq!(&c[16..22], &[0x89, 0xbe, 8, 2, 0, 0]);
++        let target = |end: usize| {
++            (OUTPUT_AT + end) as i64
++                + i32::from_le_bytes(c[end - 4..end].try_into().unwrap()) as i64
++        };
++        assert_eq!(target(28), SCREEN_HEIGHT as i64);
++        assert_eq!(target(37), SET_SCREEN_SIZE as i64);
++        assert_eq!(target(48), HEIGHT_CHANGED as i64);
++        assert_eq!(&c[28..33], &[0x89, 0xc1, 0x89, 0xfa, 0xe8]);
++        assert_eq!(&c[37..40], &[0x39, 0xfd, 0x74]);
++        assert_eq!(41 + c[40] as usize, c.len());
++        assert_eq!(50 + c[49] as usize, c.len());
++        assert!(c[50..].iter().all(|&byte| byte == 0xcc));
++    }
++}
++
++#[test]
++fn both_sites_are_checked_before_any_protection_change_or_write() {
++    let (mut memory, patches) = fixture();
++    memory.bytes[80] ^= 1;
++    let before = memory.bytes.clone();
++    assert!(transaction(&mut memory, 128, &patches).is_err());
++    assert_eq!(memory.bytes, before);
++    assert_eq!(memory.calls, ["read", "read"]);
++}
++
++#[test]
++fn successful_transaction_changes_only_requested_bytes_and_restores_protection() {
++    let (mut memory, patches) = fixture();
++    let mut expected = memory.bytes.clone();
++    expected[16..19].copy_from_slice(&[1, 2, 3]);
++    expected[82] = 4;
++    transaction(&mut memory, 128, &patches).unwrap();
++    assert_eq!(memory.bytes, expected);
++    assert!(memory.writable.values().all(|&v| !v));
++    assert_eq!(
++        &memory.calls[..4],
++        &["read", "read", "writable", "writable"]
++    );
++    assert_eq!(memory.calls.iter().filter(|&&x| x == "flush").count(), 2);
++}
++
++#[test]
++fn protection_write_flush_and_restore_failures_roll_back_all_bytes() {
++    for operation in ["writable", "write", "flush", "restore"] {
++        for count in [1, 2] {
++            let (mut memory, patches) = fixture();
++            let before = memory.bytes.clone();
++            memory.fail = Some((operation, count));
++            let result = transaction(&mut memory, 128, &patches);
++            assert!(result.is_err(), "{operation} {count}");
++            assert_eq!(memory.bytes, before, "{operation} {count}");
++            assert!(memory.writable.values().all(|&v| !v), "{operation} {count}");
++        }
++    }
++}
++
++#[test]
++fn cleanup_failure_is_reported_instead_of_claiming_success() {
++    let (mut memory, patches) = fixture();
++    memory.persistent_restore_failure = true;
++    let result = transaction(&mut memory, 128, &patches)
++        .unwrap_err()
++        .to_string();
++    assert!(result.contains("rollback: persistent restore failure"));
++}
++
++#[test]
++fn malformed_ranges_are_rejected_without_writes() {
++    for kind in 0..4 {
++        let (mut memory, mut patches) = fixture();
++        match kind {
++            0 => patches[1].at = usize::MAX,
++            1 => patches[1].at = 120,
++            2 => patches[1].at = patches[0].at + 1,
++            _ => patches[1].write_offset = usize::MAX,
++        }
++        // The range ending at 128 is valid; force one byte beyond it.
++        if kind == 1 {
++            patches[1].len = 9;
++        }
++        let before = memory.bytes.clone();
++        assert!(transaction(&mut memory, 128, &patches).is_err());
++        assert_eq!(memory.bytes, before);
++        assert!(!memory.calls.iter().any(|x| *x != "read"));
++    }
++}
++
++#[test]
++fn reduced_output_keeps_the_unsigned_pool_bound_and_original_continuation() {
++    let code = pool_code();
++    assert_eq!(&code[..5], &[0x48, 0x3b, 0x44, 0x24, 0x78]);
++    assert_eq!(code[5], 0x76); // unsigned below-or-equal, not unconditional
++    assert_eq!(7 + code[6] as usize, code.len()); // exact original continuation
++    assert_eq!(&code[7..], &[0xcc, 0x90]); // failure still traps
++    let base = 0x0000_0002_0000_0000u64;
++    for capacity in [64u64 << 20, 82u64 << 20] {
++        for remaining in [0, capacity - 1, capacity] {
++            assert!(remaining <= capacity);
++        }
++        for remaining in [capacity + 1, u64::MAX] {
++            assert!(remaining > capacity);
++        }
++        for used in [0, 1, capacity - 1, capacity, capacity + 1] {
++            let cursor = base + used;
++            let remaining = capacity.wrapping_sub(cursor).wrapping_add(base);
++            assert_eq!(remaining <= capacity, used <= capacity);
++        }
++        let cursor_before_base = base - 1;
++        let remaining = capacity.wrapping_sub(cursor_before_base).wrapping_add(base);
++        assert!(remaining > capacity);
++    }
++}
++
++#[cfg(windows)]
++#[test]
++fn mapped_image_backend_restores_permissions_and_rejects_cross_region_reads() {
++    use windows_sys::Win32::System::Memory::{
++        MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ,
++        PAGE_EXECUTE_READWRITE, PAGE_READONLY, VirtualAlloc, VirtualFree, VirtualProtect,
++        VirtualQuery,
++    };
++    struct Allocation(*mut std::ffi::c_void);
++    impl Drop for Allocation {
++        fn drop(&mut self) {
++            // SAFETY: this test exclusively owns the original reservation.
++            unsafe {
++                VirtualFree(self.0, 0, MEM_RELEASE);
++            }
++        }
++    }
++    // This is authored data, never executed and unrelated to title bytes.
++    unsafe {
++        let allocation = Allocation(VirtualAlloc(
++            std::ptr::null(),
++            0x3000,
++            MEM_RESERVE | MEM_COMMIT,
++            PAGE_EXECUTE_READWRITE,
++        ));
++        assert!(!allocation.0.is_null());
++        let base = allocation.0 as usize;
++        let mut expected: Vec<u8> = (0..0x3000).map(|i| (i * 11 + 17) as u8).collect();
++        std::ptr::copy_nonoverlapping(expected.as_ptr(), allocation.0.cast(), expected.len());
++        let patches: Vec<_> = [64, 0x2040]
++            .into_iter()
++            .map(|at| Patch {
++                at,
++                len: 16,
++                expected: blake3::hash(&expected[at..at + 16]).to_hex().to_string(),
++                write_offset: 2,
++                code: vec![91, 92, 93],
++            })
++            .collect();
++        let mut old = 0;
++        assert_ne!(
++            VirtualProtect(allocation.0, 0x3000, PAGE_EXECUTE_READ, &mut old),
++            0
++        );
++        assert_ne!(
++            VirtualProtect((base + 0x1000) as *const _, 0x1000, PAGE_READONLY, &mut old),
++            0
++        );
++        let mut memory = MappedImage { base, size: 0x3000 };
++        assert!(
++            memory.read(0xffc, 8).is_err(),
++            "cross-protection span must fail"
++        );
++        assert!(
++            memory.read(0x1000, 4).is_err(),
++            "non-executable data must fail"
++        );
++        transaction(&mut memory, 0x3000, &patches).unwrap();
++        for patch in &patches {
++            expected[patch.at + 2..patch.at + 5].copy_from_slice(&patch.code);
++            let mut info: MEMORY_BASIC_INFORMATION = std::mem::zeroed();
++            assert_ne!(
++                VirtualQuery(
++                    (base + patch.at) as *const _,
++                    &mut info,
++                    std::mem::size_of_val(&info)
++                ),
++                0
++            );
++            assert_eq!(info.Protect, PAGE_EXECUTE_READ);
++        }
++        assert_eq!(
++            std::slice::from_raw_parts(allocation.0.cast::<u8>(), expected.len()),
++            expected
++        );
++        assert!(
++            MappedImage {
++                base: usize::MAX - 3,
++                size: 128
++            }
++            .address(4, 4)
++            .is_err()
++        );
++    }
++}
+-- 
+2.56.0.windows.4
+

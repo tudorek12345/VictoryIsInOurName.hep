@@ -62,6 +62,7 @@ param(
     [switch]$FreshState,
     [switch]$Test720p,
     [string]$DisplayMode,
+    [string]$GuestOutput,
     [string]$WarpDll,
 
     [ValidatePattern('^original-\d{8}-\d{6}-[a-f0-9]{8}$')]
@@ -92,7 +93,7 @@ $snapshot = $VictorySource -in 'amd7900', 'fxceless'
 $standalone = $snapshot -or $VictorySource -eq 'amd7900-series-s'
 $amdFork = $VictorySource -in 'amd7900', 'amd7900-series-s'
 if (-not $useXcl -and $VictorySource -eq 'amd7900-series-s' -and -not ($PrepareOnly -or $PrewarmPipelines)) {
-    if (-not $PSBoundParameters.ContainsKey('MenuPicture')) { $MenuPicture = $Console -eq 'series-s' }
+    if (-not $PSBoundParameters.ContainsKey('MenuPicture')) { $MenuPicture = $Console -eq 'series-s' -and -not $GuestOutput }
     if (-not $PSBoundParameters.ContainsKey('QueuedSubmit') -and -not $GpuTiming) { $QueuedSubmit = $true }
     if (-not $PSBoundParameters.ContainsKey('PipelineWorkers')) { $PipelineWorkers = 2 }
 }
@@ -156,7 +157,13 @@ $displayOptions = & (Join-Path $local 'Resolve-VictoryDisplayOptions.ps1') `
     -LegacyPresentSupported:(Runtime-ReadsOption 'crates\victory-gpu\src\present.rs' 'VICTORY_PRESENT_720P') `
     -MissionTrace:$MissionTrace `
     -MissionTraceSupported:(Runtime-ReadsOption 'crates\victory-gpu\src\mission_trace.rs' 'VICTORY_MISSION_TRACE')
-$resolutionTest = [bool]($Test720p -or $DisplayMode)
+$guestOutputMode = & (Join-Path $local 'Resolve-VictoryGuestOutput.ps1') `
+    -GuestOutput $GuestOutput -FreshState:$FreshState `
+    -Supported:(Runtime-ReadsOption 'crates\victory-loader\src\resolution.rs' 'VICTORY_OUTPUT') `
+    -DisplayMode $DisplayMode -Test720p:$Test720p -MenuPicture:$MenuPicture `
+    -PrepareOnly:$PrepareOnly -PrewarmPipelines:$PrewarmPipelines `
+    -PrewarmLibrary:$PrewarmLibrary -PrewarmCurrentCache:$PrewarmCurrentCache
+$resolutionTest = [bool]($Test720p -or $DisplayMode -or $guestOutputMode)
 if ($Test720p -and $FreshState) {
     throw 'Test720p uses a copy of the saved Victory profile; use DisplayMode with FreshState for a new profile.'
 }
@@ -454,6 +461,7 @@ try {
                 $arguments += @('--env', ('VICTORY_DISPLAY_MODE=' + $displayOptions.GuestDisplayMode))
             }
             if ($displayOptions.LegacyPresent720p) { $arguments += @('--env', 'VICTORY_PRESENT_720P=1') }
+            if ($guestOutputMode) { $arguments += @('--env', ('VICTORY_OUTPUT=' + $guestOutputMode)) }
             if ($DiagnosticKeys) {
                 $arguments += @('--env', "VICTORY_KEYS=$DiagnosticKeys", '--env', 'VICTORY_KEYS_STAND_IN=1')
             }
@@ -510,6 +518,7 @@ try {
             console = $profile
             requested720p = [bool]$Test720p
             requestedGuestDisplayMode = $displayOptions.GuestDisplayMode
+            requestedGuestOutput = $guestOutputMode
             legacy720pPresentationOnly = $displayOptions.LegacyPresent720p
             displaySettingsFilesMatched = $displaySettings.matchedFiles
             displaySettingsFilesUpdated = $displaySettings.updatedFiles
