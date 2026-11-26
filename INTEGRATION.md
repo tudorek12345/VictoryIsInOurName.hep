@@ -11,3 +11,9 @@ The separate VIctory backend by Marvisak and its contributors uses native D3D12.
 ## Development handoff
 
 Start with the [sanitized runtime report](tracking/runtime-progress.json) and [reproduction checklist](docs/EXPERIMENTS.md). Record the backend, exact build, GPU and driver, observed output and next unresolved failure. Keep runtime measurements tied to the run that produced them. Use the [contribution guide](CONTRIBUTING.md) and [repository instructions](AGENTS.md) before changing shared code.
+
+## Series S presentation candidate
+
+The [Series S patch](runtimes/patches/victory-7900xtx-series-s-present.patch) applies to the [7900 XTX fork at `e2a28ec7`](https://github.com/avatarmanz/VIctory-7900XTX/tree/e2a28ec70632f5112be085abfa7d0a557b25e8d8). It reads the full display-plane record, uses completed draw evidence to choose a single 4K menu target, and avoids redundant copy-source transitions. `git apply --check` passed against the matching source snapshot. The selector regression and the regular and optimized diagnostics build checks passed.
+
+The isolated AMD test built the diagnostics profile, selected `--console series-s`, and set `VICTORY_SERIES_S_MENU_PICTURE=1`, `VICTORY_LATE_WAIT=0`, `VICTORY_THIN=0` and `VICTORY_ASYNC_SUBMIT=0`. Those settings keep the selector on the synchronous submission path. The original package and raw runtime artifacts stay local. The test demonstrated the menus and intro. World rendering and input remain open.

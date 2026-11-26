@@ -94,6 +94,18 @@
     "seriesXRadeon": {"earlyFps": 30, "limitGiB": 16, "outcome": "Memory allocation failed at world entry in both runs"},
     "prewarm": {"previouslyUsedPipelinesBuilt": 23, "elapsedSeconds": 2.69},
     "guardedRadeon": {"elapsedSeconds": 98.73, "limitGiB": 24, "peakCommitGiB": 15.66, "physicalReserveGiB": 3, "systemCommitReserveGiB": 4, "outcome": "Physical memory guard stopped the job at world entry"},
+    "seriesSPresentationRadeon": {
+      "patchRevision": "7857fb4b6c59ed2ec6b3090f13814518e1bfffab",
+      "runtimeSha256": "46045A9B7F18C9DF90D095DE31EA19114352E84ADF628A00F48FC365AB5AD038",
+      "earlyFps": 30,
+      "lastWorldIntervalFps": 0.4,
+      "visibleAccountPickerAndSettings": true,
+      "first45SecondsStereoPcmPeak": 9798,
+      "elapsedSeconds": 116.07,
+      "peakCommitGiB": 13.41,
+      "restoredAccessPaths": 151,
+      "outcome": "Physical memory guard stopped the job at world entry"
+    },
     "renderedGameplayVerified": false
   },
   "reportedImplementation": [

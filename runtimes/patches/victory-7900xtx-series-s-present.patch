@@ -1,0 +1,497 @@
+From 7857fb4b6c59ed2ec6b3090f13814518e1bfffab Mon Sep 17 00:00:00 2001
+From: tudorek12345 <44846825+tudorek12345@users.noreply.github.com>
+Date: Thu, 26 Nov 2026 05:03:45 +0100
+Subject: [PATCH] Select a submitted Series S menu target on synchronous
+ presents
+
+---
+ crates/victory-gpu/src/draw.rs               |   8 +
+ crates/victory-gpu/src/host.rs               |  94 ++++++--
+ crates/victory-gpu/src/queue.rs              |  29 ++-
+ crates/victory-gpu/src/queue/menu_picture.rs | 226 +++++++++++++++++++
+ 4 files changed, 337 insertions(+), 20 deletions(-)
+ create mode 100644 crates/victory-gpu/src/queue/menu_picture.rs
+
+diff --git a/crates/victory-gpu/src/draw.rs b/crates/victory-gpu/src/draw.rs
+index f04fe53..e54eccc 100644
+--- a/crates/victory-gpu/src/draw.rs
++++ b/crates/victory-gpu/src/draw.rs
+@@ -3512,6 +3512,10 @@ impl State {
+                 list.list
+                     .DrawInstanced(count, instances, from, first_instance)
+             };
++            #[cfg(feature = "diagnostics")]
++            if count != 0 && instances != 0 {
++                crate::queue::menu_picture::note(list, &self.targets);
++            }
+             self.drew(crate::pipeline::host_pipeline(self.pipeline as This));
+             DRAWN.fetch_add(1, Ordering::Relaxed);
+         }
+@@ -3617,6 +3621,10 @@ impl State {
+                 list.list
+                     .DrawIndexedInstanced(indices, instances, first, base, first_instance)
+             };
++            #[cfg(feature = "diagnostics")]
++            if indices != 0 && instances != 0 {
++                crate::queue::menu_picture::note(list, &self.targets);
++            }
+             self.drew(crate::pipeline::host_pipeline(self.pipeline as This));
+             DRAWN.fetch_add(1, Ordering::Relaxed);
+         }
+diff --git a/crates/victory-gpu/src/host.rs b/crates/victory-gpu/src/host.rs
+index 1ae56ee..41d9208 100644
+--- a/crates/victory-gpu/src/host.rs
++++ b/crates/victory-gpu/src/host.rs
+@@ -2207,6 +2207,8 @@ enum Step {
+ struct Deferred {
+     /// Destination, source, bytes.
+     copies: Vec<Step>,
++    #[cfg(feature = "diagnostics")]
++    series_s_targets: Vec<crate::queue::menu_picture::MenuTarget>,
+     uploads: Vec<ID3D12Resource>,
+     /// The bytes of `uploads` (counted in [`ALIVE`] while they are held).
+     upload_bytes: u64,
+@@ -5689,6 +5691,8 @@ impl Host {
+         #[cfg(not(feature = "diagnostics"))]
+         let groups = [&lists[..]];
+         submitting(2, runs.len());
++        #[cfg(feature = "diagnostics")]
++        let mut completed = true;
+         for (i, group) in groups.iter().enumerate() {
+             *submitted += 1;
+             let started = std::time::Instant::now();
+@@ -5707,11 +5711,23 @@ impl Host {
+                         working(false);
+                         #[cfg(feature = "diagnostics")]
+                         let _card = crate::timeline::card_wait(Some(*submitted));
+-                        WaitForSingleObject(self.event, INFINITE);
++                        let wait = WaitForSingleObject(self.event, INFINITE);
++                        #[cfg(feature = "diagnostics")]
++                        {
++                            completed &= wait == windows::Win32::Foundation::WAIT_OBJECT_0;
++                        }
++                        #[cfg(not(feature = "diagnostics"))]
++                        let _ = wait;
+                         stood(started);
+                         working(true);
+                     }
+-                    Err(e) => tracing::warn!(error = %e, "host submission not waited for"),
++                    Err(e) => {
++                        #[cfg(feature = "diagnostics")]
++                        {
++                            completed = false;
++                        }
++                        tracing::warn!(error = %e, "host submission not waited for");
++                    }
+                 }
+             }
+             // With timing on each group is one of `runs` (and the compare
+@@ -5772,6 +5788,8 @@ impl Host {
+                 last_notes(runs)
+             ));
+         }
++        #[cfg(feature = "diagnostics")]
++        crate::queue::menu_picture::submitted(runs, completed);
+         submitting(3, runs.len());
+         stage.next("submit: copying back");
+         // What shaders wrote goes back before the bottom-of-pipe writes,
+@@ -7119,6 +7137,29 @@ impl HostList {
+         self.deferred().copies.push(Step::Host(Box::new(work), (0, 0)));
+     }
+
++    /// Notes each submitted Series S color target once per list recording.
++    #[cfg(feature = "diagnostics")]
++    pub(crate) fn note_series_s_target(&self, target: crate::queue::menu_picture::MenuTarget) {
++        let mut deferred = self.deferred();
++        if !deferred
++            .series_s_targets
++            .iter()
++            .any(|observed| observed.copy.serial == target.copy.serial)
++        {
++            deferred.series_s_targets.push(target);
++        }
++    }
++
++    #[cfg(feature = "diagnostics")]
++    pub(crate) fn visit_series_s_targets(
++        &self,
++        mut visit: impl FnMut(&crate::queue::menu_picture::MenuTarget),
++    ) {
++        for target in &self.deferred().series_s_targets {
++            visit(target);
++        }
++    }
++
+     /// As [`HostList::defer_host`], for work that reads `len` bytes of title
+     /// memory at `from`.
+     pub(crate) fn defer_host_read(&self, from: usize, len: usize, work: impl Fn() + Send + 'static) {
+@@ -8878,15 +8919,20 @@ impl Host {
+                 None => &p.copy,
+             };
+             copy.reset();
++            if slot.is_some() {
++                // This list can outlive the queue's owned presentation source.
++                copy.keep(texture);
++            }
+             let list = &copy.list;
+-            list.ResourceBarrier(&[
+-                transition(texture, state, D3D12_RESOURCE_STATE_COPY_SOURCE),
+-                transition(
+-                    &back,
+-                    D3D12_RESOURCE_STATE_PRESENT,
+-                    D3D12_RESOURCE_STATE_COPY_DEST,
+-                ),
+-            ]);
++            let source = D3D12_RESOURCE_STATE_COPY_SOURCE;
++            if state != source {
++                list.ResourceBarrier(&[transition(texture, state, source)]);
++            }
++            list.ResourceBarrier(&[transition(
++                &back,
++                D3D12_RESOURCE_STATE_PRESENT,
++                D3D12_RESOURCE_STATE_COPY_DEST,
++            )]);
+             list.CopyResource(&back, texture);
+             #[cfg(feature = "diagnostics")]
+             let capture = crate::capture::wanted(frame)
+@@ -8900,14 +8946,14 @@ impl Host {
+             p.panel.draw(self, copy, &back, (width, height), format);
+             #[cfg(not(feature = "diagnostics"))]
+             let _ = frame;
+-            list.ResourceBarrier(&[
+-                transition(texture, D3D12_RESOURCE_STATE_COPY_SOURCE, state),
+-                transition(
+-                    &back,
+-                    D3D12_RESOURCE_STATE_COPY_DEST,
+-                    D3D12_RESOURCE_STATE_PRESENT,
+-                ),
+-            ]);
++            if state != source {
++                list.ResourceBarrier(&[transition(texture, source, state)]);
++            }
++            list.ResourceBarrier(&[transition(
++                &back,
++                D3D12_RESOURCE_STATE_COPY_DEST,
++                D3D12_RESOURCE_STATE_PRESENT,
++            )]);
+             copy.close();
+             let flown = match slot {
+                 Some(i) => {
+@@ -8933,7 +8979,17 @@ impl Host {
+             #[cfg(feature = "diagnostics")]
+             crate::replay::record::present(texture, state);
+             let mut showing = crate::timeline::span("the host's Present");
+-            let _ = p.swap_chain.Present(0, DXGI_PRESENT(0));
++            let result = p.swap_chain.Present(0, DXGI_PRESENT(0));
++            if result.is_err() {
++                tracing::warn!(
++                    frame,
++                    width,
++                    height,
++                    status = format_args!("{:#010x}", result.0),
++                    "host swap chain present failed"
++                );
++                return None;
++            }
+             showing.next("the frame meter");
+             #[cfg(feature = "diagnostics")]
+             p.panel.frame(p.meter.line_due());
+diff --git a/crates/victory-gpu/src/queue.rs b/crates/victory-gpu/src/queue.rs
+index ede3bb3..a60055f 100644
+--- a/crates/victory-gpu/src/queue.rs
++++ b/crates/victory-gpu/src/queue.rs
+@@ -9,6 +9,8 @@ use crate::resource::PAGEABLE_IIDS;
+
+ #[cfg(windows)]
+ mod behind;
++#[cfg(all(windows, feature = "diagnostics"))]
++pub(crate) mod menu_picture;
+
+ const QUEUE_IIDS: [Iid; 4] = [
+     guid(
+@@ -644,13 +646,23 @@ extern "system" fn execute(this: This, count: u32, lists: *const This) {
+     }
+ }
+
+-/// The start of a present plane: frame token, then the plane's resources.
++/// PresentX plane record. The title passes these in a contiguous array.
+ #[repr(C)]
+ pub(crate) struct Plane {
+     token: u64,
+     count: u32,
+     resources: *const This,
++    _source_rects: usize,
++    _placement: usize,
++    color_space: u32,
++    _scale_filter: u32,
++    _extended_count: u32,
++    _extended: usize,
++    _flags: u32,
+ }
++const _: () = assert!(std::mem::size_of::<Plane>() == 0x48);
++const _: () = assert!(std::mem::offset_of!(Plane, color_space) == 0x28);
++
+ /// Submission tagged with the frame it belongs to `(count, lists, frame
+ /// token, flags)`; frames are paced elsewhere, so it runs as a plain one.
+ extern "system" fn execute_x(this: This, count: u32, lists: *const This, _token: u64, _flags: u32) {
+@@ -888,6 +900,8 @@ extern "system" fn present(
+         release_held(forces());
+     }
+     let frame = FRAMES.fetch_add(1, Ordering::Relaxed) + 1;
++    #[cfg(all(windows, feature = "diagnostics"))]
++    let menu = menu_picture::take();
+     if frame.is_power_of_two() {
+         let (draws, dispatches) = crate::list::take_counts();
+         #[cfg(windows)]
+@@ -966,6 +980,19 @@ extern "system" fn present(
+         && let Some(texture) = crate::resource::host_resource(resource)
+         && let Some(host) = crate::host::host()
+     {
++        #[cfg(feature = "diagnostics")]
++        if let Some(menu) =
++            menu_picture::select(menu, planes, plane_parameters, plane, texture, frame)
++        {
++            let state = crate::host::legal_state(
++                &menu.copy.texture,
++                menu.copy.state.load(Ordering::Relaxed),
++            );
++            show(&menu.copy.texture, state, Shown { frame, resource: menu.resource });
++            called.end();
++            frame_ends();
++            return S_OK;
++        }
+         const COPY_SOURCE: u32 = 0x800;
+         let state = crate::resource::host_transition(resource, COPY_SOURCE)
+             .map_or(COPY_SOURCE, |(_, before)| before);
+diff --git a/crates/victory-gpu/src/queue/menu_picture.rs b/crates/victory-gpu/src/queue/menu_picture.rs
+new file mode 100644
+index 0000000..6ed07c1
+--- /dev/null
++++ b/crates/victory-gpu/src/queue/menu_picture.rs
+@@ -0,0 +1,226 @@
++//! Series S menu experiment adapted from tudorek12345/VictoryIsInOurName.hep
++//! commits 648e3a933167410f531bf8211eb564fee33c9d6d (draw evidence)
++//! and 260200067d00cac87d6b033323006d85a9562510 (plane layout).
++//! Selection stays on the synchronous path until the async queue carries
++//! draw evidence to its ordered Present job.
++
++use std::sync::{Arc, Mutex, Once, OnceLock};
++
++use windows::Win32::Graphics::Direct3D12::{D3D12_RESOURCE_DIMENSION_TEXTURE2D, ID3D12Resource};
++use windows::Win32::Graphics::Dxgi::Common::{
++    DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709, DXGI_FORMAT_R8G8B8A8_UNORM,
++};
++
++use super::{Plane, This};
++use crate::host::HostList;
++use crate::resource::HostTexture;
++
++#[derive(Clone)]
++pub(crate) struct MenuTarget {
++    pub(super) resource: usize,
++    pub(crate) copy: Arc<HostTexture>,
++    size: (u64, u32),
++}
++
++pub(super) struct Targets<T> {
++    candidate: Option<(u64, T)>,
++    keep_primary: bool,
++}
++
++impl<T> Targets<T> {
++    const fn new() -> Self {
++        Self {
++            candidate: None,
++            keep_primary: false,
++        }
++    }
++
++    fn note(&mut self, size: (u64, u32), serial: u64, target: T) {
++        match size {
++            (1920, 1080) => self.keep_primary = true,
++            (3840, 2160) => match &self.candidate {
++                None => self.candidate = Some((serial, target)),
++                Some((first, _)) if *first != serial => self.keep_primary = true,
++                _ => {}
++            },
++            _ => {}
++        }
++    }
++
++    fn choose(self, overlay: Option<u64>) -> Option<T> {
++        self.candidate
++            .filter(|(serial, _)| {
++                !self.keep_primary && overlay.is_none_or(|overlay| overlay == *serial)
++            })
++            .map(|(_, target)| target)
++    }
++}
++
++static TARGETS: Mutex<Targets<MenuTarget>> = Mutex::new(Targets::new());
++
++fn requested() -> bool {
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    *ENABLED.get_or_init(|| {
++        crate::console::current() == crate::console::Console::SeriesS
++            && std::env::var_os("VICTORY_SERIES_S_MENU_PICTURE").is_some_and(|v| v == "1")
++    })
++}
++
++fn synchronous() -> bool {
++    !crate::host::late() && !super::behind::on()
++}
++
++fn size(texture: &ID3D12Resource) -> Option<(u64, u32)> {
++    // SAFETY: a live host texture.
++    let desc = unsafe { texture.GetDesc() };
++    (desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM
++        && desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D
++        && desc.SampleDesc.Count == 1
++        && desc.DepthOrArraySize == 1
++        && desc.MipLevels == 1)
++        .then_some((desc.Width, desc.Height))
++}
++
++/// Records a nonempty host draw's render targets once per list.
++pub(crate) fn note(list: &HostList, resources: &[usize]) {
++    if !requested() || !synchronous() {
++        return;
++    }
++    for &resource in resources {
++        // A diagnostic should not allocate a texture that the draw didn't use.
++        let Some(copy) = crate::resource::made_copy(resource as This) else {
++            continue;
++        };
++        let Some(size @ ((1920, 1080) | (3840, 2160))) = size(&copy.texture) else {
++            continue;
++        };
++        list.note_series_s_target(MenuTarget {
++            resource,
++            copy,
++            size,
++        });
++    }
++}
++
++/// Includes the targets in this present interval once the host fence completes.
++pub(crate) fn submitted(lists: &[&HostList], completed: bool) {
++    if !requested() || !synchronous() {
++        return;
++    }
++    let mut targets = super::lock(&TARGETS);
++    if !completed {
++        targets.keep_primary = true;
++        return;
++    }
++    for list in lists {
++        list.visit_series_s_targets(|target| {
++            targets.note(target.size, target.copy.serial, target.clone());
++        });
++    }
++}
++
++/// Takes the host draws submitted since the preceding PresentX call.
++pub(super) fn take() -> Option<Targets<MenuTarget>> {
++    if !requested() {
++        return None;
++    }
++    let targets = std::mem::replace(&mut *super::lock(&TARGETS), Targets::new());
++    if !synchronous() {
++        static ONCE: Once = Once::new();
++        ONCE.call_once(|| {
++            tracing::info!("Series S menu selection requires synchronous GPU submissions")
++        });
++        return None;
++    }
++    Some(targets)
++}
++
++pub(super) fn select(
++    targets: Option<Targets<MenuTarget>>,
++    planes: u32,
++    parameters: *const Plane,
++    first: &Plane,
++    primary: &ID3D12Resource,
++    frame: u64,
++) -> Option<MenuTarget> {
++    let targets = targets?;
++    if planes != 2 {
++        return None;
++    }
++    const SDR: u32 = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709.0 as u32;
++    // SAFETY: PresentX supplied exactly two complete plane records.
++    let overlay = unsafe { &*parameters.add(1) };
++    let primary_size = size(primary);
++    static PLANES_REPORTED: Once = Once::new();
++    PLANES_REPORTED.call_once(|| {
++        tracing::info!(
++            frame,
++            ?primary_size,
++            primary_count = first.count,
++            overlay_count = overlay.count,
++            primary_color_space = first.color_space,
++            overlay_color_space = overlay.color_space,
++            has_4k_draw = targets.candidate.is_some(),
++            keep_primary = targets.keep_primary,
++            "Series S two-plane present"
++        );
++    });
++    if first.count != 1
++        || primary_size != Some((1920, 1080))
++        || first.color_space != SDR
++        || overlay.color_space != SDR
++        || overlay.count > 1
++    {
++        return None;
++    }
++    let overlay = if overlay.count == 1 && !overlay.resources.is_null() {
++        // SAFETY: the overlay plane lists one resource.
++        let resource = unsafe { *overlay.resources };
++        crate::resource::made_copy(resource).map(|copy| copy.serial)
++    } else {
++        None
++    };
++    let menu = targets.choose(overlay)?;
++    static REPORTED: Once = Once::new();
++    REPORTED.call_once(|| {
++        tracing::info!(
++            frame,
++            named_by_plane = overlay.is_some(),
++            source_width = 3840,
++            source_height = 2160,
++            "presenting the submitted Series S menu target"
++        );
++    });
++    Some(menu)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::Targets;
++
++    #[test]
++    fn selects_only_a_unique_submitted_4k_target() {
++        let mut targets = Targets::new();
++        targets.note((3840, 2160), 4, 1);
++        targets.note((3840, 2160), 4, 2);
++        assert_eq!(targets.choose(Some(4)), Some(1));
++
++        let mut targets = Targets::new();
++        targets.note((3840, 2160), 4, 1);
++        assert_eq!(targets.choose(None), Some(1));
++
++        let mut targets = Targets::new();
++        targets.note((3840, 2160), 4, 1);
++        assert_eq!(targets.choose(Some(5)), None);
++
++        let mut targets = Targets::new();
++        targets.note((3840, 2160), 4, 1);
++        targets.note((3840, 2160), 5, 2);
++        assert_eq!(targets.choose(Some(4)), None);
++
++        let mut targets = Targets::new();
++        targets.note((3840, 2160), 4, 1);
++        targets.note((1920, 1080), 5, 2);
++        assert_eq!(targets.choose(Some(4)), None);
++    }
++}

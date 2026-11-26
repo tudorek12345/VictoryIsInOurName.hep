@@ -44,6 +44,8 @@ The 7900 XTX fork held 30 FPS through the original intro and early loading on th
 
 A subsequent Series X trial allowed up to 24 GiB of job commit. It stopped at 15.66 GiB when available physical RAM fell below the 3 GiB guard. The runtime restored the package access rules after the stop.
 
+The Series S presentation patch selected the submitted 4K plane and displayed the account picker, navigation settings and intro at about 30 FPS on Radeon. It captured non-silent stereo audio. The world transition fell to 0.4 FPS and the physical memory guard stopped the test at 13.41 GiB of job commit. [Series S patch and scope](INTEGRATION.md#series-s-presentation-candidate)
+
 The integration now selects the physical AMD adapter, records resource operations in isolated GPU list traces, and fixes integer render-target blending, shader liveness through successive joins, and DirectStorage page-read ordering. The serial source suite passed 307 tests with five ignored. [Validation and run summary](tracking/runtime-progress.json)
 
 The [integration checkpoint](https://github.com/tudorek12345/VictoryIsInOurName.hep/commit/298042a3388e400464824d246ed3ec265c238345) adds consistent raw bindless shader resource views (SRVs), typed UINT16 unordered access views (UAVs), exact 3:1 compositor downscaling and coalescing of concurrent shader-cache fills. D3D12 diagnostics record the submission caller, fence phase and Present result.
