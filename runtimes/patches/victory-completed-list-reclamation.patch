@@ -1,0 +1,452 @@
+From f09f18eda4e94be557fdbbc2106abf87c93ad998 Mon Sep 17 00:00:00 2001
+From: tudorek12345 <44846825+tudorek12345@users.noreply.github.com>
+Date: Thu, 26 Nov 2026 01:32:52 -0800
+Subject: [PATCH] Reclaim completed list resources after one submission
+ quarantine
+
+---
+ crates/victory-gpu/src/descriptor/host.rs |  70 ++++++++++--
+ crates/victory-gpu/src/draw.rs            |  45 ++++++++
+ crates/victory-gpu/src/host.rs            | 124 ++++++++++++++++++++--
+ crates/victory-gpu/src/list.rs            |  48 +++++++++
+ 4 files changed, 267 insertions(+), 20 deletions(-)
+
+diff --git a/crates/victory-gpu/src/descriptor/host.rs b/crates/victory-gpu/src/descriptor/host.rs
+index 974d75a..e0c528b 100644
+--- a/crates/victory-gpu/src/descriptor/host.rs
++++ b/crates/victory-gpu/src/descriptor/host.rs
+@@ -124,6 +124,15 @@ impl DynamicSlots {
+     pub(crate) fn first(&self) -> u32 {
+         self.first
+     }
++
++    /// Consumes this recording's lease after its final submitted part has
++    /// completed the host's quarantine. Other slots keep their own references.
++    pub(crate) fn release_completed(mut self, _completed: &crate::host::CompletedListRetirement) {
++        // Disarm Drop before returning slots: a newly allocated lease must
++        // never be returned again by this one, even during unwinding.
++        let count = std::mem::take(&mut self.count);
++        drop(self.heap.take_released_resources(self.first, count));
++    }
+ }
+ 
+ impl Drop for DynamicSlots {
+@@ -134,7 +143,7 @@ impl Drop for DynamicSlots {
+ 
+ /// Remove only the references owned by live slots being returned. Called
+ /// with the allocation lock held, so a slot cannot be reused until its old
+-/// reference is detached. The caller retires these resources after unlocking.
++/// reference is detached. The caller handles these resources after unlocking.
+ fn take_dynamic_resources<T>(
+     count: u32,
+     first: u32,
+@@ -2653,22 +2662,23 @@ impl HostHeap {
+     ///
+     /// [`dynamic`]: HostHeap::dynamic
+     fn release(&self, first: u32, n: u32) {
+-        let retired = {
+-            let mut guard = self.next.lock().unwrap_or_else(|e| e.into_inner());
+-            let (given, retired) = take_dynamic_resources(self.count, first, n, &mut guard.1, &self.kept);
+-            self.free.fetch_add(given, std::sync::atomic::Ordering::Relaxed);
+-            if given != 0 {
+-                self.too_long.store(u32::MAX, std::sync::atomic::Ordering::Relaxed);
+-            }
+-            retired
+-        };
+         // Preserve the same submission quarantine as replacement via keep().
+         // Never take the retirement lock while holding allocation/slot locks.
+-        for resource in retired {
++        for resource in self.take_released_resources(first, n) {
+             crate::host::retire_resource(resource);
+         }
+     }
+ 
++    fn take_released_resources(&self, first: u32, n: u32) -> Vec<ID3D12Resource> {
++        let mut guard = self.next.lock().unwrap_or_else(|e| e.into_inner());
++        let (given, resources) = take_dynamic_resources(self.count, first, n, &mut guard.1, &self.kept);
++        self.free.fetch_add(given, std::sync::atomic::Ordering::Relaxed);
++        if given != 0 {
++            self.too_long.store(u32::MAX, std::sync::atomic::Ordering::Relaxed);
++        }
++        resources
++    }
++
+     /// Makes slot `index` (a dynamic one) from `view`; a null view if the
+     /// host cannot.
+     pub(crate) fn make_at(&self, index: u32, view: &View) {
+@@ -5700,6 +5710,44 @@ mod tests {
+         assert_eq!(heap.dynamic(40), Some(4 + heap.dynamic - 40));
+     }
+ 
++    #[test]
++    fn completed_dynamic_lease_drops_only_its_pin_without_a_second_quarantine() {
++        use std::sync::Arc;
++        use std::sync::atomic::Ordering::Relaxed;
++
++        let heap = Arc::new(HostHeap::new(false, 4).expect("host descriptor heap required"));
++        let resource = crate::host::host().unwrap().read_back_buffer(256).expect("small ownership test buffer");
++        let refs = || crate::host::references(&resource);
++        let base = refs();
++        let free = heap.free.load(Relaxed);
++        let completed_slots = heap.dynamic_slots(1).unwrap();
++        let other_slots = heap.dynamic_slots(1).unwrap();
++        heap.keep(completed_slots.first(), Some(resource.clone()));
++        heap.keep(other_slots.first(), Some(resource.clone()));
++        assert_eq!(refs(), base + 2);
++
++        // No capability exists before the full last-use quarantine.
++        assert!(crate::host::test_completed_list_retirement(10, 73, 64).is_none());
++        assert_eq!(refs(), base + 2);
++        let completed = crate::host::test_completed_list_retirement(10, 74, 64).unwrap();
++        completed_slots.release_completed(&completed);
++        assert_eq!(refs(), base + 1, "the completed pin is dropped, not queued again");
++        assert_eq!(heap.free.load(Relaxed), free - 1);
++        assert!(heap.kept[other_slots.first() as usize].lock().unwrap().is_some());
++
++        let replacement = heap.dynamic_slots(1).unwrap();
++        heap.keep(replacement.first(), Some(resource.clone()));
++        assert_eq!(refs(), base + 2);
++        // Ordinary Drop still transfers its pin into retirement. It must
++        // not acquire the land-only immediate-release behavior.
++        drop(other_slots);
++        assert_eq!(refs(), base + 2);
++        assert_eq!(heap.free.load(Relaxed), free - 1);
++        replacement.release_completed(&completed);
++        assert_eq!(refs(), base + 1, "only the ordinary Drop's retired reference remains");
++        assert_eq!(heap.free.load(Relaxed), free);
++    }
++
+     #[test]
+     fn dynamic_search_can_find_a_run_across_the_cursor() {
+         let Some(heap) = HostHeap::new(false, 4) else {
+diff --git a/crates/victory-gpu/src/draw.rs b/crates/victory-gpu/src/draw.rs
+index 4a4bc46..36ff563 100644
+--- a/crates/victory-gpu/src/draw.rs
++++ b/crates/victory-gpu/src/draw.rs
+@@ -371,12 +371,30 @@ impl State {
+             ONCE.call_once(|| tracing::warn!("a list ran again after its descriptor tables were given back"));
+         }
+         self.dynamic.clear();
++        self.clear_table_cache();
++    }
++
++    /// Only detached lists past their final submission's quarantine use
++    /// this path. Reset, Drop and ordinary tables_done retain their delay.
++    pub(crate) fn tables_completed(&mut self, completed: &crate::host::CompletedListRetirement) {
++        for slots in self.dynamic.drain(..) {
++            slots.release_completed(completed);
++        }
++        self.clear_table_cache();
++    }
++
++    fn clear_table_cache(&mut self) {
+         self.fresh_tables.clear();
+         self.recording = 0;
+         self.root_srv_slots.clear();
+         self.root_uav_slots.clear();
+         self.tables_gone = true;
+     }
++
++    #[cfg(test)]
++    pub(crate) fn test_with_dynamic(slots: crate::descriptor::host::DynamicSlots) -> Self {
++        Self { dynamic: vec![slots], recording: 1, ..Default::default() }
++    }
+ }
+ 
+ /// An experiment on the title's scissor rectangles (`VICTORY_SCISSOR_TEST=full`):
+@@ -4427,6 +4445,33 @@ fn staging_budget_per_frame(vram_budget: Option<u64>) -> u64 {
+ mod tests {
+     use super::staging_budget_per_frame;
+ 
++    #[test]
++    fn completed_tables_clear_once_without_releasing_another_recording() {
++        use std::sync::Arc;
++        let heap = Arc::new(crate::descriptor::host::HostHeap::new(false, 4).expect("host descriptor heap required"));
++        let weak = Arc::downgrade(&heap);
++        let mut first = super::State::test_with_dynamic(heap.dynamic_slots(1).unwrap());
++        let mut other = super::State::test_with_dynamic(heap.dynamic_slots(1).unwrap());
++        first.fresh_tables.insert((heap.identity(), 1, 1, 1), super::FreshTable {
++            first: first.dynamic[0].first(), epoch: 0, ready: Vec::new(),
++        });
++        drop(heap);
++        let completed = crate::host::test_completed_list_retirement(1, 65, 64).unwrap();
++        first.tables_completed(&completed);
++        assert!(first.dynamic.is_empty() && first.fresh_tables.is_empty());
++        assert!(first.root_srv_slots.is_empty() && first.root_uav_slots.is_empty());
++        assert!(first.tables_gone);
++        assert_eq!(first.recording, 0);
++        assert!(weak.upgrade().is_some(), "another recording owns its lease");
++        first.tables_completed(&completed);
++        first.tables_done();
++        drop(first);
++        assert!(weak.upgrade().is_some());
++        assert_eq!(other.dynamic.len(), 1);
++        other.tables_completed(&completed);
++        assert!(weak.upgrade().is_none(), "all leases were consumed exactly once");
++    }
++
+     #[test]
+     fn heap_sweep_ownership_drops_old_buffer_references_independently() {
+         use std::sync::Arc;
+diff --git a/crates/victory-gpu/src/host.rs b/crates/victory-gpu/src/host.rs
+index df8cd38..00cd28f 100644
+--- a/crates/victory-gpu/src/host.rs
++++ b/crates/victory-gpu/src/host.rs
+@@ -808,7 +808,7 @@ pub(crate) fn sampled_ownership() -> OwnershipSample {
+         } else {
+             None
+         };
+-        let landed = owner_counts(line.landed.iter().map(|(lists, _)| lists.len()));
++        let landed = owner_counts(line.landed.iter().map(|flight| flight.lists.len()));
+         (pending, landed, line.settling)
+     }) {
+         sample.inflight_flights = pending.map(|c| c.0);
+@@ -2779,6 +2779,14 @@ struct Flight {
+     texture_back_ranges: Vec<(usize, usize)>,
+ }
+ 
++/// A flight after its fence, copyback and readbacks completed. Keep its
++/// submission number so the reuse quarantine also counts synchronous work.
++struct Landed {
++    number: u64,
++    lists: Vec<crate::list::Detached>,
++    order: Vec<usize>,
++}
++
+ /// One thing in the line of what waits for the card, in order.
+ enum Late {
+     Run(Flight),
+@@ -2788,6 +2796,7 @@ enum Late {
+     Signal(usize, u64),
+ }
+ 
++#[derive(Default)]
+ struct Line {
+     line: Vec<Late>,
+     /// The title memory the flights' shaders and texture readbacks may write
+@@ -2806,7 +2815,7 @@ struct Line {
+     /// Host lists of settled flights, reset and given back outside the
+     /// submission lock ([`land`]: a settle may run under a caller's own
+     /// locks).
+-    landed: Vec<(Vec<crate::list::Detached>, Vec<usize>)>,
++    landed: Vec<Landed>,
+     /// With [`relay`]: the bottom-of-pipe writes of the flights being
+     /// landed (taken out of `line`, not done yet), for [`late_met`].
+     in_hand: Vec<(usize, crate::queue::Written, usize)>,
+@@ -2814,6 +2823,19 @@ struct Line {
+     landing: Vec<card_steps::Writer>,
+ }
+ 
++impl Line {
++    /// A synchronous completion can age the remaining landed flights even
++    /// if no new flight arrives. Recycling belongs to the helper, outside
++    /// the submission lock and any locks held by its caller.
++    fn poke_completed_lists(&mut self, finished: u64, lag: u64) -> bool {
++        let ready = self.landed.first().is_some_and(|flight| completed_list_ready(flight.number, finished, lag));
++        if ready {
++            self.poke = true;
++        }
++        ready
++    }
++}
++
+ // SAFETY: D3D12 objects (free-threaded) and host lists nothing records
+ // into; touched under the lock.
+ unsafe impl Send for Line {}
+@@ -3360,13 +3382,96 @@ pub(crate) fn settle_for_fence() {
+ /// Resets the host lists of settled flights and keeps them for reuse, as
+ /// a queue does for the lists it ran (`crate::list::recycle`).
+ fn land() {
+-    let landed: Vec<_> = {
++    let (landed, finished, lag): (Vec<_>, _, _) = {
+         let mut line = line();
+-        let n = line.landed.len().saturating_sub(bury_lag() as usize);
+-        line.landed.drain(..n).collect()
++        let finished = FINISHED.load(Ordering::Acquire);
++        let lag = bury_lag();
++        let n = completed_list_prefix(line.landed.iter().map(|flight| flight.number), finished, lag);
++        (line.landed.drain(..n).collect(), finished, lag)
+     };
+-    for (lists, order) in landed {
+-        crate::list::recycle(lists, &order);
++    for flight in landed {
++        let completed = completed_list_retirement(flight.number, finished, lag)
++            .expect("only quarantine-completed flights leave the landed prefix");
++        crate::list::recycle_completed(flight.lists, &flight.order, &completed);
++    }
++}
++
++/// Only land() creates this in production, after a detached flight's fence,
++/// copyback, readbacks and submission quarantine. Its descriptor references
++/// must not enter a second quarantine dated from the current queue tail.
++pub(crate) struct CompletedListRetirement {
++    _private: (),
++}
++
++fn completed_list_retirement(number: u64, finished: u64, lag: u64) -> Option<CompletedListRetirement> {
++    completed_list_ready(number, finished, lag).then_some(CompletedListRetirement { _private: () })
++}
++
++#[cfg(test)]
++pub(crate) fn test_completed_list_retirement(number: u64, finished: u64, lag: u64) -> Option<CompletedListRetirement> {
++    completed_list_retirement(number, finished, lag)
++}
++
++/// Keep the existing submission quarantine, not a count of newer flight
++/// containers. Checked addition prevents early release near zero/overflow.
++fn completed_list_ready(number: u64, finished: u64, lag: u64) -> bool {
++    number.checked_add(lag).is_some_and(|after| after <= finished)
++}
++
++fn completed_list_prefix(numbers: impl IntoIterator<Item = u64>, finished: u64, lag: u64) -> usize {
++    // Preserve order conservatively if a newer flight was published first.
++    numbers.into_iter().take_while(|&number| completed_list_ready(number, finished, lag)).count()
++}
++
++fn wake_completed_lists(finished: u64) {
++    let wake = line().poke_completed_lists(finished, bury_lag());
++    if wake {
++        LINE_MOVED.notify_one();
++    }
++}
++
++#[cfg(test)]
++mod completed_list_retirement_tests {
++    use super::{Landed, Line, completed_list_prefix, completed_list_ready, completed_list_retirement};
++
++    #[test]
++    fn keeps_all_sixty_four_submissions_and_rejects_future_or_overflow() {
++        assert!(!completed_list_ready(10, 73, 64));
++        assert!(completed_list_ready(10, 74, 64));
++        assert!(!completed_list_ready(1, 0, 64));
++        assert!(!completed_list_ready(65, 64, 0));
++        assert!(!completed_list_ready(u64::MAX - 31, u64::MAX, 64));
++        assert!(completed_list_ready(u64::MAX - 64, u64::MAX, 64));
++        assert!(completed_list_retirement(10, 73, 64).is_none());
++        assert!(completed_list_retirement(10, 74, 64).is_some());
++        assert!(completed_list_retirement(u64::MAX, u64::MAX, 64).is_none());
++    }
++
++    #[test]
++    fn synchronous_submissions_age_late_flights_without_new_containers() {
++        // Only two late flights; synchronous submissions fill the gaps and
++        // advance FINISHED. Requiring 64 newer containers retains both.
++        assert_eq!(completed_list_prefix([10, 20], 73, 64), 0);
++        assert_eq!(completed_list_prefix([10, 20], 74, 64), 1);
++        assert_eq!(completed_list_prefix([10, 20], 84, 64), 2);
++    }
++
++    #[test]
++    fn later_ineligible_flight_blocks_an_out_of_order_prefix() {
++        assert_eq!(completed_list_prefix([10, 100, 20], 84, 64), 1);
++        assert_eq!(completed_list_prefix([10, 100, 20], 164, 64), 3);
++    }
++
++    #[test]
++    fn idle_completed_flight_is_poked_only_when_its_quarantine_elapsed() {
++        let mut line = Line::default();
++        assert!(!line.poke_completed_lists(100, 64));
++        line.landed.push(Landed { number: 10, lists: Vec::new(), order: Vec::new() });
++        assert!(!line.poke_completed_lists(73, 64));
++        assert!(!line.poke);
++        assert!(line.poke_completed_lists(74, 64));
++        assert!(line.poke);
++        assert_eq!(line.landed.len(), 1, "the completing caller never recycles under its locks");
+     }
+ }
+ 
+@@ -5031,7 +5136,7 @@ impl Host {
+                     if let Some(own) = flight.own {
+                         own.landed();
+                     }
+-                    landed.push((flight.lists, flight.order));
++                    landed.push(Landed { number: flight.number, lists: flight.lists, order: flight.order });
+                     crate::land::spent(crate::land::stat::READ_BACKS, telling)
+                 }
+                 Late::Write(at, what, bytes) => {
+@@ -5498,7 +5603,7 @@ impl Host {
+                         if let Some(card) = flight.card {
+                             self.card_done(card);
+                         }
+-                        landed.push((flight.lists, flight.order));
++                        landed.push(Landed { number: flight.number, lists: flight.lists, order: flight.order });
+                     }
+                     Late::Write(at, what, bytes) => what.write(at as *mut u8, bytes),
+                     Late::Signal(fence, value) => crate::fence::set(fence as crate::object::This, value),
+@@ -5930,6 +6035,7 @@ impl Host {
+         let _ = &firsts;
+         FINISHED.store(this_submission, Ordering::Release);
+         bury(this_submission);
++        wake_completed_lists(this_submission);
+         let gpu = prepared.elapsed();
+         SUBMISSION_US[0].fetch_add((prepared - started).as_micros() as u64, Ordering::Relaxed);
+         SUBMISSION_US[1].fetch_add(gpu.as_micros() as u64, Ordering::Relaxed);
+diff --git a/crates/victory-gpu/src/list.rs b/crates/victory-gpu/src/list.rs
+index e79bf85..325d84d 100644
+--- a/crates/victory-gpu/src/list.rs
++++ b/crates/victory-gpu/src/list.rs
+@@ -295,6 +295,16 @@ pub(crate) fn recycle(lists: Vec<Detached>, ran: &[usize]) {
+     }
+ }
+ 
++/// The stronger land-only contract: the final part owning State has also
++/// passed its submission quarantine. Clear leases even when pooling is off.
++#[cfg(windows)]
++pub(crate) fn recycle_completed(mut lists: Vec<Detached>, ran: &[usize], completed: &crate::host::CompletedListRetirement) {
++    for list in &mut lists {
++        list._state.tables_completed(completed);
++    }
++    recycle(lists, ran);
++}
++
+ /// A wait for a memory value recorded into list `this`, with waits cut
+ /// into lists (`crate::queue::cuts`). On the console the queue runs the
+ /// list up to the wait, stands there until the value is in memory, and
+@@ -2384,6 +2394,44 @@ mod tests {
+     use super::*;
+     use crate::object::slot;
+ 
++    #[test]
++    fn completed_split_lists_keep_descriptor_leases_until_the_final_part() {
++        use std::sync::Arc;
++        let heap = Arc::new(crate::descriptor::host::HostHeap::new(false, 4).expect("host descriptor heap required"));
++        let weak = Arc::downgrade(&heap);
++        let state = crate::draw::State::test_with_dynamic(heap.dynamic_slots(1).unwrap());
++        drop(heap);
++        let null = std::ptr::null();
++        let mut allocator = null;
++        let mut this = null;
++        assert_eq!(create_allocator(null, 0, &ALLOCATOR_IIDS[0], &mut allocator), S_OK);
++        assert_eq!(create_list(null, 0, 0, allocator, null, &LIST_IIDS[1], &mut this), S_OK);
++        let earlier = crate::host::host().unwrap().new_list().expect("small test command list");
++        earlier.close();
++        // No commands are submitted. Model a recording cut into two lists
++        // and exercise the real detach_parts ownership transfer.
++        unsafe {
++            let list = &mut *this.cast_mut().cast::<List>();
++            *list.state.lock().unwrap() = state;
++            list.earlier.push(Part { waits: Vec::new(), host: earlier });
++        }
++        assert_eq!(close(this), S_OK);
++        let mut parts = detach_parts(&[this]);
++        assert_eq!(parts.len(), 1);
++        let (_, mut lists, _) = parts.pop().unwrap();
++        assert_eq!(lists.len(), 2);
++        let final_list = lists.pop().unwrap();
++        let completed = crate::host::test_completed_list_retirement(10, 74, 64).unwrap();
++        recycle_completed(lists, &[], &completed);
++        assert!(weak.upgrade().is_some(), "earlier parts cannot return the final part's leases");
++        assert!(crate::host::test_completed_list_retirement(11, 74, 64).is_none());
++        let final_completed = crate::host::test_completed_list_retirement(11, 75, 64).unwrap();
++        recycle_completed(vec![final_list], &[], &final_completed);
++        assert!(weak.upgrade().is_none());
++        assert_eq!(list_release(this), 0);
++        assert_eq!(allocator_release(allocator), 0);
++    }
++
+     #[test]
+     fn every_inline_command_falls_back_to_the_table() {
+         let null = std::ptr::null();
+-- 
+2.56.0.windows.4
+

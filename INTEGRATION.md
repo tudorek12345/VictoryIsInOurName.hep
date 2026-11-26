@@ -332,3 +332,30 @@ Descriptor regressions passed 47 tests with the hardware probe ignored by defaul
 draw regressions passed seven with one existing ignore. The explicit GPU probe
 is kept as source and uses only authored data. These results establish buffer
 semantics, not the correctness of an actual world frame.
+
+## Completed-list resource reclamation
+
+[The completed-list patch](runtimes/patches/victory-completed-list-reclamation.patch)
+applies after the RGBA32 patch and produces `f09f18e`. It fixes two retention
+problems without shortening the configured 64-submission GPU safety delay:
+
+- Completed flights now retain their submission number. Reuse depends on that
+  number plus the full delay reaching the completed submission counter, instead
+  of keeping the last 64 flight containers indefinitely. Synchronous completion
+  wakes the existing helper when an old flight becomes eligible.
+- Returning a completed flight's dynamic descriptor leases no longer starts a
+  second delay from the current queue tail. Only the flight-recycling path can
+  authorize this release, after GPU completion, copyback, readbacks and the
+  original safety delay. Ordinary reset, Drop and slot replacement still retire
+  references through the existing queue.
+
+The last part of a split recording owns its descriptor state. An authored test
+exercises the actual split/detach path and verifies that earlier parts cannot
+return its leases. Other tests cover future/overflow boundaries, mixed
+synchronous and asynchronous progress, independent COM references and repeated
+cleanup. Seven focused regressions passed; descriptor tests passed 48 with one
+ignored hardware probe, draw tests passed eight with one existing ignore, and
+two ownership-sampler tests passed. Small WARP resources were used for ownership
+checks without submitting GPU commands. Independent review found no blocking
+lifetime or locking issue. A guarded title comparison is still needed to
+establish any reduction in peak memory or improvement in gameplay.
