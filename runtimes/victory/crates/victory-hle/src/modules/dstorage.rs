@@ -546,6 +546,31 @@ impl Lanes {
 
     /// Moves a queue's enqueued commands to the workers.
     fn submit(&mut self, id: u64) {
+        self.submit_prefix(id, usize::MAX);
+    }
+
+    /// The title fills its physical page lists just before explicit Submit.
+    /// A half-full queue can start the commands before the first page read.
+    /// Keep the rest in order so a later read cannot affect an earlier status.
+    fn submit_early(&mut self, id: u64) -> bool {
+        let Some(lane) = self.lanes.get(&id) else {
+            return false;
+        };
+        let count = lane
+            .unsubmitted
+            .iter()
+            .take_while(|command| {
+                !matches!(command, Command::Read(request) if request.options & PAGE_DESTINATION != 0)
+            })
+            .count();
+        if count == 0 {
+            return false;
+        }
+        self.submit_prefix(id, count);
+        true
+    }
+
+    fn submit_prefix(&mut self, id: u64, count: usize) {
         let Some(class) = self.lanes.get(&id).map(|l| l.class) else {
             return;
         };
@@ -564,7 +589,8 @@ impl Lanes {
         if lane.reads.is_empty() {
             lane.clock = lane.clock.max(self.lane_now[class]);
         }
-        for command in std::mem::take(&mut lane.unsubmitted) {
+        let count = count.min(lane.unsubmitted.len());
+        for command in lane.unsubmitted.drain(..count) {
             let seq = self.next_seq;
             self.next_seq += 1;
             match command {
@@ -738,8 +764,7 @@ extern "system" fn enqueue_status(this: QueueRef, array: Array, index: u32) {
     queue(this, Command::Status(Status { array, index }));
 }
 
-/// Adds a command to the queue; blocks while the queue is full, and
-/// submits on its own once half of it is enqueued, as the console does.
+/// Adds a command to the queue, submitting the ready prefix at half capacity.
 fn queue(this: QueueRef, command: Command) {
     // SAFETY: a queue we created and the title still holds.
     let id = unsafe { &*this }.state.id;
@@ -755,6 +780,17 @@ fn queue(this: QueueRef, command: Command) {
         if lane.entries() + 1 < lane.capacity.max(2) {
             break;
         }
+        // A producer that fills the queue cannot reach Submit while blocked.
+        // If there is no worker that can free a slot, submit to keep it moving.
+        if lane.reads.is_empty() && lane.running.is_empty() && !lane.unsubmitted.is_empty() {
+            static WARNED: AtomicBool = AtomicBool::new(false);
+            if !WARNED.swap(true, Ordering::Relaxed) {
+                tracing::warn!("dstorage: full queue is submitting held commands to free a slot");
+            }
+            lanes.submit(id);
+            scheduler.work.notify_all();
+            continue;
+        }
         lanes = scheduler
             .finished
             .wait(lanes)
@@ -764,8 +800,7 @@ fn queue(this: QueueRef, command: Command) {
         return;
     };
     lane.unsubmitted.push(command);
-    if lane.unsubmitted.len() >= (lane.capacity / 2).max(1) {
-        lanes.submit(id);
+    if lane.unsubmitted.len() >= (lane.capacity / 2).max(1) && lanes.submit_early(id) {
         scheduler.work.notify_all();
     }
 }
@@ -1294,6 +1329,47 @@ mod tests {
     }
 
     #[test]
+    fn early_submission_preserves_status_order_across_page_reads() {
+        let mut l = lanes(STAGING);
+        l.lanes.insert(0, Lane::new(0, 64));
+        let array = status_array(2).cast::<Instance<StatusArray>>();
+        let status = |l: &mut Lanes, index| {
+            add_ref_instance(array);
+            let status = Status { array, index };
+            status.entry().store(E_PENDING, Ordering::Release);
+            l.lanes
+                .get_mut(&0)
+                .unwrap()
+                .unsubmitted
+                .push(Command::Status(status));
+        };
+        read(&mut l, 0, 0, 16);
+        read(&mut l, 0, PAGE_DESTINATION, 16);
+        status(&mut l, 0);
+        read(&mut l, 0, 0, 16);
+        status(&mut l, 1);
+
+        assert!(l.submit_early(0));
+        let prefix = l.start().unwrap();
+        assert_eq!(prefix.request.options, 0);
+        l.finish(&prefix, Ok(()));
+        assert!(!l.submit_early(0));
+        assert!(l.start().is_none());
+        assert_eq!(result(array.cast(), 0), E_PENDING);
+
+        l.submit(0);
+        let paged = l.start().unwrap();
+        assert_eq!(paged.request.options, PAGE_DESTINATION);
+        let later = l.start().unwrap();
+        l.finish(&later, Err(E_INVALIDARG));
+        assert_eq!(result(array.cast(), 0), E_PENDING);
+        l.finish(&paged, Ok(()));
+        assert_eq!(result(array.cast(), 0), S_OK);
+        assert_eq!(result(array.cast(), 1), E_INVALIDARG);
+        release(array);
+    }
+
+    #[test]
     fn priorities_share_by_bytes_about_tenfold() {
         let mut l = lanes(STAGING);
         l.lanes.insert(0, Lane::new(0, 4096));
@@ -1503,6 +1579,62 @@ mod tests {
         let seen = unsafe { std::slice::from_raw_parts(mapped.cast::<u8>().add(PAGE - 40), 100) };
         assert_eq!(seen, plain);
     }
+
+    #[test]
+    fn page_read_uses_the_list_filled_before_explicit_submission() {
+        use crate::modules::xmem;
+        let mut pages = [0usize; 2];
+        let mut n = pages.len();
+        assert_eq!(
+            xmem::XMemAllocatePhysicalPages(0, &mut n, pages.as_mut_ptr()),
+            1
+        );
+        let mapped = xmem::XMemVirtualAlloc(
+            std::ptr::null_mut(),
+            2 * PAGE,
+            0x2000 | 0x2040_0000,
+            0,
+            0x04,
+        );
+        assert!(!mapped.is_null());
+        assert_eq!(
+            xmem::XMemMapPhysicalPages(mapped, 2, pages.as_ptr()),
+            mapped
+        );
+
+        let mut page_list = [pages[0]];
+        let plain = pattern(64);
+        let mut l = lanes(STAGING);
+        let mut lane = Lane::new(0, 4);
+        lane.unsubmitted.push(Command::Read(request(
+            PAGE_DESTINATION | MEMORY_SOURCE,
+            page_list.as_mut_ptr().cast(),
+            plain.len(),
+            plain.as_ptr().cast(),
+            0,
+            plain.len(),
+        )));
+        l.lanes.insert(0, lane);
+        assert!(!l.submit_early(0));
+        assert!(l.start().is_none());
+
+        page_list.copy_from_slice(&pages[1..]);
+        l.submit(0);
+        let job = l.start().unwrap();
+        assert_eq!(execute(&job.request), Ok(()));
+        l.finish(&job, Ok(()));
+        // SAFETY: both pages are mapped read-write, with no worker accessing them.
+        let (old, new) = unsafe {
+            let mapped = mapped.cast::<u8>();
+            (
+                std::slice::from_raw_parts(mapped, plain.len()),
+                std::slice::from_raw_parts(mapped.add(PAGE), plain.len()),
+            )
+        };
+        assert_eq!(old, [0; 64]);
+        assert_eq!(new, plain);
+    }
+
     #[test]
     fn zlib_into_pages_in_place_and_across_allocations() {
         use crate::modules::xmem;
