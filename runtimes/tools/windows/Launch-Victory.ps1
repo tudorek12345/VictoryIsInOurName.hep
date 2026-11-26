@@ -186,12 +186,21 @@ try {
     Push-Location -LiteralPath $runtime
     try {
         Write-Host "Building the current $Backend source at $runtime"
-        if ($useXcl) {
-            & $cargo +1.98.1 build --locked --release -p xcl
-        } else {
-            & $cargo build --locked --jobs 4 --profile diag -p victory --features diagnostics
+        # Windows PowerShell turns redirected native stderr (including compiler
+        # warnings) into ErrorRecords. The compiler's exit code decides success.
+        $buildErrorPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            if ($useXcl) {
+                & $cargo +1.98.1 build --locked --release -p xcl
+            } else {
+                & $cargo build --locked --jobs 4 --profile diag -p victory --features diagnostics
+            }
+            $buildExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $buildErrorPreference
         }
-        if ($LASTEXITCODE -ne 0) { throw "$Backend failed to build (exit $LASTEXITCODE)." }
+        if ($buildExitCode -ne 0) { throw "$Backend failed to build (exit $buildExitCode)." }
     } finally {
         Pop-Location
     }

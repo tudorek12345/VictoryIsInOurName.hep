@@ -9,7 +9,7 @@ layout: the package is `../buildgta`, Rust is in `cargo`/`rustup`, source checko
 are siblings of the launcher, and the isolated runner is in `isolated-run`.
 Copy these scripts to that local directory, or pass its path with `-LocalRoot`.
 The matching source-only candidate patches and their exact base are documented
-in `../../../INTEGRATION.md` from the repository root.
+in [the integration notes](../../../INTEGRATION.md).
 
 Build the runner with `isolated-run/build.cmd guard`. Its source preserves the
 read-only package grants, zero-capability AppContainer and bounded job. It leaves
