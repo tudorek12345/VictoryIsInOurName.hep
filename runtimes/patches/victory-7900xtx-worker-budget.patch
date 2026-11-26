@@ -1,0 +1,87 @@
+diff --git a/crates/victory-gpu/src/pipeline/make.rs b/crates/victory-gpu/src/pipeline/make.rs
+index 5ade89f..f927dd1 100644
+--- a/crates/victory-gpu/src/pipeline/make.rs
++++ b/crates/victory-gpu/src/pipeline/make.rs
+@@ -283,11 +283,15 @@ fn slow_limit() -> usize {
+         if std::env::var_os("VICTORY_PIPELINE_SLOW").is_some_and(|v| v == "0") {
+             usize::MAX
+         } else {
+-            (worker_count(None, std::thread::available_parallelism().map_or(2, |n| n.get())) / 4).max(1)
++            slow_worker_count(configured_worker_count())
+         }
+     })
+ }
+ 
++fn slow_worker_count(workers: usize) -> usize {
++    (workers / 4).max(1)
++}
++
+ struct Queue {
+     /// Requested passes over the screen: before all others, and the only ones
+     /// [`SCREEN_WORKERS`] take.
+@@ -406,19 +410,26 @@ fn worker_count(asked: Option<usize>, processors: usize) -> usize {
+     }
+ }
+ 
++/// Use the same general-worker budget for startup and speculative slow
++/// work. Deriving the slow quota from the CPU default could occupy both
++/// workers when the user explicitly requested only two.
++fn configured_worker_count() -> usize {
++    worker_count(
++        std::env::var("VICTORY_PIPELINE_WORKERS")
++            .ok()
++            .and_then(|v| v.trim().parse().ok()),
++        std::thread::available_parallelism().map_or(2, |n| n.get()),
++    )
++}
++
+ /// Starts the workers ([`worker_count`]) on first use.
+ fn workers() -> bool {
+     static RUNNING: OnceLock<bool> = OnceLock::new();
+     *RUNNING.get_or_init(|| {
+         let mut running = false;
+-        let workers = worker_count(
+-            std::env::var("VICTORY_PIPELINE_WORKERS")
+-                .ok()
+-                .and_then(|v| v.trim().parse().ok()),
+-            std::thread::available_parallelism().map_or(2, |n| n.get()),
+-        );
+-        tracing::info!(workers, "pipeline workers");
++        let workers = configured_worker_count();
+         let screens = if screens_first() { SCREEN_WORKERS } else { 0 };
++        tracing::info!(workers, screen_workers = screens, slow_prewarm_limit = slow_limit(), "pipeline workers");
+         for i in 0..workers + screens {
+             let screens_only = i >= workers;
+             let spawned = std::thread::Builder::new()
+@@ -561,6 +572,31 @@ mod tests {
+         assert!(queue.pop(false, 1).is_none());
+     }
+ 
++    #[test]
++    fn two_requested_workers_leave_capacity_beside_a_slow_prewarm() {
++        // A 16-thread CPU defaults to ten workers, but the launcher's
++        // explicit two-worker profile must admit only one slow prewarm.
++        let limit = slow_worker_count(worker_count(Some(2), 16));
++        let (first, second, requested) = (
++            Arc::new(Pending::new(Vec::new(), None)),
++            Arc::new(Pending::new(Vec::new(), None)),
++            Arc::new(Pending::new(Vec::new(), None)),
++        );
++        let mut queue = Queue::new();
++        queue.push_as(&first, EARLY, true);
++        queue.push_as(&second, EARLY, true);
++        assert!(Arc::ptr_eq(&queue.pop(false, limit).unwrap(), &first));
++        assert!(queue.pop(false, limit).is_none());
++
++        // Work requested by a draw still takes the remaining worker.
++        queue.push_as(&requested, REQUESTED, true);
++        assert!(Arc::ptr_eq(&queue.pop(false, limit).unwrap(), &requested));
++        assert!(!requested.was_slow.load(Ordering::Relaxed));
++        assert!(queue.pop(false, limit).is_none());
++        queue.slow_now -= 1;
++        assert!(Arc::ptr_eq(&queue.pop(false, limit).unwrap(), &second));
++    }
++
+     /// Passes over the screen go before all others, and workers of their own
+     /// take nothing else.
+     #[test]

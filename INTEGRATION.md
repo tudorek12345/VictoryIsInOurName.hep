@@ -88,3 +88,14 @@ run metadata. Offline children retain their own module/RVA crash log. The
 warmer currently persists translated shader caches; reuse of an AMD disk cache
 across isolated profiles has not been established, and a persistent Victory
 pipeline-library blob is not produced by this command.
+
+## Compiler worker budget
+
+Apply [the worker-budget patch](runtimes/patches/victory-7900xtx-worker-budget.patch)
+after the shader compacting patch. Slow speculative compilation previously used
+the CPU-derived default even when two general workers were explicitly selected.
+It now uses that configured count, allowing one slow prewarm alongside requested
+work. Dedicated screen workers and the explicit unlimited override are preserved.
+Startup diagnostics expose both counts and the quota. Seven focused queue tests
+passed. This corrects scheduling; lower peak memory in the title is not yet
+measured. The system physical/commit reserves remain in force for OBS.
