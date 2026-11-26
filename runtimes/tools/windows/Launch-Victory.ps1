@@ -61,6 +61,9 @@ param(
     [ValidatePattern('^original-\d{8}-\d{6}-[a-f0-9]{8}$')]
     [string]$WarmCacheFrom,
 
+    [ValidatePattern('^original-\d{8}-\d{6}-[a-f0-9]{8}$')]
+    [string]$BuiltRuntimeFrom,
+
     [string]$BcpackTables = $env:VICTORY_BCPACK_TABLES,
     [string]$DiagnosticKeys,
 
@@ -166,6 +169,9 @@ if ($WarpDll) {
 if ($WarmCacheFrom -and ($useXcl -or $PrepareOnly -or -not ($Test720p -or $FreshState))) {
     throw 'A warm cache seed requires a Victory run with its own test profile.'
 }
+if ($BuiltRuntimeFrom -and ($useXcl -or $VictorySource -ne 'amd7900-series-s' -or $PrepareOnly)) {
+    throw 'BuiltRuntimeFrom requires a diagnostic run of the current AMD candidate.'
+}
 
 if (-not (Test-Path -LiteralPath $title -PathType Leaf)) {
     throw "The original title is missing at $title"
@@ -208,6 +214,10 @@ try {
         $checkoutDirty = [bool](& git -C $repo status --porcelain --untracked-files=no)
         if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the runtime checkout.' }
     }
+    if ($BuiltRuntimeFrom) {
+        $engine = & (Join-Path $local 'Resolve-VictoryBuiltRuntime.ps1') -Run $BuiltRuntimeFrom -LocalRoot $local
+        Write-Host "Using the verified current-source executable from $BuiltRuntimeFrom"
+    } else {
     Push-Location -LiteralPath $runtime
     try {
         Write-Host "Building the current $Backend source at $runtime"
@@ -228,6 +238,7 @@ try {
         if ($buildExitCode -ne 0) { throw "$Backend failed to build (exit $buildExitCode)." }
     } finally {
         Pop-Location
+    }
     }
 
     if ($PrepareOnly) {
@@ -460,6 +471,7 @@ try {
             console = $profile
             requested720p = [bool]$Test720p
             warmCacheFrom = if ($WarmCacheFrom) { $WarmCacheFrom } else { $null }
+            builtRuntimeFrom = if ($BuiltRuntimeFrom) { $BuiltRuntimeFrom } else { $null }
             queuedSubmit = [bool]$QueuedSubmit
             textureNoWait = [bool]$TextureNoWait
             trimIdleTextures = [bool]$TrimIdleTextures

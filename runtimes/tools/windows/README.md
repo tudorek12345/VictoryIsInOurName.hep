@@ -74,6 +74,18 @@ and pipeline caches after checking the executable and selected profile. The
 global user driver cache remains inaccessible. On the tested Radeon, this path
 reduced the six previously slow pipeline reloads to 19-244 ms each; sustained
 gameplay FPS still requires a title test.
+For a controlled comparison, `-BuiltRuntimeFrom <successful-run-id>` uses the
+recorded executable only after verifying its SHA-256 and the exact current clean
+AMD source revision. Normal launches still build current source. This avoids
+discarding a prepared cache because a same-source rebuild changed PE bytes.
+`Test-VictoryBuiltRuntime.ps1` exercises seven acceptance/rejection cases with
+authored text fixtures, including changed source and tampered executable bytes.
+
+`Install-VictoryWarmCache.ps1 -Run <completed-warm-run-id>` installs a fully
+successful Series X hardware preparation into the normal shortcut's cache. It
+requires the current clean source, holds the launcher lease, rejects reparse
+paths, backs up replaced caches, and preserves saved profile data. The runtime
+still validates its translation/driver fingerprint when opening those caches.
 Use `-CommitMiB 6144` for bounded offline preparation. Setting
 `-HostReserveMiB 0` disables only the physical floor, never the commit guard.
 
