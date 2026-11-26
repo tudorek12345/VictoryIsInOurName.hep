@@ -152,6 +152,10 @@ pub(crate) fn host() -> Option<&'static Host> {
     HOST.get_or_init(|| match create() {
         Ok(host) => Some(host),
         Err(e) => {
+            if std::env::var_os("VICTORY_D3D12_ADAPTER").is_some() {
+                tracing::error!(error = %e, "requested D3D12 adapter could not start");
+                std::process::exit(2);
+            }
             tracing::warn!(error = %e, "no host D3D12 device; command lists will not run");
             None
         }
@@ -204,10 +208,21 @@ fn create() -> windows::core::Result<Host> {
         // Diagnostics: the software adapter, on which a shader's wild access
         // is an access violation in this process (a crash report with the
         // address and instruction) instead of a GPU fault and driver reset.
-        if cfg!(feature = "diagnostics") && std::env::var_os("VICTORY_D3D12_WARP").is_some() {
-            let adapter = warp_adapter()?;
-            D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_12_0, &mut device)?;
-            tracing::info!("host device on the software adapter (WARP)");
+        let selection = std::env::var_os("VICTORY_D3D12_ADAPTER");
+        let selected = match selection.as_deref() {
+            Some(value) if value == "radeon" => Some(radeon_adapter()?.cast::<IDXGIAdapter>()?),
+            Some(value) if value == "warp" => Some(warp_adapter()?),
+            Some(_) => return Err(windows::core::Error::new(
+                windows::Win32::Foundation::E_INVALIDARG,
+                "VICTORY_D3D12_ADAPTER must be radeon or warp",
+            )),
+            None if cfg!(feature = "diagnostics") && std::env::var_os("VICTORY_D3D12_WARP").is_some() => {
+                Some(warp_adapter()?)
+            }
+            None => None,
+        };
+        if let Some(adapter) = &selected {
+            D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, &mut device)?;
         } else {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_12_0, &mut device)?;
         }
@@ -220,6 +235,8 @@ fn create() -> windows::core::Result<Host> {
             let adapter = String::from_utf16_lossy(&desc.Description[..len]);
             tracing::info!(
                 adapter,
+                vendor_id = desc.VendorId,
+                device_id = desc.DeviceId,
                 software = desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0,
                 vram_mib = desc.DedicatedVideoMemory >> 20,
                 "host D3D12 adapter"
@@ -267,6 +284,26 @@ fn create() -> windows::core::Result<Host> {
             presenter: Mutex::new(None),
         })
     }
+}
+
+/// Selects the first physical AMD adapter in DXGI's adapter order.
+fn radeon_adapter() -> windows::core::Result<IDXGIAdapter1> {
+    // SAFETY: read-only queries for live DXGI adapters.
+    unsafe {
+        let factory: IDXGIFactory4 = CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS(0))?;
+        for index in 0.. {
+            let adapter = match factory.EnumAdapters1(index) {
+                Ok(adapter) => adapter,
+                Err(e) if e.code() == DXGI_ERROR_NOT_FOUND => break,
+                Err(e) => return Err(e),
+            };
+            let desc = adapter.GetDesc1()?;
+            if desc.VendorId == 0x1002 && desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 == 0 {
+                return Ok(adapter);
+            }
+        }
+    }
+    Err(windows::core::Error::new(DXGI_ERROR_NOT_FOUND, "No physical AMD adapter found"))
 }
 
 /// DXGI may return hardware for `EnumWarpAdapter` (notably under Proton).
@@ -381,6 +418,12 @@ pub(crate) fn dred_on() -> bool {
 fn timing() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("VICTORY_GPU_TIMING").is_some())
+}
+
+#[cfg(feature = "diagnostics")]
+pub(crate) fn split_lists() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| timing() || std::env::var_os("VICTORY_GPU_SPLIT_LISTS").is_some())
 }
 
 /// Names a host object for the device-removed report, which names the
@@ -555,9 +598,9 @@ impl Host {
         }
         batch.flush();
         let prepared = std::time::Instant::now();
-        // Diagnostics: each list on its own, timed (`VICTORY_GPU_TIMING`).
+        // Isolate each guest list and its prelude without requiring GPU timestamps.
         #[cfg(feature = "diagnostics")]
-        let groups: Vec<&[Option<ID3D12CommandList>]> = if timing() {
+        let groups: Vec<&[Option<ID3D12CommandList>]> = if split_lists() {
             firsts
                 .iter()
                 .zip(firsts.iter().skip(1).chain([&lists.len()]))
@@ -591,7 +634,7 @@ impl Host {
                 };
                 if let Some((phase, hr, wait, last_error)) = failed {
                     #[cfg(feature = "diagnostics")]
-                    let (report_runs, list_label) = if groups.len() > 1 {
+                    let (report_runs, list_label) = if split_lists() {
                         (&runs[i..i + 1], format!(" at list {i} of {}", runs.len()))
                     } else {
                         (runs, String::new())
@@ -609,11 +652,10 @@ impl Host {
                 }
             }
             #[cfg(feature = "diagnostics")]
-            if groups.len() > 1 {
+            if split_lists() {
                 // An empty DRED breadcrumb history on WARP cannot locate the
-                // bad list in a batch. Only opt-in timing splits the batch;
-                // check the device after *each* completed fence, before
-                // submitting the next list (or its prelude).
+                // bad list in a batch. Check the device at each fence before
+                // submitting another list and its prelude.
                 let completed = unsafe { self.fence.GetCompletedValue() };
                 if let Err(e) = unsafe { self.device.GetDeviceRemovedReason() } {
                     let one = &runs[i..i + 1];
@@ -626,7 +668,7 @@ impl Host {
                     elapsed_ms = started.elapsed().as_millis(), "diagnostic host list completed");
             }
             #[cfg(feature = "diagnostics")]
-            if groups.len() > 1 && started.elapsed() > std::time::Duration::from_millis(50) {
+            if timing() && started.elapsed() > std::time::Duration::from_millis(50) {
                 // SAFETY: a plain query.
                 let frequency = unsafe { self.queue.GetTimestampFrequency() }.unwrap_or(1);
                 let commands = runs[i].notes.lock().unwrap_or_else(|e| e.into_inner()).len();
@@ -926,6 +968,9 @@ impl HostList {
     #[cfg(feature = "diagnostics")]
     fn slowest(&self, frequency: u64, n: usize) -> Vec<(f64, String)> {
         let notes = self.notes.lock().unwrap_or_else(|e| e.into_inner());
+        if notes.is_empty() {
+            return Vec::new();
+        }
         let (Some((_, back)), count) = (self.stamps(), notes.len().min(STAMPS as usize - 1)) else {
             return Vec::new();
         };
@@ -953,12 +998,14 @@ impl HostList {
 
     pub(crate) fn close(&self) {
         #[cfg(feature = "diagnostics")]
-        if let Some((heap, back)) = self.stamps() {
+        if timing() {
             let count = (self.notes.lock().unwrap_or_else(|e| e.into_inner()).len() as u32).min(STAMPS - 1);
-            // SAFETY: an open list, our heap and read-back buffer.
-            unsafe {
-                self.list.EndQuery(heap, D3D12_QUERY_TYPE_TIMESTAMP, count);
-                self.list.ResolveQueryData(heap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count + 1, back, 0);
+            if count > 0 && let Some((heap, back)) = self.stamps() {
+                // SAFETY: an open list, our heap and read-back buffer.
+                unsafe {
+                    self.list.EndQuery(heap, D3D12_QUERY_TYPE_TIMESTAMP, count);
+                    self.list.ResolveQueryData(heap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count + 1, back, 0);
+                }
             }
         }
         // SAFETY: our list.

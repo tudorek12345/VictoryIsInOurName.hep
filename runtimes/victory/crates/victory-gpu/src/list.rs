@@ -371,6 +371,10 @@ extern "system" fn barrier(this: This, count: u32, barriers: *const Barrier) -> 
         if !host.is_empty() {
             use windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_BARRIER;
             const _: () = assert!(size_of::<Barrier>() == size_of::<D3D12_RESOURCE_BARRIER>());
+            #[cfg(feature = "diagnostics")]
+            if crate::host::split_lists() {
+                list.note_op(|| format!("resource barriers guest={count} host={}", host.len()));
+            }
             // SAFETY: the same layout; borrowed resource pointers, never
             // released through this slice.
             let host = unsafe {
@@ -393,6 +397,10 @@ pub(crate) fn ensure_state(list: &crate::host::HostList, resource: This, state: 
     if let Some((texture, before)) = list.transition(resource, state) {
         let state = crate::host::legal_state(texture, state);
         let barrier = crate::host::transition(texture, State(before as i32), State(state as i32));
+        #[cfg(feature = "diagnostics")]
+        if crate::host::split_lists() {
+            list.note_op(|| format!("resource transition {resource:p} {before:#x} -> {state:#x}"));
+        }
         // SAFETY: an open list and a live texture.
         unsafe { list.list.ResourceBarrier(&[barrier]) };
     }
@@ -522,7 +530,9 @@ extern "system" fn copy_texture_region(
             let Some((buffer, staging)) = list.upload(host, bytes) else {
                 return;
             };
-            list.defer_copy(staging, data, bytes as usize);
+            // The list owns this mapped D3D12 upload buffer. Wine can report
+            // its address as MEM_FREE, so use the host-upload path.
+            list.defer_fill(staging, data, bytes as usize);
             from.resource = buffer.as_raw().cast_const().cast();
             from.footprint.offset = 0;
             #[cfg(feature = "diagnostics")]
@@ -696,6 +706,10 @@ extern "system" fn clear_rtv(
         });
         const RENDER_TARGET: u32 = 0x4;
         let rtv = host.rtv(texture, record.desc().as_ref());
+        #[cfg(feature = "diagnostics")]
+        if crate::host::split_lists() {
+            list.note_op(|| format!("clear RTV {:p} rects={count}", record.resource));
+        }
         // SAFETY: an open list, a fresh view of a live texture.
         unsafe {
             if let Some((_, before)) = list.transition(record.resource, RENDER_TARGET) {
@@ -744,6 +758,10 @@ extern "system" fn clear_dsv(
         const DEPTH_WRITE: u32 = 0x10;
         ensure_state(list, record.resource, DEPTH_WRITE);
         let dsv = host.dsv(texture, record.depth_desc().as_ref());
+        #[cfg(feature = "diagnostics")]
+        if crate::host::split_lists() {
+            list.note_op(|| format!("clear DSV {:p} flags={flags:#x} rects={count}", record.resource));
+        }
         // SAFETY: an open list, a fresh view of a live texture.
         unsafe {
             list.list
@@ -1230,6 +1248,10 @@ extern "system" fn barrier_groups(this: This, count: u32, _groups: *const u8) {
         use windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_BARRIER;
         // SAFETY: the same layout; no resource named.
         let barrier = unsafe { std::mem::transmute::<Barrier, D3D12_RESOURCE_BARRIER>(UAV_BARRIER) };
+        #[cfg(feature = "diagnostics")]
+        if crate::host::split_lists() {
+            list.note_op(|| format!("global UAV barrier for {count} enhanced barrier groups"));
+        }
         // SAFETY: an open list.
         unsafe { list.list.ResourceBarrier(&[barrier]) };
     }
