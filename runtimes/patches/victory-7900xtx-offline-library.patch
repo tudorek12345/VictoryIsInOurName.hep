@@ -1,0 +1,302 @@
+diff --git a/apps/victory/src/warm.rs b/apps/victory/src/warm.rs
+index e1b10e2e0d1514ef0dac41c10f74bf2e34082d01..856a049bf7152e550715a947a2f145cce7c6f604 100644
+--- a/apps/victory/src/warm.rs
++++ b/apps/victory/src/warm.rs
+@@ -21,6 +21,16 @@ const LONGEST: Duration = Duration::from_secs(180);
+ /// As the runs count one that takes long.
+ const SLOW_MS: f64 = 1000.0;
+ 
++fn persisted_library() -> bool {
++    std::env::var_os("VICTORY_WARM_LIBRARY").is_some_and(|value| value == "1")
++}
++
++fn process_count(requested: Option<usize>, cores: usize, persist: bool) -> Result<usize> {
++    let count = requested.unwrap_or(if persist { 1 } else { cores * 2 / 3 }).max(1);
++    anyhow::ensure!(!persist || count == 1, "VICTORY_WARM_LIBRARY requires --jobs 1: the pipeline library has one writer");
++    Ok(count)
++}
++
+ fn folder() -> Result<PathBuf> {
+     let cfg = victory_core::Config::load()?;
+     Ok(cfg.cache_subdir("shaders")?.with_file_name("pipelines"))
+@@ -31,10 +41,13 @@ pub fn run(jobs: Option<usize>, limit: Option<usize>, again: bool, used: bool, t
+     if let Some(these) = these {
+         return make(&dir, &these);
+     }
++    let persist = persisted_library();
++    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
++    let jobs = process_count(jobs, cores, persist)?;
+     let began = Instant::now();
+     victory_hle::known_pipelines::use_translations(dir.with_file_name("shaders"));
+     let fingerprint = known::fingerprint();
+-    let done_file = dir.join("warm-done.txt");
++    let done_file = dir.join(if persist { "warm-library-processed.txt" } else { "warm-done.txt" });
+     let bad_file = dir.join("warm-bad.txt");
+     let keys = known::keys(&dir);
+     let listed = std::fs::read_to_string(&done_file).unwrap_or_default();
+@@ -54,13 +67,14 @@ pub fn run(jobs: Option<usize>, limit: Option<usize>, again: bool, used: bool, t
+     let mut all: Vec<usize> = (0..keys.len())
+         .filter(|&n| {
+             let key = keys[n].as_str();
+-            (again || !done.contains(key)) && !bad.contains(key) && (!used || early.contains(key))
++            // A prior driver-only warm marker cannot certify library reuse.
++            // Persistent mode reopens every requested entry; existing entries
++            // load from the saved library, and unfinished batches are retried.
++            (persist || again || !done.contains(key)) && !bad.contains(key) && (!used || early.contains(key))
+         })
+         .collect();
+     all.sort_by_key(|&n| (!early.contains(keys[n].as_str()), &keys[n]));
+     all.truncate(limit.unwrap_or(usize::MAX));
+-    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+-    let jobs = jobs.unwrap_or(cores * 2 / 3).max(1);
+     println!(
+         "{} pipelines known, {} made before ({fingerprint}), {} bad; {} to make, {jobs} processes",
+         keys.len(),
+@@ -104,6 +118,13 @@ pub fn run(jobs: Option<usize>, limit: Option<usize>, again: bool, used: bool, t
+                                 lock(&state).2 += 1;
+                                 rest = after;
+                             }
++                            (Some(why), None) => {
++                                // All PSOs may have been made but saving their
++                                // library failed. Do not report a clean warm.
++                                println!("pipeline batch checkpoint: {why}");
++                                lock(&state).2 += 1;
++                                break;
++                            }
+                             _ => break,
+                         }
+                     }
+@@ -124,6 +145,9 @@ pub fn run(jobs: Option<usize>, limit: Option<usize>, again: bool, used: bool, t
+         times.last().copied().unwrap_or(0.0),
+         times.iter().sum::<f64>() / 1e3
+     );
++    if persist {
++        anyhow::ensure!(refused == 0 && crashed == 0 && times.len() == all.len(), "offline library warm was incomplete; see the summary above");
++    }
+     Ok(())
+ }
+ 
+@@ -145,8 +169,15 @@ fn child(these: &[usize], mut each: impl FnMut(usize, f64, bool)) -> (usize, Opt
+             .creation_flags(IDLE_PRIORITY_CLASS)
+             .spawn()
+     });
+-    let Ok(mut process) = spawned else { return (these.len(), None) };
+-    let Some(out) = process.stdout.take() else { return (these.len(), None) };
++    let mut process = match spawned {
++        Ok(process) => process,
++        Err(error) => return (0, Some(format!("child could not start: {error}"))),
++    };
++    let Some(out) = process.stdout.take() else {
++        let _ = process.kill();
++        let _ = process.wait();
++        return (0, Some("child stdout was unavailable".into()));
++    };
+     let process = Mutex::new(process);
+     let (heard, over) = (Mutex::new(Instant::now()), AtomicBool::new(false));
+     let hung = AtomicBool::new(false);
+@@ -164,6 +195,9 @@ fn child(these: &[usize], mut each: impl FnMut(usize, f64, bool)) -> (usize, Opt
+         });
+         for line in BufReader::new(out).lines().map_while(Result::ok) {
+             *lock(&heard) = Instant::now();
++            if line.starts_with("library checkpoint:") {
++                println!("{line}");
++            }
+             let mut words = line.split(' ');
+             if words.next() == Some("made")
+                 && let (Some(n), Some(ms), Some(there)) = (words.next(), words.next(), words.next())
+@@ -177,8 +211,11 @@ fn child(these: &[usize], mut each: impl FnMut(usize, f64, bool)) -> (usize, Opt
+     });
+     let status = lock(&process).wait();
+     let well = status.as_ref().is_ok_and(|s| s.success());
++    if well && made == these.len() {
++        return (made, None);
++    }
+     if well {
+-        return (these.len(), None);
++        return (made, Some(format!("child reported {made} of {} requested pipelines", these.len())));
+     }
+     let why = if hung.load(Ordering::Relaxed) {
+         format!("hung for {} s", LONGEST.as_secs())
+@@ -197,6 +234,9 @@ fn make(dir: &Path, these: &str) -> Result<()> {
+     victory_loader::report_crashes();
+     let cfg = victory_core::Config::load()?;
+     victory_hle::known_pipelines::use_translations(cfg.cache_subdir("shaders")?);
++    if persisted_library() {
++        known::use_library(dir.to_owned());
++    }
+     let mut out = std::io::stdout();
+     known::make(dir, &these, |n, came| {
+         let told = match came {
+@@ -208,7 +248,32 @@ fn make(dir: &Path, these: &str) -> Result<()> {
+             std::process::exit(1);
+         }
+     });
++    if persisted_library() {
++        let (made, loaded, bytes) = known::checkpoint_library()
++            .context("the offline pipeline library was not saved")?;
++        writeln!(out, "library checkpoint: made={made} loaded={loaded} saved_bytes={bytes}")?;
++    }
+     // Without what a run's end does (nothing to save, the host's threads).
+     let _ = out.flush();
+     std::process::exit(0)
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::process_count;
++
++    #[test]
++    fn a_persisted_library_has_exactly_one_writer() {
++        assert_eq!(process_count(None, 16, true).unwrap(), 1);
++        assert_eq!(process_count(Some(1), 16, true).unwrap(), 1);
++        assert!(process_count(Some(2), 16, true).is_err());
++        assert!(process_count(Some(128), 16, true).is_err());
++    }
++
++    #[test]
++    fn driver_only_warming_retains_its_process_budget() {
++        assert_eq!(process_count(None, 16, false).unwrap(), 10);
++        assert_eq!(process_count(Some(2), 16, false).unwrap(), 2);
++        assert_eq!(process_count(None, 1, false).unwrap(), 1);
++    }
++}
+diff --git a/crates/victory-gpu/src/pipeline/known.rs b/crates/victory-gpu/src/pipeline/known.rs
+index 762f920228db76e0e685c28d3347e930c3c0024d..bf14c2fecc4ca20b34f87d1e41c5435e1032c821 100644
+--- a/crates/victory-gpu/src/pipeline/known.rs
++++ b/crates/victory-gpu/src/pipeline/known.rs
+@@ -214,6 +214,23 @@ pub fn use_translations(dir: PathBuf) {
+     crate::shader_cache::use_shader_cache(dir);
+ }
+ 
++/// For a single offline compiler child. The parent must serialize children;
++/// independent library writers would overwrite one another's saved entries.
++pub fn use_library(dir: PathBuf) {
++    super::library::use_pipeline_cache(dir);
++}
++
++/// Checkpoints the library without replacing the parent's append-only logs.
++/// A success reports newly created PSOs, library loads and serialized bytes.
++pub fn checkpoint_library() -> Option<(u64, u64, u64)> {
++    use std::sync::atomic::Ordering::Relaxed;
++    super::library::checkpoint_offline().then(|| (
++        super::library::MADE.load(Relaxed),
++        super::library::LOADED.load(Relaxed),
++        super::library::SAVED.load(Relaxed),
++    ))
++}
++
+ /// Makes the host pipelines of those of `which` (numbers in the file) and
+ /// lets each go again: the driver's cache on disk keeps them. `each` is told
+ /// the number before, and what came of it after: milliseconds and whether
+diff --git a/crates/victory-gpu/src/pipeline/library.rs b/crates/victory-gpu/src/pipeline/library.rs
+index a7e974b96379d442759852ebc5611a49a5430b8c..26f6f328742d3f55469316ce903278455d5ce0d0 100644
+--- a/crates/victory-gpu/src/pipeline/library.rs
++++ b/crates/victory-gpu/src/pipeline/library.rs
+@@ -572,19 +572,30 @@ pub(crate) fn pipeline(
+ /// Writes the library and the early list if pipelines were added since the
+ /// last save and `SAVE_EVERY` has passed (or `now`).
+ pub(crate) fn save(now: bool) {
++    let _ = save_inner(now, true);
++}
++
++/// An offline warmer is the only writer of its library. It leaves the early
++/// list and timing files to its parent, whose append handles must not be
++/// replaced by the child. False means the checkpoint did not reach disk.
++pub(crate) fn checkpoint_offline() -> bool {
++    save_inner(true, false)
++}
++
++fn save_inner(now: bool, metadata: bool) -> bool {
+     static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+     const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(20);
+-    let (Some(dir), Some(library)) = (DIR.get(), library()) else { return };
++    let (Some(dir), Some(library)) = (DIR.get(), library()) else { return false };
+     {
+         let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+         if !now && last.is_some_and(|t| t.elapsed() < SAVE_EVERY) {
+-            return;
++            return false;
+         }
+         *last = Some(std::time::Instant::now());
+     }
+     if let Err(e) = std::fs::create_dir_all(dir) {
+         tracing::warn!(error = %e, "host pipeline library not saved");
+-        return;
++        return false;
+     }
+     let tmp = dir.join(LIBRARY_FILE).with_extension("tmp");
+     // The bytes of the library written to `tmp`; 0 when no pipeline was
+@@ -596,8 +607,8 @@ pub(crate) fn save(now: bool) {
+         // No store between asking the size and writing; loads go on.
+         let _alone = library.saving.write().unwrap_or_else(|e| e.into_inner());
+         let added = library.added.load(Ordering::Relaxed);
+-        if !USED_CHANGED.swap(false, Ordering::Relaxed) && added == 0 {
+-            return;
++        if !(metadata && USED_CHANGED.swap(false, Ordering::Relaxed)) && added == 0 {
++            return BLOB.load(Ordering::Relaxed) > 0 || SAVED.load(Ordering::Relaxed) > 0;
+         }
+         if added == 0 {
+             0
+@@ -608,7 +619,7 @@ pub(crate) fn save(now: bool) {
+             if let Err(e) = serialise(&library.library, &tmp, size) {
+                 tracing::warn!(error = %e, "host pipeline library not serialised");
+                 let _ = std::fs::remove_file(&tmp);
+-                return;
++                return false;
+             }
+             library.added.store(0, Ordering::Relaxed);
+             SAVED.store(size as u64, Ordering::Relaxed);
+@@ -617,7 +628,6 @@ pub(crate) fn save(now: bool) {
+     };
+     // Through `used`: a process that asked for none yet (`victory shaders`)
+     // must not write the earlier runs' list over with nothing.
+-    let used: Vec<String> = used().iter().flatten().cloned().collect();
+     let library_written = if bytes > 0 { replace_library(dir, &tmp) } else { Ok(()) };
+     if bytes > 0 && library_written.is_ok() {
+         // In place unless the system refused and the new one waits beside it.
+@@ -633,20 +643,36 @@ pub(crate) fn save(now: bool) {
+             )
+         });
+     }
++    if !metadata {
++        return match library_written {
++            Ok(()) => true,
++            Err(e) => {
++                tracing::warn!(error = %e, "offline pipeline library checkpoint failed");
++                false
++            }
++        };
++    }
++    let used: Vec<String> = used().iter().flatten().cloned().collect();
+     let slow: Vec<String> = slow_ones().iter().flatten().map(|(key, ms)| format!("{key} {ms}")).collect();
+     let written = library_written
+         .and_then(|()| write_atomically(&dir.join(SLOW_FILE), slow.join("\n").as_bytes()))
+         .and_then(|()| write_atomically(&dir.join(EARLY_FILE), used.join("\n").as_bytes()));
+     match written {
+-        Ok(()) => tracing::info!(
+-            bytes,
+-            early = used.len(),
+-            made = MADE.load(Ordering::Relaxed),
+-            loaded = LOADED.load(Ordering::Relaxed),
+-            started_early = EARLY.load(Ordering::Relaxed),
+-            "host pipeline library saved"
+-        ),
+-        Err(e) => tracing::warn!(error = %e, "host pipeline library not saved"),
++        Ok(()) => {
++            tracing::info!(
++                bytes,
++                early = used.len(),
++                made = MADE.load(Ordering::Relaxed),
++                loaded = LOADED.load(Ordering::Relaxed),
++                started_early = EARLY.load(Ordering::Relaxed),
++                "host pipeline library saved"
++            );
++            true
++        }
++        Err(e) => {
++            tracing::warn!(error = %e, "host pipeline library not saved");
++            false
++        }
+     }
+ }
+ 

@@ -17,13 +17,15 @@ the Windows GPU watchdog unchanged. The memory reserve monitor is checked every
 500 ms; it cannot guarantee recovery from a driver hang.
 
 Direct invocation now defaults to the Series X profile on Radeon, with ordered
-submission, two pipeline workers and a 3 GiB physical-memory reserve. Builds use
+submission and two pipeline workers. At the user's request, the physical-RAM
+reserve defaults to zero. The independent 4 GiB system-commit reserve, automatic
+job cap of at most 24 GiB and 8 GiB startup commit headroom remain enabled. Builds use
 two Cargo jobs to leave CPU headroom for other applications. The explicit profile is:
 
 ```powershell
 .\Launch-Victory.ps1 -LocalRoot 'D:\BuildGTA$\victory-local' `
   -VictorySource amd7900-series-s -Console series-x -Renderer hardware `
-  -Seconds 240 -HostReserveMiB 3072 -FreshState `
+  -Seconds 240 -HostReserveMiB 0 -FreshState `
   -PipelineWorkers 2 -QueuedSubmit -MemorySamples -CaptureAudio
 ```
 
@@ -57,12 +59,17 @@ destinations and reparse paths. It never transfers compiled shaders or marks
 them warm across runtime versions. For the subsequent title test,
 `-WarmCacheFrom <warm-run-id>` requires the identical executable, console and
 renderer. Warm-up can fail; check its actual completion and failure counts.
-The current warmer persists translated shader files and exercises the driver's
-cache. It does not serialize a shared Victory pipeline library from its compiler
-children. A copied cache directory alone is not proof of host-pipeline reuse;
-compare the subsequent title's actual `loaded` and `made` counters. Keep the
-physical/commit reserves in force during warm-up; a 6 GiB job cap and two processes
-are used for the local precompile comparison while OBS remains open.
+The default warmer persists translated shader files and exercises the driver's
+cache. `-PrewarmLibrary` additionally checkpoints the host pipeline library after
+each recycled compiler child, using exactly one writer to avoid lost updates.
+It revisits selected entries even when a previous driver-only marker exists;
+existing library entries can load without creating another PSO. A failed child,
+refused pipeline or failed checkpoint makes this mode return failure. Its
+`library checkpoint` lines distinguish creations, loads and bytes actually saved.
+A copied cache directory alone is not proof of fast host-pipeline reuse; compare
+load times and the subsequent title's actual `loaded` and `made` counters.
+Use `-CommitMiB 6144` for bounded offline preparation. Setting
+`-HostReserveMiB 0` disables only the physical floor, never the commit guard.
 
 Read a run with:
 

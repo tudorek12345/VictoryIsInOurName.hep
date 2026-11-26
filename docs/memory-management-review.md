@@ -29,5 +29,16 @@ Next discriminating test: precompile the recorded used pipelines with no title
 running, then reuse the exact-build cache and compare actual pipeline loads,
 new compilations, frame stalls and memory growth. Precompilation does not remove
 the title's resources, and a pipeline-created result is not rendered gameplay.
-The 3 GiB physical reserve, 4 GiB commit reserve and normal Windows GPU watchdog
-remain enabled throughout. No live resource is freed to force a test past them.
+Those comparison runs used a 3 GiB physical reserve, a 4 GiB commit reserve and
+the normal Windows GPU watchdog. The user subsequently requested removing the
+physical reserve. The launcher now defaults to zero for that floor while keeping
+the commit guard and the automatic job cap (at most 24 GiB) independent. No live
+resource is freed to force a test past a guard. This policy change is not a
+memory optimization or evidence of gameplay.
+
+The initial offline preparation created all 1,404 selected pipelines with no
+refusals or compiler-child failures, in 758 seconds and at 2.07 GiB peak job
+commit. However, the next six-pipeline reuse probe still took 3.9-6.2 seconds per
+PSO and opened an empty host library. The old warmer never selected or saved
+that library. An opt-in single-writer checkpoint path now addresses that missing
+handoff; it requires measured cache-load reuse before claiming startup gains.

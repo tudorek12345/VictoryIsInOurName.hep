@@ -107,6 +107,11 @@ ${esc}[2m2026-01-01T00:00:01Z${esc}[0m memory sample (retained except made_*; po
     $r=Report
     Assert ($r.precompile.completed -and $r.precompile.processed -eq 19 -and $r.precompile.refused -eq 3 -and $r.precompile.childFailures -eq 1) 'A warmer completion must retain refused pipelines and child failures separately.'
     $passed++
+    Add-Content -LiteralPath $victory -Value "`nlibrary checkpoint: made=6 loaded=0 saved_bytes=4096`nlibrary checkpoint: made=0 loaded=6 saved_bytes=0"
+    $r=Report
+    $checkpoints=@($r.pipelineCacheEvents | Where-Object event -eq 'offline-checkpoint')
+    Assert ($checkpoints.Count -eq 2 -and $checkpoints[0].made -eq 6 -and $checkpoints[0].saved_bytes -eq 4096 -and $checkpoints[1].loaded -eq 6 -and $checkpoints[1].saved_bytes -eq 0) 'Offline checkpoints must distinguish created pipelines, library reuse and bytes actually written.'
+    $passed++
     Write-Output "$passed synthetic diagnostic-summary checks passed."
 } finally {
     [Threading.Thread]::CurrentThread.CurrentCulture=$culture

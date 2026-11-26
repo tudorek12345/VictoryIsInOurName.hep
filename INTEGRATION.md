@@ -168,3 +168,39 @@ reproduction. The user selected Series X for the next test. The launcher and
 asset-icon shortcut use that profile; the checkout retains its historical name.
 Radeon, two pipeline workers, the 3 GiB physical reserve, the 4 GiB commit reserve
 and the Windows GPU watchdog remain unchanged.
+
+## Offline library checkpoint and physical reserve (25 November, later pass)
+
+Apply [the offline-library patch](runtimes/patches/victory-7900xtx-offline-library.patch)
+after the memory-sampling patch. It reproduces `dc9fd41` from `0001d4b`.
+Application against the preceding patch chain matched all three changed source
+files byte for byte. The diagnostics build, two warmer tests, five library tests
+and sixteen synthetic diagnostic-summary checks passed.
+
+`-PrewarmLibrary` opts into one compiler child at a time. Each child saves the
+host library before exiting, without replacing the parent's open early/slow
+lists. Failed checkpoints and incomplete batches are reported as failures.
+Legacy driver-only markers cannot suppress the persistent pass. GPU resource
+lifetimes, shader semantics and the title's regular save path are unchanged.
+
+The first six-PSO test created six and saved a 1,748-byte library. The next process
+loaded all six and created none. However, reloading the expensive compute PSOs
+still took roughly 5-6 seconds each on this Radeon/driver. Cache hits therefore
+do not establish a frame-rate improvement. Full preparation and title testing
+must be reported separately from these compiler probes.
+
+At the user's explicit request, `HostReserveMiB` now defaults to zero in the
+launcher and icon shortcut. It disables only the physical-RAM floor. The guard
+runner, 4 GiB system-commit reserve, startup commit-headroom check, automatic job
+cap of at most 24 GiB and Windows GPU watchdog remain active. Synthetic runner
+checks confirmed that the commit guard still terminates its probe with no
+physical reserve, and the hardware probe metadata records 0/4096 MiB reserves.
+
+The 7900XTX and fxceless heads were checked again and remain `9c23e8dd` and
+`46bf5351`. XCL advanced to `b49be183`: `ec80c071` reuses whole cached compute
+PSOs before its split dispatch path, `c836ecd9` expands atomic-heavy compaction,
+and `60447294` shares scratch across deferred split lists. These use XCL-specific
+translation and command-list structures. They have been inspected, not merged
+into Victory or claimed as local fixes. A standalone authored compute probe
+also tested `GetCachedBlob` (954 bytes); a tiny-shader test cannot establish that
+this alternative fixes multi-second world PSO loads.

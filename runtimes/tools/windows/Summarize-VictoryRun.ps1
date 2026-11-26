@@ -114,6 +114,9 @@ Read-LinesShared (Join-Path $logDir 'victory.log') {
             $timedMemory.Add([pscustomobject]$fields)
         }
     }
+    if ($line -match '^library checkpoint: made=(\d+) loaded=(\d+) saved_bytes=(\d+)$') {
+        $pipelineCache.Add([pscustomobject]@{logLine=$lineNumber;timestamp=$timestamp;event='offline-checkpoint';made=[uint64]$Matches[1];loaded=[uint64]$Matches[2];saved_bytes=[uint64]$Matches[3]})
+    }
     if ($line -match 'host pipeline library (saved|loaded)') {
         $fields=[ordered]@{logLine=$lineNumber;timestamp=$timestamp;event=$Matches[1]}
         foreach ($field in [regex]::Matches($line, '\b(?<key>bytes|early|made|loaded|started_early)=(?<value>\d+)(?=\s|$)')) {

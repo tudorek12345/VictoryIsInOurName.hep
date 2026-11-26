@@ -19,7 +19,7 @@ param(
     [int]$CommitMiB = 0,
 
     [ValidateRange(0, 32768)]
-    [int]$HostReserveMiB = 3072,
+    [int]$HostReserveMiB = 0,
 
     [switch]$PrepareOnly,
 
@@ -42,6 +42,7 @@ param(
     [int]$PipelineWorkers = 0,
     [switch]$PipelineBook,
     [switch]$PrewarmPipelines,
+    [switch]$PrewarmLibrary,
     [ValidateRange(1, 10000)]
     [int]$PrewarmLimit = 2048,
     [ValidateRange(0, 10000000)]
@@ -95,6 +96,9 @@ if ($PrewarmPipelines -and -not ($WarmCacheFrom -or $PipelineBookFrom)) {
 if ($PrewarmIndices.Count -gt 0 -and -not $PrewarmPipelines) {
     throw 'PrewarmIndices requires PrewarmPipelines and a recorded pipeline book.'
 }
+if ($PrewarmLibrary -and -not $PrewarmPipelines) {
+    throw 'PrewarmLibrary requires PrewarmPipelines.'
+}
 if ($PipelineBookFrom -and (-not $amdFork -or -not $FreshState -or $WarmCacheFrom -or $PrepareOnly)) {
     throw 'PipelineBookFrom requires an AMD fork fresh state and cannot be combined with WarmCacheFrom or PrepareOnly.'
 }
@@ -129,7 +133,7 @@ $runtime = if ($useXcl -or $standalone) { $repo } else { Join-Path $repo 'runtim
 $package = Join-Path $workspace 'buildgta'
 $title = Join-Path $package 'game_scarlett_master.exe'
 $toolHome = Join-Path $local 'isolated-run'
-$helper = Join-Path $toolHome $(if ($HostReserveMiB) { 'isolated-run-guard.exe' } else { 'isolated-run.exe' })
+$helper = Join-Path $toolHome 'isolated-run-guard.exe'
 $cargoHome = Join-Path $local 'cargo'
 $cargo = Join-Path $cargoHome 'bin\cargo.exe'
 $target = Join-Path $local $(if ($useXcl) { 'target-xcl' } else {
@@ -241,10 +245,12 @@ try {
         }
         $memory = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory
         $available = $memory.CommitLimit - $memory.CommittedBytes
-        $reserveCommitBytes = if ($HostReserveMiB) { 8GB } else { 1GB }
+        # Disabling the physical-RAM floor must not disable the independent
+        # system-commit guard or silently lower the selected job budget.
+        $reserveCommitBytes = 8GB
         $withReserve = [Math]::Floor(($available - $reserveCommitBytes) / 1MB)
         if ($CommitMiB -eq 0) {
-            $preferredCommitMiB = if ($HostReserveMiB) { 24576 } else { 16384 }
+            $preferredCommitMiB = 24576
             $CommitMiB = [Math]::Min($preferredCommitMiB, $withReserve)
         }
         if ($CommitMiB -lt 512 -or $CommitMiB -gt $withReserve) {
@@ -332,8 +338,9 @@ try {
             '--seconds', $Seconds, '--commit-mib', $CommitMiB
         )
         if ($HostReserveMiB) {
-            $arguments += @('--reserve-physical-mib', $HostReserveMiB, '--reserve-commit-mib', '4096')
+            $arguments += @('--reserve-physical-mib', $HostReserveMiB)
         }
+        $arguments += @('--reserve-commit-mib', '4096')
         if ($useXcl) {
             $adapter = if ($Renderer -eq 'warp') { 'warp' } else { 'radeon' }
             $arguments += @(
@@ -401,10 +408,12 @@ try {
                 }
             }
             if ($PrewarmPipelines) {
+                if ($PrewarmLibrary) { $arguments += @('--env', 'VICTORY_WARM_LIBRARY=1') }
                 if ($PrewarmIndices.Count -gt 0) {
                     $arguments += @('--', 'warm', '--these', ($PrewarmIndices -join ','))
                 } else {
-                    $arguments += @('--', 'warm', '--used', '--jobs', '2', '--limit', "$PrewarmLimit")
+                    $warmJobs = if ($PrewarmLibrary) { '1' } else { '2' }
+                    $arguments += @('--', 'warm', '--used', '--jobs', $warmJobs, '--limit', "$PrewarmLimit")
                 }
             } else {
                 $arguments += @('--', 'run', $title, '--console', $Console, '--execute')
@@ -457,6 +466,7 @@ try {
             pipelineWorkers = if ($PipelineWorkers) { $PipelineWorkers } else { $null }
             pipelineBook = [bool]$PipelineBook
             prewarmPipelines = [bool]$PrewarmPipelines
+            prewarmLibrary = [bool]$PrewarmLibrary
             prewarmLimit = if ($PrewarmPipelines) { $PrewarmLimit } else { $null }
             prewarmIndices = @($PrewarmIndices)
             requestedSeconds = $Seconds
@@ -474,7 +484,7 @@ try {
             elapsedSeconds = [Math]::Round(((Get-Date) - $started).TotalSeconds, 2)
             availableCommitBytesAtStart = $available
             hostPhysicalReserveMiB = $HostReserveMiB
-            hostCommitReserveMiB = if ($HostReserveMiB) { 4096 } else { 0 }
+            hostCommitReserveMiB = 4096
             jobCommitLimitBytes = [long]$CommitMiB * 1MB
             peakJobCommitBytes = $peakBytes
             exitCode = $exitCode
