@@ -1,0 +1,285 @@
+From 00ea5d4cc5450f0578d0d16980a653e62218f7c0 Mon Sep 17 00:00:00 2001
+From: tudorek12345 <44846825+tudorek12345@users.noreply.github.com>
+Date: Thu, 26 Nov 2026 02:17:15 -0800
+Subject: [PATCH] Fix RDNA2 legacy fused arithmetic and verify pixel helper
+ edges
+
+---
+ crates/victory-shader/src/emit/lower.rs      |  43 ++++++--
+ crates/victory-shader/src/emit/mod.rs        | 100 +++++++++++++++++++
+ crates/victory-shader/src/emit/valu_tests.rs |  76 +++++++++++++-
+ 3 files changed, 208 insertions(+), 11 deletions(-)
+
+diff --git a/crates/victory-shader/src/emit/lower.rs b/crates/victory-shader/src/emit/lower.rs
+index 6691e3a..5f14471 100644
+--- a/crates/victory-shader/src/emit/lower.rs
++++ b/crates/victory-shader/src/emit/lower.rs
+@@ -3994,6 +3994,31 @@ impl<'a> Lower<'a> {
+         self.s.m.select(c, z, zero, m)
+     }
+ 
++    /// RDNA2 reuses the legacy MAD/MAC encodings for fused FMA/FMAC.
++    /// A zero factor gives a +0 product even if the other factor is NaN or
++    /// infinite. Keep the existing denormal policy: input flushing is MODE
++    /// dependent, not an unconditional property of these opcodes.
++    fn legacy_fmad(&mut self, a: V, b: V, addend: V) -> V {
++        let c = self.cur;
++        let fused = self.fmad(a, b, addend);
++        let zero = self.s.m.f32(0);
++        let az = self.s.m.cmp(c, pred::OEQ, a, zero);
++        let bz = self.s.m.cmp(c, pred::OEQ, b, zero);
++        let zero_factor = self.s.m.bin(c, Bin::Or, az, bz);
++        let without_product = self.s.m.bin(c, Bin::Add, zero, addend);
++        // The host can fold +0 + x to x, losing +0 + -0 == +0. Preserve
++        // that case through integer bits; other inputs keep the add's policy.
++        let addend_bits = self.as_int(addend);
++        let magnitude = self.s.m.i32(0x7FFF_FFFF);
++        let magnitude = self.s.m.bin(c, Bin::And, addend_bits, magnitude);
++        let zero_bits = self.s.m.i32(0);
++        let addend_zero = self.s.m.cmp(c, pred::EQ, magnitude, zero_bits);
++        let sum_bits = self.as_int(without_product);
++        let sum_bits = self.s.m.select(c, addend_zero, zero_bits, sum_bits);
++        let without_product = self.as_float(sum_bits);
++        self.s.m.select(c, zero_factor, without_product, fused)
++    }
++
+     // ---- lane booleans ----
+ 
+     fn boolean(&mut self, b: Bool, at: usize) -> Result<V, Why> {
+@@ -8429,23 +8454,21 @@ impl<'a> Lower<'a> {
+                         let m = self.s.m.bin(c, Bin::Mul, a, bb);
+                         self.s.m.bin(c, Bin::Add, m, acc)
+                     }
+-                    _ => {
+-                        let m = self.legacy_mul(a, bb);
+-                        self.s.m.bin(c, Bin::Add, m, acc)
+-                    }
++                    _ => self.legacy_fmad(a, bb, acc),
+                 };
+                 float(self, r)
+             }
+-            "v_mad_f32" | "v_madak_f32" | "v_madmk_f32" | "v_mad_legacy_f32" => {
++            "v_mad_f32" | "v_madak_f32" | "v_madmk_f32" => {
+                 let (a, bb, cc) = (f(self, 0)?, f(self, 1)?, f(self, 2)?);
+-                let m = if name == "v_mad_legacy_f32" {
+-                    self.legacy_mul(a, bb)
+-                } else {
+-                    self.s.m.bin(c, Bin::Mul, a, bb)
+-                };
++                let m = self.s.m.bin(c, Bin::Mul, a, bb);
+                 let r = self.s.m.bin(c, Bin::Add, m, cc);
+                 float(self, r)
+             }
++            "v_mad_legacy_f32" => {
++                let (a, bb, cc) = (f(self, 0)?, f(self, 1)?, f(self, 2)?);
++                let r = self.legacy_fmad(a, bb, cc);
++                float(self, r)
++            }
+             "v_max3_f32" | "v_min3_f32" | "v_med3_f32" => {
+                 let (a, bb, cc) = (f(self, 0)?, f(self, 1)?, f(self, 2)?);
+                 let r = match name {
+diff --git a/crates/victory-shader/src/emit/mod.rs b/crates/victory-shader/src/emit/mod.rs
+index 1b43fff..130be51 100644
+--- a/crates/victory-shader/src/emit/mod.rs
++++ b/crates/victory-shader/src/emit/mod.rs
+@@ -2721,6 +2721,106 @@ mod barycentric_tests {
+         let _ = shader;
+     }
+ 
++    /// Quad reads must include rasterizer helper lanes even when the other
++    /// half of a quad is covered by a different triangle (DexNom 921d8d3).
++    #[cfg(windows)]
++    #[test]
++    fn pixel_quad_reads_include_helper_lanes_at_triangle_edges() {
++        use super::bitcode::{Attr, Term};
++        use super::host::{Draw, Host};
++        use super::shader::Shader;
++        use windows::Win32::Graphics::Direct3D12::D3D12_SHADER_VISIBILITY_PIXEL;
++
++        let _one = super::valu_tests::ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
++
++        let mut vs = Shader::new(false);
++        let mut input = element("POSITION", 0, 0);
++        input.usage = 15;
++        vs.inputs.push(input);
++        let mut output = element("SV_Position", 3, 0);
++        output.usage = 15;
++        output.interp = 4;
++        vs.outputs.push(output);
++        let zero = vs.m.i32(0);
++        let undef = vs.m.undef(vs.t.i32);
++        for col in 0..4 {
++            let col = vs.m.i8(col);
++            let value = vs.op(vs.entry, "loadInput.f32", Attr::ReadNone, vs.t.f32, 4,
++                &[zero, zero, col, undef]);
++            vs.op(vs.entry, "storeOutput.f32", Attr::NoUnwind, vs.t.void, 5,
++                &[zero, zero, col, value]);
++        }
++        vs.m.terminate(vs.entry, Term::Ret);
++        let vs = vs.finish();
++
++        const SIZE: usize = 16;
++        let a = [-1.0, -1.0, 0.5, 1.0];
++        let b = [-1.0, 1.0, 0.5, 1.0];
++        let c = [1.0, -1.0, 0.5, 1.0];
++        let d = [1.0, 1.0, 0.5, 1.0];
++        // Broadcasts, all native exchanges, identity, and a mixed permutation.
++        let patterns = [0x00, 0x55, 0xaa, 0xff, 0xb1, 0x4e, 0x1b, 0xe4, 0x27];
++        let mut devices_checked = 0;
++        for (name, warp) in [("hardware", false), ("WARP", true)] {
++            if !warp && std::env::var_os("VICTORY_WARP").is_some() {
++                eprintln!("hardware quad edge probe skipped under VICTORY_WARP");
++                continue;
++            }
++            let Ok(host) = Host::new(warp) else {
++                eprintln!("no SM 6.6 {name} device; skipped quad edge probe");
++                continue;
++            };
++            let mut checked = 0;
++            for dpp in [false, true] {
++                for pattern in patterns {
++                    let mut words = vec![0xBEFE_097E]; // whole-quad mode
++                    for dst in 2..6u32 {
++                        let src = dst & 1; // SV_Position.x / y
++                        words.extend(if dpp {
++                            [0x7E00_02FA | dst << 17, 0xFF00_0000 | pattern << 8 | src]
++                        } else {
++                            [0xD8D4_8000 | pattern, dst << 24 | src]
++                        });
++                    }
++                    words.extend([0xF800_180F, 0x0504_0302, 0xBF81_0000]);
++                    let ps = pixel_with_inputs(&words, (1 << 8) | (1 << 9),
++                        &[element("SV_Position", 3, 0)]).unwrap();
++                    validate(&ps);
++                    let root = host.root_signature_for(&[(&ps, D3D12_SHADER_VISIBILITY_PIXEL)]).unwrap();
++                    let pso = host.pipeline_with(&root, &vs, &ps.dxil).unwrap();
++                    // Each draw starts cleared. Summing the complementary halves
++                    // checks coverage as well as the partner coordinates.
++                    let halves = [[a, b, c], [b, c, d]].map(|triangle| {
++                        host.draw(&root, &pso, &Draw {
++                            roots: Vec::new(), textures: &[], samplers: &[],
++                            vertices: triangle.as_flattened(), stride: 16,
++                            size: (SIZE as u32, SIZE as u32), mesh_groups: 0,
++                        }).unwrap()
++                    });
++                    for y in 0..SIZE {
++                        for x in 0..SIZE {
++                            let lane = (x & 1) | ((y & 1) << 1);
++                            let partner = (pattern >> (lane * 2)) & 3;
++                            let px = (x & !1) as f32 + (partner & 1) as f32 + 0.5;
++                            let py = (y & !1) as f32 + (partner >> 1) as f32 + 0.5;
++                            let actual: [f32; 4] = std::array::from_fn(|channel|
++                                halves[0][y * SIZE + x][channel] + halves[1][y * SIZE + x][channel]);
++                            assert_eq!(actual, [px, py, px, py],
++                                "{name} dpp={dpp} permutation={pattern:#x} pixel=({x},{y})");
++                        }
++                    }
++                    checked += 1;
++                }
++            }
++            assert_eq!(checked, 18);
++            devices_checked += 1;
++            eprintln!("{name}: executed {checked} quad edge cases (256 pixels each)");
++        }
++        if devices_checked == 0 {
++            eprintln!("quad edge probe skipped: no hardware or WARP draw executed");
++        }
++    }
++
+     /// Custom interpolation reads I and J (v0, v1 with PERSP_CENTER) as
+     /// plain floats: they are channels y and z of `SV_Barycentrics`, the
+     /// weights of vertices 1 and 2.
+diff --git a/crates/victory-shader/src/emit/valu_tests.rs b/crates/victory-shader/src/emit/valu_tests.rs
+index 4a2d829..51d5fd7 100644
+--- a/crates/victory-shader/src/emit/valu_tests.rs
++++ b/crates/victory-shader/src/emit/valu_tests.rs
+@@ -2049,7 +2049,13 @@ fn rdna_forms_give_what_the_spelled_out_ones_give() {
+             run_cases_on(&shader, &cases, &[("hardware", false)], |_, _, _, r| all.push(r));
+             got.push(all);
+         }
+-        assert_ne!(written[0], written[1], "{name}: written alike");
++        if name == "mad_legacy" {
++            // RDNA2 legacy FMA now has the same fused/zero-factor lowering
++            // on every host; the optional legacy multiply shortcut is unused.
++            assert_eq!(written[0], written[1], "legacy FMA must not depend on RDNA shortcuts");
++        } else {
++            assert_ne!(written[0], written[1], "{name}: written alike");
++        }
+         for (case, (&was, &is)) in cases.iter().zip(got[0].iter().zip(&got[1])) {
+             let (x, y) = (f32::from_bits(was), f32::from_bits(is));
+             let same = was == is || x.is_nan() && y.is_nan() || !exact && x == 0.0 && y == 0.0;
+@@ -2057,3 +2063,71 @@ fn rdna_forms_give_what_the_spelled_out_ones_give() {
+         }
+     }
+ }
++
++/// The decoder retains the pre-RDNA2 names, but 0x140 and VOP2 0x06 are
++/// FMA_LEGACY/FMAC_LEGACY on RDNA2 (AMD ISA, instruction changes p3).
++fn legacy_fma_programs() -> [(&'static str, HostShader); 2] {
++    let mad = build_valu_cs(&vop3(0x140, 0, vgpr(1), vgpr(2), vgpr(3)));
++    let mac = build_valu_cs(&[
++        vop1(0x001, 0, vgpr(3)), // the old destination is the addend
++        (0x06 << 25) | (2 << 9) | u32::from(vgpr(1)),
++    ]);
++    [("mad", mad), ("mac", mac)]
++}
++
++#[test]
++fn legacy_fma_rounding_on_hardware() {
++    // WARP may implement dx.op.tertiary.f32(46) with two roundings; it is
++    // not a reference for this hardware precision requirement.
++    if std::env::var("VICTORY_WARP").is_ok_and(|v| v == "1")
++        || Host::new(false).is_err()
++    {
++        eprintln!("legacy FMA precision: no hardware probe executed");
++        return;
++    }
++    let cases = [
++        [0x3f80_0001, 0x3f7f_fffe, 0xbf80_0000, 0],
++        [0x3f80_0001, 0x3f80_0001, 0xbf80_0002, 0],
++    ];
++    // Cancellation leaves -/+2^-46 only with a single rounding.
++    let expected = [0xa880_0000, 0x2880_0000];
++    let mut executed = 0;
++    for (name, shader) in legacy_fma_programs() {
++        run_cases_on(&shader, &cases, &[("hardware", false)], |backend, i, _, got| {
++            assert_eq!(got, expected[i], "{backend}: legacy {name} fused case {i}");
++            executed += 1;
++        });
++    }
++    assert_eq!(executed, 4, "the hardware precision cases must actually run");
++    eprintln!("legacy FMA precision: {executed} hardware cases executed");
++}
++
++#[test]
++fn legacy_fma_zero_factor_accumulator_and_modifiers() {
++    let cases = [
++        [0, 0x7f80_0000, 0x3f80_0000, 0], // zero * infinity + 1
++        [0x8000_0000, 0x7fc0_1234, 0x8000_0000, 0], // -0 * NaN + -0
++        [0x7fc0_1234, 0x8000_0000, 0xc000_0000, 0], // NaN * -0 - 2
++        [0x7f80_0000, 0, 0x7fc0_4321, 0], // zero product does not hide NaN addend
++        [0x4000_0000, 0x4040_0000, 0x4080_0000, 0], // 2 * 3 + 4
++        [0x7f80_0000, 0x3f80_0000, 0xff80_0000, 0], // infinity - infinity
++    ];
++    let expected = [Some(0x3f80_0000), Some(0), Some(0xc000_0000), None, Some(0x4120_0000), None];
++    for (name, shader) in legacy_fma_programs() {
++        run_cases(&shader, &cases, |backend, i, _, got| {
++            if let Some(want) = expected[i] {
++                assert_eq!(got, want, "{backend}: legacy {name} case {i}");
++            } else {
++                assert!(f32::from_bits(got).is_nan(), "{backend}: legacy {name} case {i}: {got:#x}");
++            }
++        });
++    }
++    let modifiers = [0xc000_0000, 0x4040_0000, 0x4080_0000, 0];
++    for (clamp, expected) in [(false, 0xc080_0000), (true, 0)] {
++        // (abs(-2) * -3 + 4) * 2 = -4, then optional output clamp.
++        let shader = build_valu_cs(&vop3_mod(0x140, 0, vgpr(1), vgpr(2), vgpr(3), 1, 2, 1, clamp));
++        run_cases(&shader, &[modifiers], |backend, _, _, got| {
++            assert_eq!(got, expected, "{backend}: legacy FMA modifiers, clamp={clamp}");
++        });
++    }
++}
+-- 
+2.56.0.windows.4
+

@@ -365,3 +365,23 @@ Peak job memory remained about 21.57 GiB, so a reduction in total peak memory
 is not established. The final world interval was 0.4 FPS with incorrect rendering;
 first-mission progress and responsive controls remain unverified. Cleanup restored
 all 151 package access paths. See the memory follow-up for the exact configuration.
+
+## RDNA2 legacy fused arithmetic
+
+[The legacy FMA patch](runtimes/patches/victory-rdna2-legacy-fma.patch) applies
+after the completed-list patch and produces `00ea5d4`. RDNA2 reuses the older
+legacy MAD/MAC encodings for fused FMA/FMAC. The previous multiply-then-add
+lowering failed an authored Radeon cancellation case: it returned zero instead
+of the expected nonzero fused result. The corrected path preserves the legacy
+zero-factor rule, accumulator and operand modifiers. Generic MAD/MAC, existing
+denormal handling and lane-identity behavior remain unchanged.
+
+All four hardware precision cases executed on the RX 9060 XT. The full shader
+library suite passed 291 tests with four existing ignored tests. One existing
+test's bytecode-difference assertion was updated because the two legacy paths
+now intentionally use the same fused implementation; its hardware value checks
+remain. An authored pixel-edge regression also passed 18 cases on Radeon and
+18 on WARP, so the already-present pixel helper implementation was retained.
+These results validate the tested shader semantics, not first-mission rendering
+or a gameplay performance improvement. Translator changes require fresh
+content-keyed shader/pipeline preparation before the next title comparison.
