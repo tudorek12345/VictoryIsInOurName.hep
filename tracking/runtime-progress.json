@@ -1,87 +1,79 @@
 {
   "schemaVersion": 2,
   "repository": "tudorek12345/VictoryIsInOurName.hep",
-  "reportedOn": "2026-11-24",
-  "reportedBy": "repository maintainer",
-  "verification": "self-reported",
+  "reportedOn": "2026-11-26",
+  "reportedBy": "repository maintainer; local tool measurements and manually inspected private captures",
+  "verification": "local evidence, not independent reproduction",
   "subject": "GTA VI on the Windows D3D12 runtime integration",
   "observations": [
     {
-      "stage": "title-card",
-      "result": "The maintainer reports that the Rockstar Games Presents title card now appears."
+      "stage": "intro",
+      "result": "Both final-binary runs have a visible Rockstar intro or logo capture with a 30 FPS window caption; this is an interval observation, not a whole-run guarantee."
     },
     {
-      "stage": "world-transition",
-      "result": "The reported load reaches the first mission’s intro. The picture stays black and the host GPU fails within seconds. The cause is unresolved."
+      "stage": "rendered-scene",
+      "result": "Series S produced a recognizable rendered character close-up. Seven world-rendering interval samples around the transition were 1.3-2.4 FPS, sample median 1.9. No gameplay input, responsive control or first-mission completion was verified."
+    },
+    {
+      "stage": "memory",
+      "result": "Both fresh-profile runs stopped at the job commit reserve. Series S then had a separate profile-cleanup failure, followed by a documented successful manual API retry."
+    },
+    {
+      "stage": "audio",
+      "result": "Recorded signal was present in X and later S intervals. The first 45 seconds of S were effectively silent; correct logo audibility and glitch-free playback remain unverified."
     }
   ],
-  "testedCommit": null,
+  "testedCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
   "hardwareForThisRun": {
     "gpu": "AMD Radeon RX 9060 XT",
+    "driver": "32.0.32029.2010",
     "vramGB": 16,
     "cpu": "AMD Ryzen 7 5700X",
     "systemRamGB": 32,
-    "scope": "Machine identified by the maintainer for the five-stage report."
+    "scope": "GPU adapter and driver verified in the two local run diagnostics; CPU and installed RAM identified by the maintainer."
   },
   "captureForThisRun": null,
   "independentReproduction": false,
   "limitations": [
-    "The five-stage count describes the scope of this report. PortWatch assigns its own milestones.",
-    "The exact tested commit and GPU driver are unspecified. The title-card observation and stage summary have no matching public run capture.",
-    "The supplied status-panel image summarizes observations. It is not a capture of the game rendering the world.",
-    "The exact cause of the black picture and GPU failure is unknown. The debug attempt ended before world entry, and gameplay frame rate and player control remain unverified."
+    "This headline describes the completed 0331fdc6 and b28a27fe runs, not later experiments. The original November 24 report is preserved under historicalMaintainerReport20261124.",
+    "The first mission is not verified playable: no gameplay input was sent in the Series S comparison, mission identity is unverified, and both runs reached the memory guard.",
+    "Series S also enabled MenuPicture and had different foreground timing. Early S captures were occluded and invalid as game-image evidence; this is not a matched-scene or resolution-only benchmark.",
+    "Whole-run interval medians include intro/background intervals. GPU-wait aggregate fields measure CPU fence/landing waits, not hardware GPU timestamp duration.",
+    "Raw captures, audio, logs and game data remain private. Recorded signal is not proof of logo audibility; absent matching Windows events do not prove general driver health."
   ],
-  "nextEvidence": "Identify the tested commit and driver and capture one uninterrupted run through the title card and world transition, including an input attempt and the observed response.",
-  "reportedStageCount": {
-    "working": 4,
-    "total": 5,
-    "unit": "stages in this report"
-  },
+  "nextEvidence": "Verify responsive player control and mission context in a visible scene under existing guards, while measuring remaining pipeline work, CPU preparation and retained allocation ownership.",
   "stages": [
     {
       "id": "first-boot",
       "stage": "Boot and first-boot screens",
-      "status": "reported-working",
-      "detail": "Accessibility, language, settings and legal screens work.",
-      "reportedFps": 30
+      "status": "not-retested",
+      "detail": "Historical maintainer observations are preserved separately; the current comparison does not revalidate every first-boot setting."
     },
     {
       "id": "intro-video",
-      "stage": "Intro video with sound",
-      "status": "reported-working",
-      "detail": "Video and audio play."
+      "stage": "Intro video and audio",
+      "status": "observed-with-limitations",
+      "detail": "Visible logo/intro captures show 30 FPS. Later recorded audio exists, but initial S audio is effectively silent and correct logo audibility is unverified."
     },
     {
       "id": "profile-saves",
       "stage": "Start screen, profile and saves",
-      "status": "reported-working",
-      "detail": "Start screen, profile and save flow work."
+      "status": "unverified-in-this-comparison",
+      "detail": "Fresh isolated profiles were used. Save correctness and a deliberate first-mission selection were not verified."
     },
     {
       "id": "world-loading",
-      "stage": "Loading into the world",
-      "status": "reported-working",
-      "detail": "The load reaches the first mission’s intro.",
-      "approximateSeconds": 50
+      "stage": "Loading into a rendered scene",
+      "status": "observed-transition",
+      "detail": "S proceeds from the restored logo to a recognizable character close-up; this does not establish mission identity or player control."
     },
     {
       "id": "world-rendering",
-      "stage": "World / first mission’s intro",
-      "status": "reported-blocked",
-      "detail": "The picture stays black. The host GPU fails within seconds. World geometry and controllable gameplay remain unverified."
+      "stage": "World rendering and first-mission playability",
+      "status": "not-playable-verified",
+      "detail": "S later intervals are 1.3-2.4 FPS and X has a final 1.5 FPS interval. Both reach the memory guard. Responsive gameplay and first-mission completion remain unverified."
     }
   ],
-  "shortIntroMeasurements": {
-    "scope": "Separate bounded intro measurements, before gameplay.",
-    "hardware": {
-      "fps": 30,
-      "frameTimeMs": 33.3
-    },
-    "warp": {
-      "approximateFps": 10,
-      "approximateFrameTimeMs": 100
-    }
-  },
   "localCandidateComparison": {
     "date": "2026-11-26",
     "hardware": {
@@ -5943,5 +5935,653 @@
     },
     "interpretation": "Guest display request accepted, actual swapchain still 4K. No lower-resolution performance comparison or first-mission success established.",
     "report": "docs/display-and-rendering-followup-20261126.md"
+  },
+  "historicalMaintainerReport20261124": {
+    "reportedOn": "2026-11-24",
+    "reportedBy": "repository maintainer",
+    "verification": "self-reported",
+    "observations": [
+      {
+        "stage": "title-card",
+        "result": "The maintainer reports that the Rockstar Games Presents title card now appears."
+      },
+      {
+        "stage": "world-transition",
+        "result": "The reported load reaches the first mission’s intro. The picture stays black and the host GPU fails within seconds. The cause is unresolved."
+      }
+    ],
+    "testedCommit": null,
+    "hardwareForThisRun": {
+      "gpu": "AMD Radeon RX 9060 XT",
+      "vramGB": 16,
+      "cpu": "AMD Ryzen 7 5700X",
+      "systemRamGB": 32,
+      "scope": "Machine identified by the maintainer for the five-stage report."
+    },
+    "captureForThisRun": null,
+    "independentReproduction": false,
+    "limitations": [
+      "The five-stage count describes the scope of this report. PortWatch assigns its own milestones.",
+      "The exact tested commit and GPU driver are unspecified. The title-card observation and stage summary have no matching public run capture.",
+      "The supplied status-panel image summarizes observations. It is not a capture of the game rendering the world.",
+      "The exact cause of the black picture and GPU failure is unknown. The debug attempt ended before world entry, and gameplay frame rate and player control remain unverified."
+    ],
+    "nextEvidence": "Identify the tested commit and driver and capture one uninterrupted run through the title card and world transition, including an input attempt and the observed response.",
+    "reportedStageCount": {
+      "working": 4,
+      "total": 5,
+      "unit": "stages in this report"
+    },
+    "stages": [
+      {
+        "id": "first-boot",
+        "stage": "Boot and first-boot screens",
+        "status": "reported-working",
+        "detail": "Accessibility, language, settings and legal screens work.",
+        "reportedFps": 30
+      },
+      {
+        "id": "intro-video",
+        "stage": "Intro video with sound",
+        "status": "reported-working",
+        "detail": "Video and audio play."
+      },
+      {
+        "id": "profile-saves",
+        "stage": "Start screen, profile and saves",
+        "status": "reported-working",
+        "detail": "Start screen, profile and save flow work."
+      },
+      {
+        "id": "world-loading",
+        "stage": "Loading into the world",
+        "status": "reported-working",
+        "detail": "The load reaches the first mission’s intro.",
+        "approximateSeconds": 50
+      },
+      {
+        "id": "world-rendering",
+        "stage": "World / first mission’s intro",
+        "status": "reported-blocked",
+        "detail": "The picture stays black. The host GPU fails within seconds. World geometry and controllable gameplay remain unverified."
+      }
+    ],
+    "shortIntroMeasurements": {
+      "scope": "Separate bounded intro measurements, before gameplay.",
+      "hardware": {
+        "fps": 30,
+        "frameTimeMs": 33.3
+      },
+      "warp": {
+        "approximateFps": 10,
+        "approximateFrameTimeMs": 100
+      }
+    }
+  },
+  "latestMeasuredComparison": "preparedFreshConsoleComparison20261126",
+  "preparedFreshConsoleComparison20261126": {
+    "report": "docs/prepared-console-comparison-20261126.md",
+    "evidenceDate": "2026-11-26",
+    "evidenceCutoffUtc": "2026-11-26T11:02:20Z",
+    "sourceCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
+    "runtimeSha256": "DA612AE0D2B6ED570C09162CE5E4398CDA7A86427165183E6BD8D04DACA1B8C8",
+    "hardware": {
+      "gpu": "AMD Radeon RX 9060 XT",
+      "driver": "32.0.32029.2010",
+      "vramGiB": 16,
+      "reportedCpu": "AMD Ryzen 7 5700X",
+      "reportedSystemRamGiB": 32
+    },
+    "sharedSettings": {
+      "renderer": "hardware",
+      "queuedSubmit": true,
+      "dredMode": "light",
+      "textureNoWait": true,
+      "trimIdleTextures": false,
+      "pipelineWorkers": 1,
+      "shadowWindowKiB": 256,
+      "shadowBarMiB": 0,
+      "gpuTiming": false,
+      "missionTrace": false,
+      "jobCommitLimitBytes": 23622320128,
+      "jobCommitReserveMiB": 512,
+      "hostCommitReserveMiB": 4096,
+      "hostPhysicalReserveMiB": 0
+    },
+    "reviewedUpstreamRefsForThisBuild": {
+      "avatarmanz/VIctory-7900XTX": "9576c45f1d551be0cfde154da027707658ce031e",
+      "fxceless/victory-fork": "f6a09d3ba4ca425e71429ddbcb43b18ad507202a",
+      "Belobug/VIctory-Belobug-AMD": "81ebb7bdc9b7ca6ec2f3169973f50be77c7c803c",
+      "DexNom/VIctory": "64bd58f5fb794216894bc0e33e03a3a64d19c347",
+      "XCL-cache-ABI-reference": "4178e888c0b5be50a2887eda45cdb832763b68a4"
+    },
+    "upstreamInterpretation": "Historical checked revisions and reference implementation only; not a claim about current branch heads or later integrations.",
+    "preparations": [
+      {
+        "runId": "original-20261126-022405-b6a02f20",
+        "sourceCommit": "988ed8fdb63c558ff27e7fcaf86765c4cac2ee19",
+        "runtimeSha256": "D2D8013B7C918965F6A5AB46EF921BD6201072B842E01461E39FE0C9ED5642A1",
+        "console": "series-x",
+        "cacheMode": "shared-content-keyed",
+        "libraryWriters": 1,
+        "knownPipelines": 83555,
+        "selectedPipelines": 1715,
+        "processedPipelines": 1715,
+        "refusedPipelines": 0,
+        "childFailures": 0,
+        "completed": true,
+        "newPipelinesMade": 884,
+        "pipelinesLoaded": 831,
+        "launcherElapsedSeconds": 1533.87,
+        "precompileElapsedSeconds": 1532,
+        "peakJobCommitBytes": 916004864,
+        "jobCommitLimitBytes": 6442450944,
+        "exitCode": 0,
+        "runtimeResultBeforeCleanup": 0,
+        "restoredPackagePaths": 151,
+        "cleanupFailure": false
+      },
+      {
+        "runId": "original-20261126-025022-5155ba61",
+        "sourceCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
+        "runtimeSha256": "DA612AE0D2B6ED570C09162CE5E4398CDA7A86427165183E6BD8D04DACA1B8C8",
+        "console": "series-x",
+        "cacheMode": "shared-content-keyed",
+        "libraryWriters": 1,
+        "knownPipelines": 83555,
+        "selectedPipelines": 1715,
+        "processedPipelines": 1715,
+        "refusedPipelines": 0,
+        "childFailures": 0,
+        "completed": true,
+        "newPipelinesMade": 0,
+        "pipelinesLoaded": 1715,
+        "launcherElapsedSeconds": 38.61,
+        "precompileElapsedSeconds": 36,
+        "peakJobCommitBytes": 453300224,
+        "jobCommitLimitBytes": 6442450944,
+        "exitCode": 0,
+        "runtimeResultBeforeCleanup": 0,
+        "restoredPackagePaths": 151,
+        "cleanupFailure": false
+      },
+      {
+        "runId": "original-20261126-025503-5e22eda4",
+        "sourceCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
+        "runtimeSha256": "DA612AE0D2B6ED570C09162CE5E4398CDA7A86427165183E6BD8D04DACA1B8C8",
+        "console": "series-s",
+        "cacheMode": "shared-content-keyed",
+        "libraryWriters": 1,
+        "knownPipelines": 83555,
+        "selectedPipelines": 1715,
+        "processedPipelines": 1715,
+        "refusedPipelines": 0,
+        "childFailures": 0,
+        "completed": true,
+        "newPipelinesMade": 0,
+        "pipelinesLoaded": 1715,
+        "launcherElapsedSeconds": 40.68,
+        "precompileElapsedSeconds": 38,
+        "peakJobCommitBytes": 453332992,
+        "jobCommitLimitBytes": 6442450944,
+        "exitCode": 0,
+        "runtimeResultBeforeCleanup": 0,
+        "restoredPackagePaths": 151,
+        "cleanupFailure": false
+      }
+    ],
+    "seriesX": {
+      "runId": "original-20261126-025210-0331fdc6",
+      "sourceCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
+      "checkoutDirty": false,
+      "runtimeSha256": "DA612AE0D2B6ED570C09162CE5E4398CDA7A86427165183E6BD8D04DACA1B8C8",
+      "console": "series-x",
+      "menuPicture": false,
+      "started": "2026-11-26T02:52:15.5360237-08:00",
+      "freshProfile": true,
+      "warmCacheFrom": "original-20261126-025022-5155ba61",
+      "cacheFilesSeeded": 4067,
+      "driverCacheFilesSeeded": 4,
+      "requestedSeconds": 240,
+      "launcherElapsedSeconds": 77.91,
+      "finalRunnerElapsedSeconds": 71.5,
+      "launcherExitCode": 126,
+      "runtimeResultBeforeCleanup": 126,
+      "stopReason": "job commit reserve",
+      "cleanupFailure": false,
+      "restoredPackagePaths": 151,
+      "peakJobCommitBytes": 23247933440,
+      "jobCommitBytesAtStop": 23180140544,
+      "jobStopThresholdBytes": 23085449216,
+      "resolution": {
+        "requestedGuestDisplayMode": null,
+        "legacyPresentationOnly": false,
+        "reportedGuestDisplay": {
+          "logLine": 112,
+          "timestamp": "2026-11-26T10:52:17.912091Z",
+          "width": 3840,
+          "height": 2160
+        },
+        "observedSwapchain": {
+          "logLine": 259,
+          "timestamp": "2026-11-26T10:52:18.670674Z",
+          "width": 3840,
+          "height": 2160,
+          "event": "created"
+        },
+        "initialSwapchain": {
+          "logLine": 259,
+          "timestamp": "2026-11-26T10:52:18.670674Z",
+          "width": 3840,
+          "height": 2160,
+          "event": "created"
+        },
+        "swapchainObservationCount": 1,
+        "swapchainHistory": [
+          {
+            "logLine": 259,
+            "timestamp": "2026-11-26T10:52:18.670674Z",
+            "width": 3840,
+            "height": 2160,
+            "event": "created"
+          }
+        ],
+        "swapchainMatchesRequest": null,
+        "interpretation": "The guest display report, swapchain and internal render targets are different. observedSwapchain is the latest recognized creation or resize, not the size of the entire run. swapchainHistory is a bounded tail in log order. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown."
+      },
+      "timing": {
+        "metadataGpuTiming": false,
+        "interpretation": "runtimeGpuWaitMs is the aggregate CPU fence/landing wait counter; gpuMs is its compatibility alias, not hardware GPU timestamp duration. No hardware GPU duration is inferred from this aggregate, even when metadataGpuTiming is true. That flag records a diagnostic request only; absent or non-boolean metadata is unknown."
+      },
+      "lastLoggedInterval": {
+        "logLine": 10232,
+        "timestamp": "2026-11-26T10:53:27.154717Z",
+        "fps": 1.5,
+        "frameMs": 660.2,
+        "prepareMs": 122.5,
+        "copyMs": 49.1,
+        "textureMs": 3.8,
+        "gpuMs": 11.7,
+        "runtimeGpuWaitMs": 11.7,
+        "readbackMs": 3.6,
+        "drawsPerFrame": 1009,
+        "droppedWithoutPipeline": 462,
+        "pipelinesBeingMade": 0,
+        "droppedIndirect": 0
+      },
+      "pipelineCacheEvents": [
+        {
+          "logLine": 166,
+          "timestamp": "2026-11-26T10:52:18.253141Z",
+          "event": "loaded",
+          "bytes": 366164
+        },
+        {
+          "logLine": 10550,
+          "timestamp": "2026-11-26T10:53:28.135859Z",
+          "event": "saved",
+          "bytes": 366310,
+          "early": 1772,
+          "made": 1,
+          "loaded": 1735,
+          "started_early": 1735
+        }
+      ],
+      "lastTimedMemorySample": {
+        "timestamp": "2026-11-26T10:53:27.789435Z",
+        "elapsed_ms": 64026,
+        "frame": 1690,
+        "private_bytes": 22658039808,
+        "working_set_bytes": 18930343936,
+        "physical_free_bytes": 809041920,
+        "commit_free_bytes": 12917522432,
+        "rust_bytes": 1387627344,
+        "host_lists": 1243,
+        "host_idle_lists": 49,
+        "host_inflight_flights": 0,
+        "host_inflight_lists": 0,
+        "host_landed_flights": 64,
+        "host_landed_lists": 264,
+        "host_landing_active": false,
+        "retired_objects": 4962,
+        "retired_resources": 4962,
+        "submissions_started": 6922,
+        "submissions_finished": 6921,
+        "submissions_queued": 41,
+        "list_scratch_bytes": 288882688,
+        "list_spare_bytes": 128974848,
+        "list_upload_bytes": 306176,
+        "host_texture_count": 27764,
+        "host_texture_bytes": 5628035072,
+        "shadow_count": 9304,
+        "shadow_bytes": 4081361726,
+        "texture_pool_bytes": 3556769792,
+        "staging_pool_bytes": 536870912,
+        "shader_container_bytes": 197812392,
+        "translated_shader_bytes": 129234301
+      },
+      "memoryInterpretation": "Timed snapshots are not exact stop-time samples. Allocation categories overlap and are not additive; runs differ in scenes, duration and foreground behavior.",
+      "thinUploadReclamation": {
+        "intervalSamples": 59,
+        "maximumReclaimedUploadsPerFrame": 0,
+        "interpretation": "Rounded interval rates do not establish exact cumulative counts or measured memory savings."
+      },
+      "playerInputSent": false,
+      "playerInputResponseVerified": false,
+      "missionIdentityVerified": false,
+      "firstMissionPlayableVerified": false,
+      "rawMediaPublished": false,
+      "observedStages": [
+        {
+          "stage": "intro",
+          "timestampUtc": "2026-11-26T10:52:35.5577980Z",
+          "visible": true,
+          "captionFps": 30,
+          "captionFrameMs": 33.3
+        },
+        {
+          "stage": "transition",
+          "timestampUtc": "2026-11-26T10:53:23.5421799Z",
+          "observation": "Black capture, caption 18 FPS; no subsequent valid world capture before exit."
+        }
+      ],
+      "renderedSceneVerified": false,
+      "lastDropClassification": "All 462 drops/frame in the final classification were disabled BVH builder stages; zero host pipelines were being made.",
+      "audio": {
+        "analyzedFirstSeconds": 45,
+        "rmsDbFS": -30.330980683912472,
+        "normalizedPeak": 0.299041748046875,
+        "logoAudibilityVerified": false,
+        "glitchFreePlaybackVerified": false
+      },
+      "windowsEvents": {
+        "fromUtc": "2026-11-26T10:52:10Z",
+        "toUtc": "2026-11-26T10:54:10Z",
+        "display4101Count": 0,
+        "application1000Count": 0,
+        "matchingTitleApplication1000Count": 0
+      },
+      "observedIntermediateDepthTargets": [
+        {
+          "width": 2560,
+          "height": 1440
+        }
+      ]
+    },
+    "seriesS": {
+      "runId": "original-20261126-025720-b28a27fe",
+      "sourceCommit": "8f6f742cfcd324501d7a11f9926d5ff40dcacdec",
+      "checkoutDirty": false,
+      "runtimeSha256": "DA612AE0D2B6ED570C09162CE5E4398CDA7A86427165183E6BD8D04DACA1B8C8",
+      "console": "series-s",
+      "menuPicture": true,
+      "started": "2026-11-26T02:57:25.8248871-08:00",
+      "freshProfile": true,
+      "warmCacheFrom": "original-20261126-025503-5e22eda4",
+      "cacheFilesSeeded": 4067,
+      "driverCacheFilesSeeded": 4,
+      "requestedSeconds": 240,
+      "launcherElapsedSeconds": 181.36,
+      "finalRunnerElapsedSeconds": 173.766,
+      "launcherExitCode": 125,
+      "runtimeResultBeforeCleanup": 126,
+      "stopReason": "job commit reserve",
+      "cleanupFailure": true,
+      "restoredPackagePaths": 151,
+      "peakJobCommitBytes": 23194882048,
+      "jobCommitBytesAtStop": 23182458880,
+      "jobStopThresholdBytes": 23085449216,
+      "resolution": {
+        "requestedGuestDisplayMode": null,
+        "legacyPresentationOnly": false,
+        "reportedGuestDisplay": {
+          "logLine": 111,
+          "timestamp": "2026-11-26T10:57:28.134002Z",
+          "width": 3840,
+          "height": 2160
+        },
+        "observedSwapchain": {
+          "logLine": 9640,
+          "timestamp": "2026-11-26T10:59:33.298922Z",
+          "width": 1920,
+          "height": 1080,
+          "event": "resized"
+        },
+        "initialSwapchain": {
+          "logLine": 260,
+          "timestamp": "2026-11-26T10:57:28.855473Z",
+          "width": 1920,
+          "height": 1080,
+          "event": "created"
+        },
+        "swapchainObservationCount": 5,
+        "swapchainHistory": [
+          {
+            "logLine": 260,
+            "timestamp": "2026-11-26T10:57:28.855473Z",
+            "width": 1920,
+            "height": 1080,
+            "event": "created"
+          },
+          {
+            "logLine": 311,
+            "timestamp": "2026-11-26T10:57:29.105649Z",
+            "width": 3840,
+            "height": 2160,
+            "event": "resized"
+          },
+          {
+            "logLine": 6491,
+            "timestamp": "2026-11-26T10:58:55.920053Z",
+            "width": 1920,
+            "height": 1080,
+            "event": "resized"
+          },
+          {
+            "logLine": 6510,
+            "timestamp": "2026-11-26T10:58:56.920801Z",
+            "width": 3840,
+            "height": 2160,
+            "event": "resized"
+          },
+          {
+            "logLine": 9640,
+            "timestamp": "2026-11-26T10:59:33.298922Z",
+            "width": 1920,
+            "height": 1080,
+            "event": "resized"
+          }
+        ],
+        "swapchainMatchesRequest": null,
+        "interpretation": "The guest display report, swapchain and internal render targets are different. observedSwapchain is the latest recognized creation or resize, not the size of the entire run. swapchainHistory is a bounded tail in log order. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown."
+      },
+      "timing": {
+        "metadataGpuTiming": false,
+        "interpretation": "runtimeGpuWaitMs is the aggregate CPU fence/landing wait counter; gpuMs is its compatibility alias, not hardware GPU timestamp duration. No hardware GPU duration is inferred from this aggregate, even when metadataGpuTiming is true. That flag records a diagnostic request only; absent or non-boolean metadata is unknown."
+      },
+      "lastLoggedInterval": {
+        "logLine": 14464,
+        "timestamp": "2026-11-26T11:00:18.443258Z",
+        "fps": 1.9,
+        "frameMs": 524.7,
+        "prepareMs": 182.9,
+        "copyMs": 83,
+        "textureMs": 29.5,
+        "gpuMs": 31.6,
+        "runtimeGpuWaitMs": 31.6,
+        "readbackMs": 39.4,
+        "drawsPerFrame": 4449,
+        "droppedWithoutPipeline": 745,
+        "pipelinesBeingMade": 21,
+        "droppedIndirect": 28
+      },
+      "pipelineCacheEvents": [
+        {
+          "logLine": 165,
+          "timestamp": "2026-11-26T10:57:28.477603Z",
+          "event": "loaded",
+          "bytes": 366164
+        },
+        {
+          "logLine": 10039,
+          "timestamp": "2026-11-26T10:59:37.134636Z",
+          "event": "saved",
+          "bytes": 367332,
+          "early": 1780,
+          "made": 8,
+          "loaded": 1657,
+          "started_early": 1657
+        },
+        {
+          "logLine": 13973,
+          "timestamp": "2026-11-26T11:00:07.734535Z",
+          "event": "saved",
+          "bytes": 377406,
+          "early": 1898,
+          "made": 77,
+          "loaded": 1681,
+          "started_early": 1657
+        }
+      ],
+      "lastTimedMemorySample": {
+        "timestamp": "2026-11-26T11:00:20.077462Z",
+        "elapsed_ms": 166093,
+        "frame": 3752,
+        "private_bytes": 22923395072,
+        "working_set_bytes": 19262103552,
+        "physical_free_bytes": 1390850048,
+        "commit_free_bytes": 15265730560,
+        "rust_bytes": 1466328988,
+        "host_lists": 1460,
+        "host_idle_lists": 165,
+        "host_inflight_flights": 0,
+        "host_inflight_lists": 0,
+        "host_landed_flights": 64,
+        "host_landed_lists": 302,
+        "host_landing_active": false,
+        "retired_objects": 23972,
+        "retired_resources": 23934,
+        "submissions_started": 17288,
+        "submissions_finished": 17288,
+        "submissions_queued": 42,
+        "list_scratch_bytes": 263716864,
+        "list_spare_bytes": 140247040,
+        "list_upload_bytes": 306176,
+        "host_texture_count": 34393,
+        "host_texture_bytes": 5085331456,
+        "shadow_count": 8501,
+        "shadow_bytes": 3580183254,
+        "texture_pool_bytes": 4093640704,
+        "staging_pool_bytes": 536870912,
+        "shader_container_bytes": 198094636,
+        "translated_shader_bytes": 133296983
+      },
+      "memoryInterpretation": "Timed snapshots are not exact stop-time samples. Allocation categories overlap and are not additive; runs differ in scenes, duration and foreground behavior.",
+      "thinUploadReclamation": {
+        "intervalSamples": 150,
+        "maximumReclaimedUploadsPerFrame": 0,
+        "interpretation": "Rounded interval rates do not establish exact cumulative counts or measured memory savings."
+      },
+      "playerInputSent": false,
+      "playerInputResponseVerified": false,
+      "missionIdentityVerified": false,
+      "firstMissionPlayableVerified": false,
+      "rawMediaPublished": false,
+      "earlyCaptureValidity": "The first two window-rectangle captures were occluded and invalid as game-image evidence.",
+      "foregroundRestoredUtc": "2026-11-26T10:58:53.1050670Z",
+      "observedStages": [
+        {
+          "stage": "intro-logo",
+          "timestampUtc": "2026-11-26T10:58:53.3748418Z",
+          "visible": true,
+          "captionFps": 30,
+          "captionFrameMs": 33.3
+        },
+        {
+          "stage": "rendered-character-closeup",
+          "timestampUtc": "2026-11-26T10:59:54.4975194Z",
+          "visible": true,
+          "captionFps": 3,
+          "captionFrameMs": 363.5,
+          "captionDrawsPerFrame": 2255,
+          "interpretation": "Visible rendering, not verified mission identity or responsive player control."
+        }
+      ],
+      "renderedSceneVerified": true,
+      "worldRenderingIntervalSamples": {
+        "fromUtc": "2026-11-26T10:59:33Z",
+        "toUtc": "2026-11-26T11:00:19Z",
+        "count": 7,
+        "minimumFps": 1.3,
+        "medianFps": 1.9,
+        "maximumFps": 2.4,
+        "interpretation": "Selected interval samples following the world-output transition, not a per-frame whole-run average or 1% low."
+      },
+      "observedIntermediateDepthTargets": [
+        {
+          "width": 1280,
+          "height": 720
+        },
+        {
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "dropClassification": "Later intervals included deliberately disabled BVH builder stages and pipelines still being made; reason snapshots must not be added across differing collection windows.",
+      "audio": {
+        "durationSeconds": 173.078875,
+        "segments": [
+          {
+            "fromSeconds": 0,
+            "toSeconds": 45,
+            "rmsDbFS": -96.71078874839922,
+            "normalizedPeak": 3.0517578125e-05,
+            "interpretation": "Effectively silent; nonzero one-step samples do not establish audible program audio."
+          },
+          {
+            "fromSeconds": 45,
+            "toSeconds": 90,
+            "rmsDbFS": -30.346,
+            "normalizedPeak": 0.299042
+          },
+          {
+            "fromSeconds": 90,
+            "toSeconds": 135,
+            "rmsDbFS": -52.255,
+            "normalizedPeak": 0.134827
+          },
+          {
+            "fromSeconds": 135,
+            "toSeconds": 173.078875,
+            "rmsDbFS": -28.903,
+            "normalizedPeak": 0.371124
+          }
+        ],
+        "logoAudibilityVerified": false,
+        "glitchFreePlaybackVerified": false
+      },
+      "windowsEvents": {
+        "fromUtc": "2026-11-26T10:57:20Z",
+        "toUtc": "2026-11-26T11:02:20Z",
+        "display4101Count": 0,
+        "application1000Count": 0,
+        "matchingTitleApplication1000Count": 0
+      },
+      "profileCleanupRecovery": {
+        "timestampUtc": "2026-11-26T11:02:10.5550186Z",
+        "initialErrorHex": "0x80070020",
+        "retryHresult": 0,
+        "retryHresultHex": "0x00000000",
+        "runtimeProcessesAbsent": true,
+        "initialLauncherExitCodeRetained": 125,
+        "runtimeResultBeforeCleanupRetained": 126
+      }
+    },
+    "diagnosticSummaryChecks": {
+      "passed": 34,
+      "failed": 0,
+      "scope": "Existing synthetic summary suite plus CPU-wait metadata/alias checks, bounded swapchain-resize history checks and metadata-only guest-output request separation; local and public mirror passed."
+    },
+    "interpretation": "Visible Series S rendering is verified in one private close-up capture, but first-mission identity and responsive control are not. Both runs stopped at the memory guard. Different MenuPicture/foreground behavior and scene coverage prevent matched-performance or stability claims. All aggregate gpuMs/runtimeGpuWaitMs fields are CPU fence/landing waits, not hardware GPU execution durations."
   }
 }

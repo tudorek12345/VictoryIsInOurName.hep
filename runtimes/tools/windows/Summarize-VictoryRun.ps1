@@ -229,12 +229,13 @@ $report = [ordered]@{
     requestedRenderer=$metadata.renderer; console=$metadata.console; adapter=$state.adapter; softwareAdapter=$state.software; vramMiB=$state.vramMiB
     resolution=[ordered]@{
         requestedGuestDisplayMode=$metadata.requestedGuestDisplayMode
+        requestedGuestOutput=$metadata.requestedGuestOutput
         legacyPresentationOnly=$metadata.legacy720pPresentationOnly
         reportedGuestDisplay=$lastDisplay; observedSwapchain=$lastSwapchain
         initialSwapchain=$swapchainState.first; swapchainObservationCount=$swapchainState.count
         swapchainHistory=@($swapchains.ToArray())
         swapchainMatchesRequest=$swapchainMatchesRequest
-        interpretation='The guest display report, swapchain and internal render targets are different. observedSwapchain is the latest recognized creation or resize, not the size of the entire run. swapchainHistory is a bounded tail in log order. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown.'
+        interpretation='The guest display report, swapchain and internal render targets are different. Display-mode and guest-output requests do not prove that a change was applied. observedSwapchain is the latest recognized creation or resize, not the size of the entire run. swapchainHistory is a bounded tail in log order. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown.'
     }
     elapsedSeconds=$metadata.elapsedSeconds; launcherExitCode=$metadata.exitCode
     stopReason=$state.stopReason; childResult=$state.childResult

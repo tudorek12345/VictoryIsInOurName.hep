@@ -200,6 +200,11 @@ DeleteAppContainerProfile failed for Synthetic (0x80070020)
     $r=Report
     Assert ($r.resolution.swapchainObservationCount -eq 0 -and $null -eq $r.resolution.initialSwapchain -and $null -eq $r.resolution.observedSwapchain -and $r.resolution.swapchainHistory.Count -eq 0 -and $null -eq $r.resolution.swapchainMatchesRequest) 'Unrecognized old resize formats must stay unknown rather than inventing actual dimensions.'
     $passed++
+    Write-Text $metadata '{"requestedGuestOutput":"1920x1080"}'
+    Write-Text $victory 'presenting to a window width=3840 height=2160 format=28'
+    $r=Report
+    Assert ($r.resolution.requestedGuestOutput -eq '1920x1080' -and $null -eq $r.resolution.requestedGuestDisplayMode -and $r.resolution.observedSwapchain.width -eq 3840 -and $null -eq $r.resolution.swapchainMatchesRequest -and -not $r.resolution.Contains('guestOutputApplied')) 'A guest-output request must remain separate from a display-mode request and must not imply successful application or changed observed output.'
+    $passed++
     $thin='list calls translated by threads of ours per frame (VICTORY_THIN): 20 in 1.0 ms (all threads), 2.0 lists, 3.0 pieces; left in the middle 0.00'
     Write-Text $victory "2026-01-01T00:00:01Z INFO victory_gpu::list::thin: $thin"
     $r=Report
