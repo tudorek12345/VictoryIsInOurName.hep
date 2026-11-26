@@ -314,3 +314,21 @@ The summary parser accepts the new fields; all 22 synthetic checks pass.
 The new upstream review and failed post-lifetime-fix title comparison are recorded
 in [the memory follow-up](docs/memory-followup-20261126.md). Light DRED is now the
 launcher default for this candidate, with full marker text available explicitly.
+
+[The RGBA32 typed-buffer patch](runtimes/patches/victory-rgba32-typed-buffer.patch)
+applies next, producing `6e11a9a`. It adapts the buffer-view idea in fxceless
+`f6a09d3` only for four-component 32-bit UINT/SINT views. The translator uses
+float-typed loads/stores and bitcasts their register words, so the host view must
+preserve those bits. Other component widths, textures and raw/structured views
+retain their existing formats.
+
+Two focused checks passed, including an explicitly requested authored GPU probe
+on the RX 9060 XT. RGBA32 loads/stores preserved sign, subnormal, infinity and NaN
+payload patterns, and the raw-view integer atomic passed. The same probe exposed
+why the upstream change cannot be imported for all widths: an absent W component
+has integer bits `1` in the original view but float bits `0x3f800000` after remap.
+Handling narrower views requires additional translator metadata and remains open.
+Descriptor regressions passed 47 tests with the hardware probe ignored by default;
+draw regressions passed seven with one existing ignore. The explicit GPU probe
+is kept as source and uses only authored data. These results establish buffer
+semantics, not the correctness of an actual world frame.

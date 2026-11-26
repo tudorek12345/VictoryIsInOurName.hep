@@ -1,0 +1,626 @@
+diff --git a/crates/victory-gpu/src/descriptor/host.rs b/crates/victory-gpu/src/descriptor/host.rs
+index e476cf9..974d75a 100644
+--- a/crates/victory-gpu/src/descriptor/host.rs
++++ b/crates/victory-gpu/src/descriptor/host.rs
+@@ -3563,6 +3563,25 @@ fn unordered_range(base: u64, words: &[u32; 10]) -> Option<(u64, u64)> {
+ /// The host resource a slot made by [`make`] views, if any.
+ type Kept = Option<ID3D12Resource>;
+ 
++/// Translated typed buffer loads/stores use f32 handles and bitcast the
++/// register words (emit/lower.rs). Match that contract for four-component
++/// 32-bit integer views; an integer host view can numerically convert their
++/// float interpretation instead. Do not remap one/two/three-component views:
++/// their missing alpha must be integer 1, not the bits of float 1.0. Those
++/// need translator handling of original-format defaults before remapping.
++/// Narrower, normalized, raw, structured and texture formats stay unchanged.
++/// Restricted adaptation of fxceless/victory-fork f6a09d3 (upstream PR #684).
++fn bit_exact_format(format: DXGI_FORMAT) -> DXGI_FORMAT {
++    match format {
++        DXGI_FORMAT_R32G32B32A32_UINT | DXGI_FORMAT_R32G32B32A32_SINT => DXGI_FORMAT_R32G32B32A32_FLOAT,
++        other => other,
++    }
++}
++
++#[cfg(test)]
++#[path = "typed_buffer_tests.rs"]
++mod typed_buffer_tests;
++
+ /// A structured buffer view (`first`, `count` elements of `stride` bytes,
+ /// `offset` bytes into its host copy) as a raw view of the same bytes:
+ /// its first dword and its dwords. Translated shaders read untyped buffers
+@@ -3720,6 +3739,7 @@ fn buffer_srv(
+             Flags: D3D12_BUFFER_SRV_FLAG_RAW,
+         };
+     }
++    desc.Format = bit_exact_format(desc.Format);
+     let element = element_size(&desc);
+     // SAFETY: a buffer view's union member.
+     let buffer = unsafe { &mut desc.Anonymous.Buffer };
+@@ -3857,6 +3877,7 @@ fn buffer_uav(
+     buffer.CounterOffsetInBytes = 0;
+     let (first, count, stride) = (buffer.FirstElement, buffer.NumElements, buffer.StructureByteStride);
+     let raw = buffer.Flags.0 & D3D12_BUFFER_UAV_FLAG_RAW.0 != 0;
++    desc.Format = bit_exact_format(desc.Format);
+     if window.is_some() {
+         // (Left out at first: every structured unordered access view was then
+         // refused by `buffer_view_ok` and left null, runs 15 and 16.)
+diff --git a/crates/victory-gpu/src/descriptor/typed_buffer_tests.rs b/crates/victory-gpu/src/descriptor/typed_buffer_tests.rs
+new file mode 100644
+index 0000000..844d014
+--- /dev/null
++++ b/crates/victory-gpu/src/descriptor/typed_buffer_tests.rs
+@@ -0,0 +1,574 @@
++//! Authored GPU checks of the float-typed load/store contract used by the
++//! translator. No title data, world rendering, or large resource allocation.
++use super::*;
++use windows::Win32::Graphics::Direct3D::{Fxc::D3DCompile, ID3DBlob};
++use windows::core::{Interface, s};
++
++const PATTERNS: [u32; 16] = [
++    0x1234_5678,
++    0xffff_ffff,
++    0x8000_0000,
++    0x7fff_ffff,
++    0x0000_0001,
++    0x007f_ffff,
++    0x0080_0000,
++    0x8000_0001,
++    0x7f80_0000,
++    0xff80_0000,
++    0x7fc0_1234,
++    0xffc0_5678,
++    0,
++    0xdead_beef,
++    0x0100_0001,
++    0x7654_3210,
++];
++
++fn cases() -> [(DXGI_FORMAT, DXGI_FORMAT, usize); 8] {
++    [
++        (DXGI_FORMAT_R32_UINT, DXGI_FORMAT_R32_FLOAT, 1),
++        (DXGI_FORMAT_R32_SINT, DXGI_FORMAT_R32_FLOAT, 1),
++        (DXGI_FORMAT_R32G32_UINT, DXGI_FORMAT_R32G32_FLOAT, 2),
++        (DXGI_FORMAT_R32G32_SINT, DXGI_FORMAT_R32G32_FLOAT, 2),
++        (DXGI_FORMAT_R32G32B32_UINT, DXGI_FORMAT_R32G32B32_FLOAT, 3),
++        (DXGI_FORMAT_R32G32B32_SINT, DXGI_FORMAT_R32G32B32_FLOAT, 3),
++        (
++            DXGI_FORMAT_R32G32B32A32_UINT,
++            DXGI_FORMAT_R32G32B32A32_FLOAT,
++            4,
++        ),
++        (
++            DXGI_FORMAT_R32G32B32A32_SINT,
++            DXGI_FORMAT_R32G32B32A32_FLOAT,
++            4,
++        ),
++    ]
++}
++
++#[test]
++fn typed_32_bit_formats_preserve_width_and_leave_other_views_alone() {
++    for (title, expected, width) in cases() {
++        assert_eq!(
++            bit_exact_format(title),
++            if width == 4 { expected } else { title }
++        );
++        assert_eq!(
++            crate::resource::element(title.0 as u32),
++            crate::resource::element(expected.0 as u32)
++        );
++    }
++    for format in [
++        DXGI_FORMAT_UNKNOWN,
++        DXGI_FORMAT_R32_TYPELESS,
++        DXGI_FORMAT_R32_FLOAT,
++        DXGI_FORMAT_R16G16_UINT,
++        DXGI_FORMAT_R16_SINT,
++        DXGI_FORMAT_R16_FLOAT,
++        DXGI_FORMAT_R8G8B8A8_UNORM,
++        DXGI_FORMAT_R8G8B8A8_SNORM,
++    ] {
++        assert_eq!(bit_exact_format(format), format);
++    }
++}
++
++fn compile(
++    device: &ID3D12Device,
++    source_type: &str,
++    body: &str,
++) -> (ID3D12RootSignature, ID3D12PipelineState) {
++    let source = format!(
++        r#"
++        cbuffer Data : register(b0) {{ uint4 payload[4]; }};
++        Buffer<{source_type}4> source : register(t0);
++        RWBuffer<float4> target : register(u0);
++        RWByteAddressBuffer raw : register(u1);
++        [RootSignature("RootConstants(num32BitConstants=16,b0),DescriptorTable(SRV(t0),UAV(u0),UAV(u1))")]
++        [numthreads(1,1,1)] void main(uint3 id : SV_DispatchThreadID) {{ {body} }}
++    "#
++    );
++    let mut code: Option<ID3DBlob> = None;
++    let mut errors: Option<ID3DBlob> = None;
++    // SAFETY: source and entry names stay live through compilation; returned
++    // blobs and root signature stay live through pipeline creation.
++    unsafe {
++        let result = D3DCompile(
++            source.as_ptr().cast(),
++            source.len(),
++            s!("typed-buffer-test"),
++            None,
++            None,
++            s!("main"),
++            s!("cs_5_1"),
++            0,
++            0,
++            &mut code,
++            Some(&mut errors),
++        );
++        if let Some(errors) = errors {
++            let bytes = std::slice::from_raw_parts(
++                errors.GetBufferPointer().cast::<u8>(),
++                errors.GetBufferSize(),
++            );
++            eprintln!("{}", String::from_utf8_lossy(bytes));
++        }
++        result.expect("authored typed-buffer shader must compile");
++        let code = code.unwrap();
++        let bytes =
++            std::slice::from_raw_parts(code.GetBufferPointer().cast::<u8>(), code.GetBufferSize());
++        let root = device.CreateRootSignature(0, bytes).unwrap();
++        let pipeline = device
++            .CreateComputePipelineState(&D3D12_COMPUTE_PIPELINE_STATE_DESC {
++                pRootSignature: std::mem::transmute_copy(&root),
++                CS: D3D12_SHADER_BYTECODE {
++                    pShaderBytecode: bytes.as_ptr().cast(),
++                    BytecodeLength: bytes.len(),
++                },
++                ..Default::default()
++            })
++            .unwrap();
++        (root, pipeline)
++    }
++}
++
++fn buffer(
++    device: &ID3D12Device,
++    heap: D3D12_HEAP_TYPE,
++    state: D3D12_RESOURCE_STATES,
++) -> ID3D12Resource {
++    let mut resource: Option<ID3D12Resource> = None;
++    let flags = if heap == D3D12_HEAP_TYPE_DEFAULT {
++        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
++    } else {
++        D3D12_RESOURCE_FLAG_NONE
++    };
++    // SAFETY: a 256-byte ordinary buffer with a compatible heap/state.
++    unsafe {
++        device
++            .CreateCommittedResource(
++                &D3D12_HEAP_PROPERTIES {
++                    Type: heap,
++                    ..Default::default()
++                },
++                D3D12_HEAP_FLAG_NONE,
++                &D3D12_RESOURCE_DESC {
++                    Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
++                    Width: 256,
++                    Height: 1,
++                    DepthOrArraySize: 1,
++                    MipLevels: 1,
++                    SampleDesc: DXGI_SAMPLE_DESC {
++                        Count: 1,
++                        Quality: 0,
++                    },
++                    Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
++                    Flags: flags,
++                    ..Default::default()
++                },
++                state,
++                None,
++                &mut resource,
++            )
++            .unwrap();
++    }
++    resource.unwrap()
++}
++
++/// Executes only the authored small shaders and waits before any
++/// descriptors/resources are reused. A five-second timeout bounds the probe.
++struct Probe {
++    device: ID3D12Device,
++    queue: ID3D12CommandQueue,
++    allocator: ID3D12CommandAllocator,
++    list: ID3D12GraphicsCommandList,
++    fence: ID3D12Fence,
++    value: u64,
++}
++
++impl Probe {
++    fn new(device: &ID3D12Device) -> Self {
++        // SAFETY: a private direct queue, allocator, list, and fence.
++        unsafe {
++            let allocator = device
++                .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
++                .unwrap();
++            let list = device
++                .CreateCommandList(
++                    0,
++                    D3D12_COMMAND_LIST_TYPE_DIRECT,
++                    &allocator,
++                    None::<&ID3D12PipelineState>,
++                )
++                .unwrap();
++            Self {
++                device: device.clone(),
++                queue: device
++                    .CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC::default())
++                    .unwrap(),
++                allocator,
++                list,
++                fence: device.CreateFence(0, D3D12_FENCE_FLAG_NONE).unwrap(),
++                value: 0,
++            }
++        }
++    }
++
++    fn run(
++        &mut self,
++        root: &ID3D12RootSignature,
++        pipeline: &ID3D12PipelineState,
++        heap: &ID3D12DescriptorHeap,
++        output: &ID3D12Resource,
++        readback: &ID3D12Resource,
++        groups: u32,
++        constants: &[u32; 16],
++    ) -> [u32; 64] {
++        // SAFETY: descriptors and buffers outlive the waited-for submission;
++        // output starts/ends in UAV state and readback stays COPY_DEST.
++        unsafe {
++            self.list.SetPipelineState(pipeline);
++            self.list.SetComputeRootSignature(root);
++            self.list.SetDescriptorHeaps(&[Some(heap.clone())]);
++            self.list
++                .SetComputeRoot32BitConstants(0, 16, constants.as_ptr().cast(), 0);
++            self.list
++                .SetComputeRootDescriptorTable(1, heap.GetGPUDescriptorHandleForHeapStart());
++            self.list.Dispatch(groups, 1, 1);
++            self.list.ResourceBarrier(&[crate::host::transition(
++                output,
++                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
++                D3D12_RESOURCE_STATE_COPY_SOURCE,
++            )]);
++            self.list.CopyBufferRegion(readback, 0, output, 0, 256);
++            self.list.ResourceBarrier(&[crate::host::transition(
++                output,
++                D3D12_RESOURCE_STATE_COPY_SOURCE,
++                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
++            )]);
++            self.list.Close().unwrap();
++            self.queue
++                .ExecuteCommandLists(&[Some(self.list.cast().unwrap())]);
++            self.value += 1;
++            self.queue.Signal(&self.fence, self.value).unwrap();
++            let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
++            while self.fence.GetCompletedValue() < self.value {
++                self.device
++                    .GetDeviceRemovedReason()
++                    .expect("authored probe lost the device");
++                if std::time::Instant::now() >= until {
++                    // Do not unwind/free resources that a stuck submission
++                    // may still reference. End this isolated probe process.
++                    eprintln!("authored probe fence timed out; terminating without resource reuse");
++                    std::process::exit(3);
++                }
++                std::thread::sleep(std::time::Duration::from_millis(1));
++            }
++            self.device.GetDeviceRemovedReason().unwrap();
++            let mut data = std::ptr::null_mut();
++            readback
++                .Map(
++                    0,
++                    Some(&D3D12_RANGE { Begin: 0, End: 256 }),
++                    Some(&mut data),
++                )
++                .unwrap();
++            let mut words = [0; 64];
++            words.copy_from_slice(std::slice::from_raw_parts(data.cast::<u32>(), 64));
++            readback.Unmap(0, Some(&D3D12_RANGE::default()));
++            self.allocator.Reset().unwrap();
++            self.list
++                .Reset(&self.allocator, None::<&ID3D12PipelineState>)
++                .unwrap();
++            words
++        }
++    }
++}
++
++#[test]
++#[ignore = "explicit Radeon hardware probe; run with VICTORY_D3D12_ADAPTER=radeon and --ignored"]
++fn typed_32_bit_gpu_load_store_and_raw_atomics_preserve_bits() {
++    assert_eq!(
++        std::env::var("VICTORY_D3D12_ADAPTER").as_deref(),
++        Ok("radeon")
++    );
++    let host = host().expect("a host D3D12 device is required; this test must not silently skip");
++    let device = &host.device;
++    // Verify the device itself, not just the requested adapter selector.
++    unsafe {
++        use windows::Win32::Graphics::Dxgi::*;
++        let factory = CreateDXGIFactory2::<IDXGIFactory4>(DXGI_CREATE_FACTORY_FLAGS(0)).unwrap();
++        let adapter = factory
++            .EnumAdapterByLuid::<IDXGIAdapter1>(device.GetAdapterLuid())
++            .unwrap();
++        let desc = adapter.GetDesc1().unwrap();
++        assert_eq!(desc.VendorId, 0x1002, "probe must use AMD hardware");
++        assert_eq!(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32, 0);
++        let end = desc
++            .Description
++            .iter()
++            .position(|&c| c == 0)
++            .unwrap_or(desc.Description.len());
++        eprintln!(
++            "typed-buffer probe adapter: {}",
++            String::from_utf16_lossy(&desc.Description[..end])
++        );
++    }
++    let load_body = "raw.Store4(16 * id.x, asuint(source[id.x]));";
++    let (load_root, load) = compile(device, "float", load_body);
++    let (uint_root, uint_load) = compile(device, "uint", load_body);
++    let (sint_root, sint_load) = compile(device, "int", load_body);
++    let (store_root, store) = compile(device, "float", "target[id.x] = asfloat(payload[id.x]);");
++    let (atomic_root, atomic) =
++        compile(device, "float", "uint old; raw.InterlockedAdd(0, 1, old);");
++    let input = buffer(
++        device,
++        D3D12_HEAP_TYPE_UPLOAD,
++        D3D12_RESOURCE_STATE_GENERIC_READ,
++    );
++    let output = buffer(
++        device,
++        D3D12_HEAP_TYPE_DEFAULT,
++        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
++    );
++    let readback = buffer(
++        device,
++        D3D12_HEAP_TYPE_READBACK,
++        D3D12_RESOURCE_STATE_COPY_DEST,
++    );
++    let mut probe = Probe::new(device);
++    // SAFETY: the upload mapping is used before any submission. Descriptor
++    // slots are rewritten only after Probe::run has completed its fence.
++    unsafe {
++        let mut data = std::ptr::null_mut();
++        input
++            .Map(0, Some(&D3D12_RANGE::default()), Some(&mut data))
++            .unwrap();
++        std::ptr::copy_nonoverlapping(PATTERNS.as_ptr(), data.cast::<u32>(), PATTERNS.len());
++        input.Unmap(0, Some(&D3D12_RANGE { Begin: 0, End: 64 }));
++        let heap: ID3D12DescriptorHeap = device
++            .CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
++                Type: D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
++                NumDescriptors: 3,
++                Flags: D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
++                NodeMask: 0,
++            })
++            .unwrap();
++        let base = heap.GetCPUDescriptorHandleForHeapStart().ptr;
++        let step = device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
++            as usize;
++        let at = |n| D3D12_CPU_DESCRIPTOR_HANDLE {
++            ptr: base + n * step,
++        };
++        for (title, expected, width) in cases() {
++            assert_eq!(
++                bit_exact_format(title),
++                if width == 4 { expected } else { title }
++            );
++            // Narrow views are a characterization, not production mapping.
++            // Their alpha defaults must be measured before widening scope.
++            let format = expected;
++            let mut support = D3D12_FEATURE_DATA_FORMAT_SUPPORT {
++                Format: format,
++                ..Default::default()
++            };
++            device
++                .CheckFeatureSupport(
++                    D3D12_FEATURE_FORMAT_SUPPORT,
++                    std::ptr::from_mut(&mut support).cast(),
++                    std::mem::size_of_val(&support) as u32,
++                )
++                .unwrap();
++            assert!(support.Support1.0 & D3D12_FORMAT_SUPPORT1_BUFFER.0 != 0);
++            assert!(support.Support1.0 & D3D12_FORMAT_SUPPORT1_SHADER_LOAD.0 != 0);
++            let stores = support.Support2.0 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE.0 != 0;
++            assert!(
++                stores || width == 3,
++                "required typed UAV format unsupported: {format:?}"
++            );
++            let mut srv = D3D12_SHADER_RESOURCE_VIEW_DESC {
++                Format: format,
++                ViewDimension: D3D12_SRV_DIMENSION_BUFFER,
++                Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
++                Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
++                    Buffer: D3D12_BUFFER_SRV {
++                        NumElements: (16 / width) as u32,
++                        ..Default::default()
++                    },
++                },
++            };
++            device.CreateShaderResourceView(&input, Some(&srv), at(0));
++            // Never create a three-channel typed UAV if the adapter rejects
++            // that format. Its SRV still runs; u0 is unused by the load pass.
++            device.CreateUnorderedAccessView(
++                &output,
++                None::<&ID3D12Resource>,
++                Some(&D3D12_UNORDERED_ACCESS_VIEW_DESC {
++                    Format: if stores {
++                        format
++                    } else {
++                        DXGI_FORMAT_R32_FLOAT
++                    },
++                    ViewDimension: D3D12_UAV_DIMENSION_BUFFER,
++                    Anonymous: D3D12_UNORDERED_ACCESS_VIEW_DESC_0 {
++                        Buffer: D3D12_BUFFER_UAV {
++                            NumElements: 4,
++                            ..Default::default()
++                        },
++                    },
++                }),
++                at(1),
++            );
++            device.CreateUnorderedAccessView(
++                &output,
++                None::<&ID3D12Resource>,
++                Some(&D3D12_UNORDERED_ACCESS_VIEW_DESC {
++                    Format: DXGI_FORMAT_R32_TYPELESS,
++                    ViewDimension: D3D12_UAV_DIMENSION_BUFFER,
++                    Anonymous: D3D12_UNORDERED_ACCESS_VIEW_DESC_0 {
++                        Buffer: D3D12_BUFFER_UAV {
++                            NumElements: 64,
++                            Flags: D3D12_BUFFER_UAV_FLAG_RAW,
++                            ..Default::default()
++                        },
++                    },
++                }),
++                at(2),
++            );
++            // Check every channel. Float views supply absent channels as
++            // (0, 0, 0, 1.0); notably W is *not* integer 1. This assertion
++            // characterizes the limitation of narrower integer remapping.
++            let rows = 16 / width;
++            let actual = probe.run(
++                &load_root,
++                &load,
++                &heap,
++                &output,
++                &readback,
++                rows as u32,
++                &PATTERNS,
++            );
++            for row in 0..rows {
++                for channel in 0..width {
++                    assert_eq!(
++                        actual[4 * row + channel],
++                        PATTERNS[width * row + channel],
++                        "{title:?} typed SRV row {row} channel {channel}"
++                    );
++                }
++            }
++            for row in 0..rows {
++                for channel in width..4 {
++                    assert_eq!(
++                        actual[4 * row + channel],
++                        if channel == 3 { 1.0f32.to_bits() } else { 0 },
++                        "{title:?} absent float SRV row {row} channel {channel}"
++                    );
++                }
++            }
++            if width < 4 {
++                srv.Format = title;
++                device.CreateShaderResourceView(&input, Some(&srv), at(0));
++                let signed = matches!(
++                    title,
++                    DXGI_FORMAT_R32_SINT | DXGI_FORMAT_R32G32_SINT | DXGI_FORMAT_R32G32B32_SINT
++                );
++                let (root, pipeline) = if signed {
++                    (&sint_root, &sint_load)
++                } else {
++                    (&uint_root, &uint_load)
++                };
++                let actual = probe.run(
++                    root,
++                    pipeline,
++                    &heap,
++                    &output,
++                    &readback,
++                    rows as u32,
++                    &PATTERNS,
++                );
++                for row in 0..rows {
++                    for channel in 0..4 {
++                        let expected = if channel < width {
++                            PATTERNS[width * row + channel]
++                        } else if channel == 3 {
++                            1
++                        } else {
++                            0
++                        };
++                        assert_eq!(
++                            actual[4 * row + channel],
++                            expected,
++                            "{title:?} native integer SRV row {row} channel {channel}"
++                        );
++                    }
++                }
++                eprintln!(
++                    "{title:?}: integer missing W=1, float missing W=0x3f800000; production format remains integer (typed UAV remap not enabled)"
++                );
++                continue;
++            }
++            if !stores {
++                eprintln!(
++                    "{title:?}: SRV bits passed; three-channel typed UAV unsupported, no UAV dispatched"
++                );
++                continue;
++            }
++            for shift in 0..4 {
++                let mut constants = PATTERNS;
++                constants.rotate_left(shift);
++                let actual = probe.run(
++                    &store_root,
++                    &store,
++                    &heap,
++                    &output,
++                    &readback,
++                    4,
++                    &constants,
++                );
++                for row in 0..4 {
++                    for channel in 0..width {
++                        assert_eq!(
++                            actual[width * row + channel],
++                            constants[4 * row + channel],
++                            "{title:?} typed UAV row {row} channel {channel}, rotation {shift}"
++                        );
++                    }
++                }
++            }
++            // Now bind exactly the production raw-twin range over those
++            // same typed-written bytes, not the full output probe buffer.
++            let (first, count, by) = twin_window(format, 0, 4, 0, false, 256).unwrap();
++            assert_eq!(by, 0);
++            device.CreateUnorderedAccessView(
++                &output,
++                None::<&ID3D12Resource>,
++                Some(&D3D12_UNORDERED_ACCESS_VIEW_DESC {
++                    Format: DXGI_FORMAT_R32_TYPELESS,
++                    ViewDimension: D3D12_UAV_DIMENSION_BUFFER,
++                    Anonymous: D3D12_UNORDERED_ACCESS_VIEW_DESC_0 {
++                        Buffer: D3D12_BUFFER_UAV {
++                            FirstElement: first,
++                            NumElements: count,
++                            Flags: D3D12_BUFFER_UAV_FLAG_RAW,
++                            ..Default::default()
++                        },
++                    },
++                }),
++                at(2),
++            );
++            let actual = probe.run(
++                &atomic_root,
++                &atomic,
++                &heap,
++                &output,
++                &readback,
++                1,
++                &PATTERNS,
++            );
++            assert_eq!(
++                actual[0],
++                PATTERNS[3].wrapping_add(1),
++                "{title:?} raw-twin integer atomic"
++            );
++            eprintln!("{title:?}: typed SRV/UAV bit preservation and raw-twin atomic passed");
++        }
++    }
++}
