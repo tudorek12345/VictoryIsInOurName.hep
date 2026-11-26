@@ -7,7 +7,7 @@ param(
     [string]$VictorySource = 'review',
 
     [ValidateSet('series-s', 'series-x')]
-    [string]$Console = 'series-s',
+    [string]$Console = 'series-x',
 
     [ValidateSet('warp', 'hardware')]
     [string]$Renderer = 'hardware',
@@ -33,6 +33,7 @@ param(
     [switch]$CaptureAudio,
     [switch]$MovieAudio = $true,
     [switch]$MemoryStats,
+    [switch]$MemorySamples,
     [switch]$GpuTiming,
     [switch]$SplitGpuLists,
     [switch]$MissionTrace,
@@ -80,7 +81,7 @@ $snapshot = $VictorySource -in 'amd7900', 'fxceless'
 $standalone = $snapshot -or $VictorySource -eq 'amd7900-series-s'
 $amdFork = $VictorySource -in 'amd7900', 'amd7900-series-s'
 if (-not $useXcl -and $VictorySource -eq 'amd7900-series-s' -and -not ($PrepareOnly -or $PrewarmPipelines)) {
-    if (-not $PSBoundParameters.ContainsKey('MenuPicture')) { $MenuPicture = $true }
+    if (-not $PSBoundParameters.ContainsKey('MenuPicture')) { $MenuPicture = $Console -eq 'series-s' }
     if (-not $PSBoundParameters.ContainsKey('QueuedSubmit') -and -not $GpuTiming) { $QueuedSubmit = $true }
     if (-not $PSBoundParameters.ContainsKey('PipelineWorkers')) { $PipelineWorkers = 2 }
 }
@@ -104,6 +105,9 @@ if ($QueuedSubmit -and ($VictorySource -ne 'amd7900-series-s' -or $GpuTiming)) {
 }
 if ($TextureNoWait -and -not $amdFork) {
     throw 'TextureNoWait requires the AMD fork with fault-safe texture reads.'
+}
+if ($MemorySamples -and ($useXcl -or $VictorySource -ne 'amd7900-series-s')) {
+    throw 'MemorySamples requires the Series S candidate with timed memory diagnostics.'
 }
 if ($ShadowWindowKiB -and -not $amdFork) {
     throw 'ShadowWindowKiB requires the AMD fork.'
@@ -351,7 +355,8 @@ try {
                 '--env', "VICTORY_D3D12_ADAPTER=$adapter",
                 '--env', "VICTORY_LOG=$logFilter"
             )
-            if ($MemoryStats) { $arguments += @('--env', 'VICTORY_MEMORY_STATS=1') }
+            if ($MemoryStats -or $MemorySamples) { $arguments += @('--env', 'VICTORY_MEMORY_STATS=1') }
+            if ($MemorySamples) { $arguments += @('--env', 'VICTORY_MEMORY_SAMPLE=1') }
             if ($TextureNoWait) { $arguments += @('--env', 'VICTORY_TEXTURE_NO_WAIT=1') }
             if ($Renderer -eq 'warp' -and $VictorySource -ne 'review') {
                 $arguments += @('--env', 'VICTORY_D3D12_WARP=1')
@@ -436,7 +441,8 @@ try {
             queuedSubmit = [bool]$QueuedSubmit
             textureNoWait = [bool]$TextureNoWait
             menuPicture = [bool]$MenuPicture
-            memoryStats = [bool]$MemoryStats
+            memoryStats = [bool]($MemoryStats -or $MemorySamples)
+            memorySamples = [bool]$MemorySamples
             pipelineBookFrom = if ($PipelineBookFrom) { $PipelineBookFrom } else { $null }
             pipelineUseFrom = if ($PipelineUseFrom) { $PipelineUseFrom } else { $null }
             gpuTiming = [bool]$GpuTiming

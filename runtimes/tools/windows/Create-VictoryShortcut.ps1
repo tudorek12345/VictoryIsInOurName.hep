@@ -16,10 +16,10 @@ $destinationPath = [IO.Path]::GetFullPath($Destination)
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($destinationPath)
 $shortcut.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$shortcut.Arguments = '-NoProfile -File "' + $launcher + '" -VictorySource amd7900-series-s -Console series-s -Renderer hardware -HostReserveMiB 3072 -PipelineWorkers 2 -MenuPicture -QueuedSubmit'
+$shortcut.Arguments = '-NoProfile -File "' + $launcher + '" -VictorySource amd7900-series-s -Console series-x -Renderer hardware -HostReserveMiB 3072 -PipelineWorkers 2 -QueuedSubmit -MemorySamples'
 $shortcut.WorkingDirectory = $local
 $shortcut.IconLocation = $icon + ',0'
-$shortcut.Description = 'Build and run the current Radeon Series S candidate with diagnostics and host memory reserves.'
+$shortcut.Description = 'Build and run the current Radeon Series X profile with diagnostics and host memory reserves.'
 $shortcut.WindowStyle = 7
 $shortcut.Save()
 Write-Output $destinationPath

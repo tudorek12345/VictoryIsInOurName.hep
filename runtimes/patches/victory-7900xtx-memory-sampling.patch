@@ -1,0 +1,399 @@
+diff --git a/crates/victory-gpu/src/copystat.rs b/crates/victory-gpu/src/copystat.rs
+index 3bbb9dd..ea8de21 100644
+--- a/crates/victory-gpu/src/copystat.rs
++++ b/crates/victory-gpu/src/copystat.rs
+@@ -524,12 +524,104 @@ fn system_memory() -> (u64, u64) {
+     (m.ullAvailPhys, m.ullAvailPageFile)
+ }
+ 
+-/// Whether the address space is walked for the memory map line
+-/// ([`log_memory_map`]). On by default (this module is in diagnostics
+-/// builds only); `VICTORY_MEMORY_MAP=0` leaves the walk out.
+-fn memory_map() -> bool {
+-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+-    *ON.get_or_init(|| std::env::var_os("VICTORY_MEMORY_MAP").is_none_or(|v| v != "0"))
++/// Opt-in memory samples that continue while a frame is being recorded or
++/// submitted. No GPU calls, virtual-memory walk, or waiting for resource
++/// locks: retained counters are atomic and the two pools use try_lock.
++/// Categories overlap (textures occupy pool blocks; shadows have card
++/// copies), so the byte fields are not meant to be added together.
++fn start_memory_sampler() {
++    static START: std::sync::Once = std::sync::Once::new();
++    START.call_once(|| {
++        if !std::env::var_os("VICTORY_MEMORY_SAMPLE").is_some_and(|v| v == "1") {
++            return;
++        }
++        let result = std::thread::Builder::new().name("victory-memory-sample".into()).spawn(|| {
++            let start = std::time::Instant::now();
++            loop {
++                let (working, private) = process_memory();
++                let (free, commit_free) = system_memory();
++                let own: [u64; 8] = std::array::from_fn(owned);
++                let alive: [u64; 8] = std::array::from_fn(|i| crate::host::ALIVE[i].load(Relaxed));
++                let made: [u64; 6] = std::array::from_fn(|i| crate::host::MADE[i].load(Relaxed));
++                let textures: [u64; 2] = std::array::from_fn(|i| crate::resource::HOST_TEXTURES[i].load(Relaxed));
++                let copies = crate::shadow::sampled_memory();
++                let staging = crate::texture::sampled_memory();
++                let pools = crate::pool::sampled_memory();
++                let kept = crate::pipeline::kept();
++                tracing::info!(
++                    elapsed_ms = start.elapsed().as_millis() as u64,
++                    frame = crate::frame::current(),
++                    private_bytes = private,
++                    working_set_bytes = working,
++                    physical_free_bytes = free,
++                    commit_free_bytes = commit_free,
++                    rust_bytes = own[..4].iter().copied().fold(0u64, u64::wrapping_add),
++                    rust_class_bytes = ?&own[..4],
++                    rust_class_blocks = ?&own[4..],
++                    host_lists = alive[0],
++                    list_scratch_bytes = alive[2],
++                    list_spare_bytes = alive[4],
++                    list_upload_bytes = alive[7],
++                    host_texture_count = textures[0],
++                    host_texture_bytes = textures[1],
++                    shadow_count = copies[0],
++                    shadow_bytes = copies[1],
++                    shadow_card_bytes = copies[2],
++                    shadow_before_bytes = copies[3],
++                    shadow_window_card_bytes = copies[4],
++                    shadow_window_mapped_card_bytes = copies[5],
++                    staging_count = staging[0],
++                    staging_bytes = staging[1],
++                    texture_pool_bytes = ?pools[0],
++                    staging_pool_bytes = ?pools[1],
++                    shader_container_bytes = kept[1],
++                    translated_shader_bytes = kept[3],
++                    pipeline_library_bytes = kept[4],
++                    made_upload_count = made[0],
++                    made_upload_bytes = made[1],
++                    made_shared_count = made[2],
++                    made_shared_bytes = made[3],
++                    made_card_count = made[4],
++                    made_card_bytes = made[5],
++                    "memory sample (retained except made_*; pool None means unavailable)"
++                );
++                std::thread::sleep(std::time::Duration::from_secs(1));
++            }
++        });
++        if let Err(error) = result {
++            tracing::warn!(%error, "memory sampler could not start");
++        }
++    });
++}
++
++/// Every how many memory lines (one each 5 s) the address space is walked
++/// for the memory map line ([`log_memory_map`]): `VICTORY_MEMORY_MAP=<n>`,
++/// 60 if unset (about every 5 minutes; 6 before), `0` leaves the walk out.
++/// (This module is in diagnostics builds only.)
++///
++/// The walk asks Windows about every region and holds the process's memory
++/// map while each query runs. The submitting thread's write-watch queries
++/// and the title's faults can wait behind it, so keep the walk infrequent.
++fn memory_map() -> u64 {
++    static EVERY: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
++    *EVERY.get_or_init(|| memory_map_every(std::env::var("VICTORY_MEMORY_MAP").ok().as_deref()))
++}
++
++fn memory_map_every(value: Option<&str>) -> u64 {
++    value.and_then(|v| v.trim().parse().ok()).unwrap_or(60)
++}
++
++#[cfg(test)]
++mod memory_map_tests {
++    #[test]
++    fn memory_map_interval_is_configurable_and_can_be_disabled() {
++        use super::memory_map_every;
++        assert_eq!(memory_map_every(None), 60);
++        assert_eq!(memory_map_every(Some("invalid")), 60);
++        assert_eq!(memory_map_every(Some("-1")), 60);
++        assert_eq!(memory_map_every(Some("0")), 0);
++        assert_eq!(memory_map_every(Some(" 6 ")), 6);
++    }
+ }
+ 
+ /// Asks which of the pages in `asked` (address, answer) are in physical
+@@ -566,8 +658,8 @@ fn in_memory(asked: &mut Vec<[usize; 2]>, stands: &mut Vec<(usize, u64)>, presen
+ /// shader cache file.
+ /// shortcut: the walk takes about 0.6 s on a thread of its own, and a
+ /// query of a region of gigabytes holds up other threads' memory calls
+-/// for its length (89 ms for the 6.2 GB pool), so it runs with every
+-/// sixth memory line only.
++/// for its length (89 ms for the 6.2 GB pool), so it runs only at the
++/// configured memory-line interval.
+ fn log_memory_map() {
+     use windows_sys::Win32::System::Memory::{
+         MEM_COMMIT, MEM_FREE, MEM_IMAGE, MEM_MAPPED, MEMORY_BASIC_INFORMATION, PAGE_WRITECOMBINE,
+@@ -740,11 +832,12 @@ fn log_memory() {
+     if let Some(h) = crate::host::host() {
+         h.log_video_memory("with the memory line");
+     }
+-    // What else holds memory: the map, on a thread of its own, with every
+-    // sixth line; and what the shader table and the pipeline library keep.
++    // What else holds memory: the map, on a thread of its own, at the
++    // configured interval; and what the shader table and pipeline library keep.
+     static LINES: AtomicU64 = AtomicU64::new(0);
+     static WALKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+-    if memory_map() && LINES.fetch_add(1, Relaxed) % 6 == 5 && !WALKING.swap(true, Relaxed) {
++    let every = memory_map();
++    if every > 0 && LINES.fetch_add(1, Relaxed) % every == every - 1 && !WALKING.swap(true, Relaxed) {
+         let walk = std::thread::Builder::new().name("victory-memory-map".into()).spawn(|| {
+             log_memory_map();
+             WALKING.store(false, Relaxed);
+@@ -1138,6 +1231,7 @@ fn page_faults() -> u64 {
+ /// second or more: a 4 s frame after an unlogged 4 s frame showed two
+ /// frames' counts as one's).
+ pub(crate) fn log(frames: f64) {
++    start_memory_sampler();
+     let counted = taken(C::Frames as usize);
+     let frames = if counted > 0 { counted as f64 } else { frames };
+     static FAULTS: AtomicU64 = AtomicU64::new(0);
+diff --git a/crates/victory-gpu/src/pool.rs b/crates/victory-gpu/src/pool.rs
+index 3bd23f9..ee35cae 100644
+--- a/crates/victory-gpu/src/pool.rs
++++ b/crates/victory-gpu/src/pool.rs
+@@ -361,6 +361,16 @@ pub(crate) fn memory() -> [u64; 2] {
+     [lock(&TEXTURES).blocks() as u64 * (BLOCK >> 20), lock(&STAGING).blocks() as u64 * (BLOCK >> 20)]
+ }
+ 
++/// Pool bytes for the independent sampler. A busy or poisoned pool is
++/// unavailable, never waited for by the diagnostic thread.
++#[cfg(feature = "diagnostics")]
++pub(crate) fn sampled_memory() -> [Option<u64>; 2] {
++    [
++        TEXTURES.try_lock().ok().map(|p| p.blocks() as u64 * BLOCK),
++        STAGING.try_lock().ok().map(|p| p.blocks() as u64 * BLOCK),
++    ]
++}
++
+ /// Part of a block of mapped upload memory, back in the pool when dropped.
+ pub(crate) struct StagingPiece(Piece);
+ 
+@@ -705,6 +715,14 @@ pub(crate) unsafe fn texture(
+ 
+ #[cfg(test)]
+ mod tests {
++    #[cfg(feature = "diagnostics")]
++    #[test]
++    fn memory_sampler_does_not_wait_for_busy_pools() {
++        let _textures = super::lock(&super::TEXTURES);
++        let _staging = super::lock(&super::STAGING);
++        assert_eq!(super::sampled_memory(), [None, None]);
++    }
++
+     use super::*;
+ 
+     #[test]
+diff --git a/crates/victory-gpu/src/shadow.rs b/crates/victory-gpu/src/shadow.rs
+index 43d1b76..e684dce 100644
+--- a/crates/victory-gpu/src/shadow.rs
++++ b/crates/victory-gpu/src/shadow.rs
+@@ -2838,6 +2838,22 @@ pub(crate) fn let_go_idle() {
+     }
+ }
+ 
++/// Atomic-only totals for the independent sampler: copies, bytes, bytes
++/// of card-side copies, bytes of their before twins, and window bytes in
++/// card-side copies and mapped card-side copies. A card-side window can
++/// fall back to shared memory, so these are not dedicated VRAM totals.
++#[cfg(feature = "diagnostics")]
++pub(crate) fn sampled_memory() -> [u64; 6] {
++    [
++        LIVE[0].load(Ordering::Relaxed),
++        LIVE[1].load(Ordering::Relaxed),
++        CARD_BYTES[0].load(Ordering::Relaxed),
++        CARD_BYTES[1].load(Ordering::Relaxed),
++        WINDOW_CARD_BYTES.load(Ordering::Relaxed),
++        WINDOW_MAPPED_BYTES.load(Ordering::Relaxed),
++    ]
++}
++
+ /// For the memory line: host copies alive and their bytes, of them the
+ /// windows of memory outside buffers and their bytes, and the snapshot
+ /// buffers kept for reuse and the bytes they reserve.
+diff --git a/crates/victory-gpu/src/texture.rs b/crates/victory-gpu/src/texture.rs
+index 27bc83b..6d70ce2 100644
+--- a/crates/victory-gpu/src/texture.rs
++++ b/crates/victory-gpu/src/texture.rs
+@@ -478,6 +478,13 @@ impl Drop for Staging {
+     }
+ }
+ 
++/// Atomic-only staging count and bytes for the independent sampler.
++#[cfg(feature = "diagnostics")]
++pub(crate) fn sampled_memory() -> [u64; 2] {
++    use std::sync::atomic::Ordering::Relaxed;
++    [STAGED[0].load(Relaxed), STAGED[1].load(Relaxed)]
++}
++
+ /// For the memory line: staging buffers alive, their bytes, and how many
+ /// of them their texture still has (the others wait for a list's reset).
+ #[cfg(feature = "diagnostics")]
+diff --git a/crates/victory-gpu/src/watch.rs b/crates/victory-gpu/src/watch.rs
+index 736ac6e..c6fd59d 100644
+--- a/crates/victory-gpu/src/watch.rs
++++ b/crates/victory-gpu/src/watch.rs
+@@ -128,7 +128,7 @@ struct Journal {
+     /// Page ranges asked ahead for a submission's refreshes ([`ask_ahead`])
+     /// and the asking that did: `writes` answers for a range inside one
+     /// from the journal, without another kernel call.
+-    ahead: Vec<(usize, usize)>,
++    ahead: Ahead,
+     ahead_asked: u64,
+     /// The ahead asking stands for a whole submission ([`ask_once`]): no
+     /// other ahead asking is made, and `ahead` stays, until
+@@ -145,11 +145,54 @@ struct Journal {
+ static JOURNAL: RwLock<Journal> = RwLock::new(Journal {
+     written: BTreeMap::new(),
+     parts: std::collections::HashMap::with_hasher(std::hash::BuildHasherDefault::new()),
+-    ahead: Vec::new(),
++    ahead: Ahead::new(),
+     ahead_asked: 0,
+     kept: false,
+ });
+ 
++/// The page ranges of [`Journal::ahead`], by their starts, and for each the
++/// furthest end of it and those before it: whether one holds a range is
++/// found in a few steps. Each refresh asked it two or three times, through
++/// all of the ranges (10,000 refreshes a frame, a few hundred ranges).
++struct Ahead {
++    ranges: Vec<(usize, usize)>,
++    most: Vec<usize>,
++}
++
++impl Ahead {
++    const fn new() -> Ahead {
++        Ahead { ranges: Vec::new(), most: Vec::new() }
++    }
++
++    fn set(&mut self, mut ranges: Vec<(usize, usize)>) {
++        ranges.sort_unstable();
++        self.most.clear();
++        let mut most = 0;
++        self.most.extend(ranges.iter().map(|r| {
++            most = most.max(r.1);
++            most
++        }));
++        self.ranges = ranges;
++    }
++
++    fn clear(&mut self) {
++        self.ranges.clear();
++        self.most.clear();
++    }
++
++    fn take(&mut self) -> Vec<(usize, usize)> {
++        self.most.clear();
++        std::mem::take(&mut self.ranges)
++    }
++
++    /// Whether one of the ranges holds pages `[first, last)`.
++    fn holds(&self, first: usize, last: usize) -> bool {
++        // Those that start at `first` or before; of them the furthest end.
++        let n = self.ranges.partition_point(|r| r.0 <= first);
++        n > 0 && self.most[n - 1] >= last
++    }
++}
++
+ fn journal() -> std::sync::RwLockReadGuard<'static, Journal> {
+     if let Ok(j) = JOURNAL.try_read() {
+         return j;
+@@ -349,7 +392,7 @@ pub(crate) fn ask_ahead(ranges: &[(usize, usize)]) {
+     note_hot(&written);
+     let mut j = journal_mut();
+     j.ahead_asked = next_asking();
+-    j.ahead = asked;
++    j.ahead.set(asked);
+     let now = j.ahead_asked;
+     for (page, parts) in written {
+         j.note(page, parts, now);
+@@ -542,7 +585,7 @@ fn ask_rest(ranges: &[(usize, usize)]) {
+     let _all = Asking::hold_all();
+     let mut ahead = {
+         let mut j = journal_mut();
+-        std::mem::take(&mut j.ahead)
++        j.ahead.take()
+     };
+     // `ask_ahead` leaves a range that lies alone to `writes`, which asks
+     // once per flush: with one asking for the submission that was every
+@@ -574,7 +617,7 @@ fn ask_rest(ranges: &[(usize, usize)]) {
+         j.note(page, parts, now);
+     }
+     j.kept = !ahead.is_empty();
+-    j.ahead = ahead;
++    j.ahead.set(ahead);
+ }
+ 
+ /// The submission's one asking stands no longer: its refreshes are done,
+@@ -648,8 +691,7 @@ pub(crate) fn asked(start: usize, end: usize) -> Option<(u64, Vec<(usize, u64)>)
+     let (first, last) = (start / PAGE, end.div_ceil(PAGE));
+     let j = journal();
+     j.ahead
+-        .iter()
+-        .any(|&(a, b)| a <= first && last <= b)
++        .holds(first, last)
+         .then(|| (j.ahead_asked, j.written.range(first..last).map(|(&p, &w)| (p, w)).collect()))
+ }
+ 
+@@ -662,7 +704,7 @@ pub(crate) fn writes(start: usize, end: usize, guarded: bool) -> Option<(u64, Ve
+     let (first, last) = (start / PAGE, end.div_ceil(PAGE));
+     let of = |j: &Journal| -> Vec<(usize, u64)> { j.written.range(first..last).map(|(&p, &w)| (p, w)).collect() };
+     // Asked ahead with the submission's other ranges: the journal has it.
+-    let ahead = |j: &Journal| j.ahead.iter().any(|&(a, b)| a <= first && last <= b).then(|| (j.ahead_asked, of(j)));
++    let ahead = |j: &Journal| j.ahead.holds(first, last).then(|| (j.ahead_asked, of(j)));
+     if let Some(known) = ahead(&journal()) {
+         return Some(known);
+     }
+@@ -746,7 +788,7 @@ pub(crate) fn nothing_new(start: usize, end: usize, base: usize, copied: &[u64],
+         crate::faultbook::note(crate::faultbook::What::Known, first, last, 1);
+     }
+     let j = journal();
+-    if !known && !j.ahead.iter().any(|&(a, b)| a <= first && last <= b) {
++    if !known && !j.ahead.holds(first, last) {
+         return false;
+     }
+     let Some(taken) = first.checked_sub(base).and_then(|from| copied.get(from..last - base)) else {
+@@ -2667,12 +2709,42 @@ fn writable(at: usize) -> bool {
+ mod parts_tests {
+     use super::*;
+ 
++    #[test]
++    fn ranges_asked_ahead_hold_what_lies_in_one_of_them() {
++        let all = [(10, 20), (12, 14), (30, 40), (15, 35), (50, 51)];
++        let mut ahead = Ahead::new();
++        ahead.set(all.to_vec());
++        for first in 0..60 {
++            for last in first + 1..62 {
++                let slow = all.iter().any(|&(a, b)| a <= first && last <= b);
++                assert_eq!(ahead.holds(first, last), slow, "{first}..{last}");
++            }
++        }
++        assert!(!Ahead::new().holds(0, 1));
++        assert_eq!(ahead.take().len(), all.len());
++        assert!(ahead.ranges.is_empty() && !ahead.holds(10, 11));
++    }
++
++    #[test]
++    fn indexed_ranges_preserve_gaps_boundaries_and_replacement() {
++        let mut ahead = Ahead::new();
++        for all in [vec![(0, 5), (5, 10)], vec![(9, 11), (1, 30), (1, 2)], vec![(usize::MAX - 8, usize::MAX)], vec![]] {
++            ahead.set(all.clone());
++            for (first, last) in [(0, 1), (4, 6), (5, 10), (10, 11), (29, 30), (30, 31), (usize::MAX - 1, usize::MAX)] {
++                assert_eq!(ahead.holds(first, last), all.iter().any(|&(a, b)| a <= first && last <= b));
++            }
++            ahead.clear();
++            assert!(!ahead.holds(5, 6));
++        }
++    }
++
++
+     #[test]
+     fn the_parts_of_a_page_written_since_it_was_taken() {
+         let mut j = Journal {
+             written: BTreeMap::new(),
+             parts: std::collections::HashMap::with_hasher(std::hash::BuildHasherDefault::new()),
+-            ahead: Vec::new(),
++            ahead: Ahead::new(),
+             ahead_asked: 0,
+             kept: false,
+         };

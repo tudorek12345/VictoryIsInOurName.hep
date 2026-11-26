@@ -16,15 +16,15 @@ read-only package grants, zero-capability AppContainer and bounded job. It leave
 the Windows GPU watchdog unchanged. The memory reserve monitor is checked every
 500 ms; it cannot guarantee recovery from a driver hang.
 
-Direct invocation now defaults to the Series S candidate on Radeon, with ordered
+Direct invocation now defaults to the Series X profile on Radeon, with ordered
 submission, two pipeline workers and a 3 GiB physical-memory reserve. Builds use
 two Cargo jobs to leave CPU headroom for other applications. The explicit profile is:
 
 ```powershell
 .\Launch-Victory.ps1 -LocalRoot 'D:\BuildGTA$\victory-local' `
-  -VictorySource amd7900-series-s -Console series-s -Renderer hardware `
-  -Seconds 240 -HostReserveMiB 3072 -FreshState -MenuPicture `
-  -PipelineWorkers 2 -QueuedSubmit -MemoryStats -CaptureAudio
+  -VictorySource amd7900-series-s -Console series-x -Renderer hardware `
+  -Seconds 240 -HostReserveMiB 3072 -FreshState `
+  -PipelineWorkers 2 -QueuedSubmit -MemorySamples -CaptureAudio
 ```
 
 `-QueuedSubmit:$false` selects synchronous submission for a comparison.
@@ -32,6 +32,18 @@ two Cargo jobs to leave CPU headroom for other applications. The explicit profil
 Queued submission demonstrated about 30 FPS through the intro and loading; this
 is not evidence of 30 FPS gameplay. `-DiagnosticKeys` supplies a bounded local input script and is
 included in the run metadata. Closing the game ends its associated runner.
+
+The source checkout name `amd7900-series-s` is historical; `-Console` selects
+the title profile independently. Series X was selected after the upstream fork
+also reported a black world with Series S. This selection is not proof that
+Series X gameplay works on this machine. Explicit `-Console series-s` retains
+the menu-picture workaround for comparisons.
+
+`-MemorySamples` enables the regular memory report plus an independent one-second
+sample during frame stalls. It reads atomic counters and uses nonblocking pool
+snapshots. Retained categories overlap; do not add them together. `made_*` fields
+are cumulative allocations, and a missing pool value means unavailable, not zero.
+The ordinary expensive memory-map walk now defaults to every 60 report lines.
 
 `-PrewarmPipelines -PipelineBookFrom <run-id> -PipelineUseFrom <run-id>` creates a
 fresh cache from compatible **raw** local pipeline records. `-PrewarmLimit`

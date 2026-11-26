@@ -129,3 +129,42 @@ with the query fix on RX 9060 XT / driver 32.0.32029.2010. The first took about
 of 625,065,984 bytes (0.58 GiB). Tests used 6 GiB caps and the existing physical
 and commit reserves. This resolves the demonstrated compiler exception;
 rendered gameplay remains a separate end-to-end validation requirement.
+
+## Upstream review and timed memory diagnostics (25 November 2026, PST)
+
+Apply [the memory-sampling patch](runtimes/patches/victory-7900xtx-memory-sampling.patch)
+after the buffer-query patch. It reproduces candidate `0001d4b` from `33cbd2f`.
+Patch application was checked against the preceding sequence.
+
+Reviewed 7900XTX head [9c23e8dd](https://github.com/avatarmanz/VIctory-7900XTX/commit/9c23e8dd40cac6fb4a2aa8c804587e7c2e2a5853)
+and fxceless head [46bf5351](https://github.com/fxceless/victory-fork/commit/46bf5351707b1697c04e5d871c30973ebaa3e973).
+The local `victory-fork-main` directory is an archive without Git history; its
+raw-address memory implementation matches the fetched fxceless source.
+
+Selected adaptations:
+
+- [c83e54c8](https://github.com/avatarmanz/VIctory-7900XTX/commit/c83e54c808aaf3fe173cd56bc4463324e75022d2):
+  index watched ranges by start and prefix maximum end for binary-search
+  containment checks. The existing serial kernel-query path is retained.
+  Tests cover overlapping/nested ranges, gaps, replacement and address boundaries.
+- [fb28d49e](https://github.com/avatarmanz/VIctory-7900XTX/commit/fb28d49e959359cb20992e5c5533a647cb408054):
+  configurable full memory-map walks, defaulting to every 60 report lines instead
+  of six. These queries can delay write-watch calls. Experimental query scheduling
+  remains unchanged.
+- An opt-in independent memory sampler observes allocations during frame stalls.
+  It uses atomic counters and nonblocking pool snapshots without changing resource
+  lifetimes. Five focused CPU tests passed, with no failures or ignores.
+
+The fxceless [zero-length constant-buffer fix](https://github.com/fxceless/victory-fork/commit/619b2dc5c4cb37fa32abe4f64ed6e78145c8fa01)
+is already present semantically in `constant_bytes`; no duplicate patch was applied.
+Its new texture worker remains default-off upstream and did not improve the
+author's measured frame rate. The new 7900XTX constant-heap remapping cluster is
+experimental and default-off, with two immediate follow-up fixes; it is not
+enabled or imported in this candidate.
+
+The fxceless diagnostics index reports a black Series S world in run 304 while
+Series X renders on the author's machine. That is upstream evidence, not a local
+reproduction. The user selected Series X for the next test. The launcher and
+asset-icon shortcut use that profile; the checkout retains its historical name.
+Radeon, two pipeline workers, the 3 GiB physical reserve, the 4 GiB commit reserve
+and the Windows GPU watchdog remain unchanged.
