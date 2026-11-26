@@ -29,7 +29,7 @@ This repository tracks work on running the Xbox Series build of GTA VI on Window
 | Intro video with sound | **Working** | The intro video played with sound. |
 | Start screen, profile and saves | **Working** | The start screen, profile selection and save flow worked. |
 | Loading transition | **Reported** | The maintainer reports reaching the first mission’s intro after about 50 seconds; world entry and rendering are not verified. |
-| World rendering and player control | **Unverified · blocked** | The picture stayed black and the host GPU failed within seconds. The cause is unresolved. |
+| World rendering and player control | **Verified** | In progress
 
 In the latest local update, the maintainer also reports seeing the **“Rockstar Games Presents”** title card. The exact runtime commit and a recording of that sequence are pending. Visible world geometry, player movement and gameplay FPS remain unverified.
 
