@@ -59,3 +59,32 @@ and report-parser tests each passed ten synthetic checks. These changes are
 AI-assisted. Original package data and generated shader programs are not part of
 the patch. Gameplay validation and sustained frame rate remain separate runtime
 requirements; see the measured report before treating this as a playable build.
+
+## Shader compiler follow-up (25 November 2026, PST)
+
+Apply [the shader compacting patch](runtimes/patches/victory-7900xtx-shader-compact.patch)
+after the world-entry patch. It recreates local candidate `3747dfc` from `629334cd`.
+The adaptation uses only the missing parts of Marvisak/VIctory
+[850b66ff](https://github.com/Marvisak/VIctory/commit/850b66ffd7e06a9c21bc20ccd9168a627f653f3d)
+(fixed-address and uniform-join handle sharing) and
+[286a00e9](https://github.com/Marvisak/VIctory/commit/286a00e9b69851d1dc0d68d313a01822a251084f)
+(safe empty forwarder folding). Existing dead-code optimization, recursive joins,
+raw-view bounds and nonuniform waterfall behavior are retained. Synthetic tests
+cover the new dominance/phi-edge cases; 36 focused CPU tests passed with two
+existing ignores. The optimized diagnostics executable built successfully.
+
+Two recorded compute pipelines showed 40.4?40.6% fewer heap handles and about
+2.6% smaller DXIL. Both still ended with access violations below 0.6 GiB job
+commit. New offline-child crash reports identify `amdxc64.dll+0x861b9f`, the
+same location as the separately reproduced synthetic compiler failure on driver
+`32.0.32029.2010`. This is a measured code-size improvement, not a resolved
+compiler crash or verified gameplay fix. The raw shaders and crash reports
+remain local.
+
+The launcher now accepts `-PrewarmIndices` with `-PrewarmPipelines` to compile
+specific recorded indices under the existing external timeout and memory guard.
+This bypasses stale warm-failure markers and records the exact indices in the
+run metadata. Offline children retain their own module/RVA crash log. The
+warmer currently persists translated shader caches; reuse of an AMD disk cache
+across isolated profiles has not been established, and a persistent Victory
+pipeline-library blob is not produced by this command.

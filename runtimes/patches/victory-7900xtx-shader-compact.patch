@@ -1,0 +1,515 @@
+diff --git a/apps/victory/src/warm.rs b/apps/victory/src/warm.rs
+index 42faad4..e1b10e2 100644
+--- a/apps/victory/src/warm.rs
++++ b/apps/victory/src/warm.rs
+@@ -191,6 +191,10 @@ fn child(these: &[usize], mut each: impl FnMut(usize, f64, bool)) -> (usize, Opt
+ /// What such a process does.
+ fn make(dir: &Path, these: &str) -> Result<()> {
+     let these: Vec<usize> = these.split(',').map(|n| n.parse().context("--these")).collect::<Result<_>>()?;
++    // Offline compiler children need the same module/RVA evidence as a title
++    // crash. Each child writes its own file because several may warm at once.
++    victory_loader::log_crashes_to(dir.join(format!("warm-crash-{}.log", std::process::id())));
++    victory_loader::report_crashes();
+     let cfg = victory_core::Config::load()?;
+     victory_hle::known_pipelines::use_translations(cfg.cache_subdir("shaders")?);
+     let mut out = std::io::stdout();
+diff --git a/crates/victory-shader/src/emit/bitcode.rs b/crates/victory-shader/src/emit/bitcode.rs
+index 18e0a31..569c2f0 100644
+--- a/crates/victory-shader/src/emit/bitcode.rs
++++ b/crates/victory-shader/src/emit/bitcode.rs
+@@ -549,6 +549,73 @@ impl Module {
+         live
+     }
+ 
++    /// Layout after the optimizer's existing reachability and liveness passes.
++    /// Only empty forwarders and latches can disappear here; values and
++    /// effects remain governed by the existing optimizer and writer.
++    fn block_layout(&self, live: &[bool]) -> BlockLayout {
++        // Blocks are laid out in reverse postorder, so every block follows
++        // its forward predecessors (drivers take a branch to an earlier
++        // block for a loop's back edge).
++        let succs = |b: usize| successors(self.blocks[b].term);
++        let mut seen = vec![false; self.blocks.len()];
++        let mut post = Vec::new();
++        let mut stack = vec![(0usize, 0usize)];
++        seen[0] = true;
++        while let Some(top) = stack.last_mut() {
++            let (b, k) = *top;
++            top.1 += 1;
++            match succs(b).get(k) {
++                Some(&s) if !seen[s] => {
++                    seen[s] = true;
++                    stack.push((s, 0));
++                }
++                Some(_) => {}
++                None => {
++                    post.push(b);
++                    stack.pop();
++                }
++            }
++        }
++        post.reverse();
++        let mut pos = vec![u64::MAX; self.blocks.len()];
++        for (n, &b) in post.iter().enumerate() {
++            pos[b] = n as u64;
++        }
++        // Marvisak/VIctory 286a00e9: also fold forward empty blocks,
++        // preserving dedicated critical edges and distinct phi predecessors.
++        let mut preds = vec![Vec::new(); self.blocks.len()];
++        for &b in &post {
++            for &s in succs(b).iter() {
++                preds[s].push(b);
++            }
++        }
++        let mut plan = BlockLayout {
++            layout: Vec::new(),
++            pos: Vec::new(),
++            fold: vec![None; self.blocks.len()],
++        };
++        for &b in &post {
++            let blk = &self.blocks[b];
++            let empty = b != 0 && blk.phis.iter().chain(&blk.body).all(|&i| !live[i as usize]);
++            if let (Some(Term::Br(h)), true, [p]) = (blk.term, empty, &preds[b][..])
++                && plan.to(h) != b
++            {
++                plan.fold[b] = Some((*p, h));
++                let (from, at) = (plan.src(b), plan.to(h));
++                let critical = succs(from).len() > 1 && preds[at].len() > 1 && pos[h] > pos[b];
++                if critical || succs(from).iter().filter(|&&s| plan.to(s) == at).count() != 1 {
++                    plan.fold[b] = None;
++                }
++            }
++        }
++        plan.layout = post.into_iter().filter(|&b| plan.fold[b].is_none()).collect();
++        plan.pos = vec![u64::MAX; self.blocks.len()];
++        for (n, &b) in plan.layout.iter().enumerate() {
++            plan.pos[b] = n as u64;
++        }
++        plan
++    }
++
+     pub fn write(&self) -> Vec<u8> {
+         let mut w = Writer::default();
+         w.bytes(b"BC\xC0\xDE");
+@@ -685,64 +752,10 @@ impl Module {
+         // Phis nothing reads are left out (one register per phi makes many).
+         let live = self.live();
+ 
+-        // Blocks are laid out in reverse postorder, so every block follows
+-        // its forward predecessors (drivers take a branch to an earlier
+-        // block for a loop's back edge).
+-        let succs = |b: usize| successors(self.blocks[b].term);
+-        let mut seen = vec![false; self.blocks.len()];
+-        let mut post = Vec::new();
+-        let mut stack = vec![(0usize, 0usize)];
+-        seen[0] = true;
+-        while let Some(top) = stack.last_mut() {
+-            let (b, k) = *top;
+-            top.1 += 1;
+-            match succs(b).get(k) {
+-                Some(&s) if !seen[s] => {
+-                    seen[s] = true;
+-                    stack.push((s, 0));
+-                }
+-                Some(_) => {}
+-                None => {
+-                    post.push(b);
+-                    stack.pop();
+-                }
+-            }
+-        }
+-        post.reverse();
+-        let mut pos = vec![u64::MAX; self.blocks.len()];
+-        for (n, &b) in post.iter().enumerate() {
+-            pos[b] = n as u64;
+-        }
+-        // An empty latch (only a branch back to its loop header) is folded
+-        // into its one predecessor, so the exiting block is the latch as in
+-        // DXC's loops; the AMD driver hangs on divergent loops otherwise.
+-        let mut preds = vec![Vec::new(); self.blocks.len()];
+-        for &b in &post {
+-            for &s in succs(b).iter() {
+-                preds[s].push(b);
+-            }
+-        }
+-        let mut fold = vec![None; self.blocks.len()];
+-        for &b in &post {
+-            let blk = &self.blocks[b];
+-            if let (Some(Term::Br(h)), true, [p]) = (
+-                blk.term,
+-                blk.phis.iter().all(|&i| !live[i as usize]) && blk.body.is_empty(),
+-                &preds[b][..],
+-            ) && pos[h] < pos[b]
+-                && !succs(*p).contains(&h)
+-            {
+-                fold[b] = Some((*p, h));
+-            }
+-        }
+-        let layout: Vec<usize> = post.into_iter().filter(|&b| fold[b].is_none()).collect();
+-        let mut pos = vec![u64::MAX; self.blocks.len()];
+-        for (n, &b) in layout.iter().enumerate() {
+-            pos[b] = n as u64;
+-        }
+-        // Branch targets and phi blocks through folded latches.
+-        let target = |t: usize| fold[t].map_or(pos[t], |(_, h)| pos[h]);
+-        let from = |b: usize| fold[b].map_or(pos[b], |(p, _)| pos[p]);
++        let plan = self.block_layout(&live);
++        let layout = &plan.layout;
++        let target = |t: usize| plan.pos[plan.to(t)];
++        let from = |b: usize| plan.pos[plan.src(b)];
+ 
+         // Instruction value ids, in layout order.
+         let base = funcs + self.consts.len() as u32;
+@@ -906,6 +919,29 @@ const VALUE_SYMTAB_BLOCK: u64 = 14;
+ const METADATA_BLOCK: u64 = 15;
+ const TYPE_BLOCK: u64 = 17;
+ 
++/// The writer's block order, including chains of folded empty blocks.
++struct BlockLayout {
++    layout: Vec<usize>,
++    pos: Vec<u64>,
++    fold: Vec<Option<(usize, usize)>>,
++}
++
++impl BlockLayout {
++    fn to(&self, mut t: usize) -> usize {
++        while let Some((_, h)) = self.fold[t] {
++            t = h;
++        }
++        t
++    }
++
++    fn src(&self, mut b: usize) -> usize {
++        while let Some((p, _)) = self.fold[b] {
++            b = p;
++        }
++        b
++    }
++}
++
+ /// Calls `f` with every value `op` reads, in operand order.
+ fn for_each_operand(op: &Op, mut f: impl FnMut(V)) {
+     match op {
+@@ -1235,6 +1271,88 @@ mod tests {
+         assert_eq!(build(false), build(true));
+     }
+ 
++    /// A module with `main`, `n` blocks and a call with effects to keep
++    /// values alive (what a store does).
++    fn module(n: usize) -> (Module, Vec<usize>, V) {
++        let mut m = Module::default();
++        let (i32t, void) = (m.int(32), m.void());
++        let ty = m.func_ty(void, vec![i32t]);
++        let sink = m.function("dx.op.sink", ty, Some(Attr::NoUnwind), false);
++        let main_ty = m.func_ty(void, vec![]);
++        m.function("main", main_ty, None, true);
++        let blocks = (0..n).map(|_| m.new_block()).collect();
++        (m, blocks, sink)
++    }
++    /// An empty block that is a phi's predecessor: folded only where its
++    /// predecessor then reaches the phi's block once, the phi's entry then
++    /// coming from that predecessor.
++    #[test]
++    fn empty_blocks_before_a_phi_fold_only_where_the_entry_can_move() {
++        let (mut m, b, sink) = module(7);
++        let [entry, f, t, p2, f2, q2, t2] = b[..] else { unreachable!() };
++        let i32t = m.int(32);
++        let (one, two) = (m.i32(1), m.i32(2));
++        // entry branches to `t` both directly and through empty `f`, with
++        // different values: `f` stays.
++        let x = m.cmp(entry, pred::EQ, one, two);
++        m.terminate(entry, Term::CondBr(x, f, t));
++        m.terminate(f, Term::Br(t));
++        let phi = m.phi(t, i32t);
++        m.set_phi(phi, vec![(one, entry), (two, f)]);
++        let _ = m.call(t, sink, vec![phi]);
++        let y = m.cmp(t, pred::EQ, phi, two);
++        m.terminate(t, Term::CondBr(y, p2, q2));
++        // `p2` reaches `t2` only through empty `f2`, which has one
++        // predecessor and splits no critical edge: folded, its entry now
++        // `p2`'s.
++        let _ = m.call(p2, sink, vec![one]);
++        m.terminate(p2, Term::Br(f2));
++        m.terminate(f2, Term::Br(t2));
++        let _ = m.call(q2, sink, vec![two]);
++        m.terminate(q2, Term::Br(t2));
++        let phi2 = m.phi(t2, i32t);
++        m.set_phi(phi2, vec![(one, f2), (two, q2)]);
++        let _ = m.call(t2, sink, vec![phi2]);
++        m.terminate(t2, Term::Ret);
++        let plan = m.block_layout(&m.live());
++        assert_eq!(plan.fold[f], None);
++        assert_eq!(plan.fold[f2], Some((p2, t2)));
++        assert_eq!((plan.src(f2), plan.to(f2)), (p2, t2));
++        assert!(!plan.layout.contains(&f2));
++        let _ = m.write();
++    }
++    #[test]
++    fn empty_forwarder_chains_fold_but_critical_edges_and_cycles_stay() {
++        let (mut m, b, sink) = module(7);
++        let [entry, one, two, split, critical, other, join] = b[..] else { unreachable!() };
++        let (a, z) = (m.i32(1), m.i32(0));
++        m.terminate(entry, Term::Br(one));
++        m.terminate(one, Term::Br(two));
++        m.terminate(two, Term::Br(split));
++        let cond = m.cmp(split, pred::EQ, a, z);
++        m.terminate(split, Term::CondBr(cond, critical, other));
++        m.terminate(critical, Term::Br(join));
++        let _ = m.call(other, sink, vec![a]);
++        m.terminate(other, Term::Br(join));
++        let _ = m.call(join, sink, vec![z]);
++        m.terminate(join, Term::Ret);
++        let plan = m.block_layout(&m.live());
++        assert_eq!(plan.to(one), split);
++        assert_eq!(plan.src(two), entry);
++        assert!(!plan.layout.contains(&one) && !plan.layout.contains(&two));
++        assert!(plan.layout.contains(&critical), "keep the dedicated critical edge");
++        let _ = m.write();
++
++        let (mut cycle, b, _) = module(3);
++        cycle.terminate(b[0], Term::Br(b[1]));
++        cycle.terminate(b[1], Term::Br(b[2]));
++        cycle.terminate(b[2], Term::Br(b[1]));
++        let plan = cycle.block_layout(&cycle.live());
++        assert_eq!(plan.layout.len(), 2, "an empty loop remains a loop");
++        let _ = cycle.write();
++    }
++
++
+     #[test]
+     fn successors_of_each_terminator() {
+         assert!(successors(None).is_empty());
+diff --git a/crates/victory-shader/src/emit/lower.rs b/crates/victory-shader/src/emit/lower.rs
+index 24d5cee..42dc3f4 100644
+--- a/crates/victory-shader/src/emit/lower.rs
++++ b/crates/victory-shader/src/emit/lower.rs
+@@ -62,6 +62,12 @@ pub(crate) struct Lowered {
+     /// Heap handles made with a non-uniform index.
+     #[cfg(test)]
+     pub nonuniform_handles: u32,
++    /// Handles shared for descriptors at fixed root-parameter addresses.
++    #[cfg(test)]
++    pub entry_handles: usize,
++    /// Handles shared at uniform descriptor joins.
++    #[cfg(test)]
++    pub join_handles: usize,
+     /// Whether the program uses wave operations.
+     #[cfg(test)]
+     pub wave_ops: bool,
+@@ -301,6 +307,11 @@ struct Lower<'a> {
+     exports: HashMap<Site, &'a Export>,
+     interps: HashMap<Site, &'a Interp>,
+     handles: HashMap<(usize, Site, u8, bool, (u32, u32)), V>,
++    /// One handle for each fixed descriptor address, emitted in the entry
++    /// block so it dominates every reload (Marvisak/VIctory 850b66ff).
++    entry_handles: HashMap<((usize, u32), u8, bool, (u32, u32)), V>,
++    /// One handle at each uniform descriptor join, shared by its accesses.
++    join_handles: HashMap<(String, bool, (u32, u32)), V>,
+     /// Element strides read from the host's table by heap slot
+     /// ([`super::shader::SLOT_STRIDES`]), by block and descriptor load.
+     strides: HashMap<(usize, Site, u8), V>,
+@@ -1664,6 +1675,8 @@ impl<'a> Lower<'a> {
+                 m
+             },
+             handles: HashMap::new(),
++            entry_handles: HashMap::new(),
++            join_handles: HashMap::new(),
+             strides: HashMap::new(),
+             edges: HashMap::new(),
+             exported: vec![false; p.blocks.len()],
+@@ -2431,6 +2444,10 @@ impl<'a> Lower<'a> {
+             #[cfg(test)]
+             nonuniform_handles: self.s.nonuniform_handles,
+             #[cfg(test)]
++            entry_handles: self.entry_handles.len(),
++            #[cfg(test)]
++            join_handles: self.join_handles.len(),
++            #[cfg(test)]
+             wave_ops: self.s.flags & flags::WAVE_OPS != 0,
+             dxil: self.s.finish(),
+             user_data,
+@@ -7175,6 +7192,21 @@ impl<'a> Lower<'a> {
+         props: (u32, u32),
+     ) -> Result<V, Why> {
+         match src {
++            Source::Loaded { load, first }
++                if let Some(address) = self.entry_address(*load) =>
++            {
++                let key = (address, *first, sampler, props);
++                if let Some(&h) = self.entry_handles.get(&key) {
++                    return Ok(h);
++                }
++                let here = std::mem::replace(&mut self.cur, self.s.entry);
++                let index = self.entry_heap_index(address, *first, sampler);
++                let (index, bounded) = self.raw_twin(src, index, sampler, props);
++                let h = self.s.heap_handle_at(self.cur, index, sampler, false, props, bounded);
++                self.cur = here;
++                self.entry_handles.insert(key, h);
++                Ok(h)
++            }
+             Source::Loaded { load, first } => {
+                 let key = (self.cur, *load, *first, sampler, props);
+                 if let Some(&h) = self.handles.get(&key) {
+@@ -7233,9 +7265,18 @@ impl<'a> Lower<'a> {
+             }
+             Source::Phi { block, args } => {
+                 let _ = site;
++                let key = (format!("{src:?}"), sampler, props);
++                if let Some(&h) = self.join_handles.get(&key) {
++                    return Ok(h);
++                }
+                 let phi = self.descriptor_phi(*block, args, sampler, 8)?;
++                let join = self.block[*block].ok_or("a descriptor chosen by control flow")?;
++                let here = std::mem::replace(&mut self.cur, join);
+                 let (index, bounded) = self.raw_twin(src, phi, sampler, props);
+-                Ok(self.s.heap_handle_at(self.cur, index, sampler, false, props, bounded))
++                let h = self.s.heap_handle_at(self.cur, index, sampler, false, props, bounded);
++                self.cur = here;
++                self.join_handles.insert(key, h);
++                Ok(h)
+             }
+             Source::Select { scc, args } => {
+                 // The heap index of each choice, picked by SCC (uniform).
+@@ -7267,6 +7308,30 @@ impl<'a> Lower<'a> {
+         }
+     }
+ 
++    /// A descriptor address given by root parameters alone. A dynamic
++    /// address or a waterfall loop's per-lane index must stay at its use.
++    fn entry_address(&self, load: Site) -> Option<(usize, u32)> {
++        let a = self.scalar.get(&load)?;
++        let fixed = a.dynamic.is_none() && !self.x.res.waterfall.loads.contains(&load);
++        let root = self.x.native.layout.get(a.param)?.root;
++        let heap = matches!(root, RootType::Table | RootType::ResourceHeap | RootType::SamplerHeap);
++        (fixed && heap).then_some((a.param, a.offset))
++    }
++
++    /// The fixed address is reconstructed in the entry block, independent
++    /// of the registers used by any individual descriptor reload.
++    fn entry_heap_index(&mut self, (param, offset): (usize, u32), first: u8, sampler: bool) -> V {
++        let base = match self.user(param, 0) {
++            Val::I32(base) => base,
++            _ => unreachable!("entry_address only accepts tables and heaps"),
++        };
++        let entry = self.s.entry;
++        let k = self.s.m.i32(offset.wrapping_add(4 * u32::from(first)));
++        let addr = self.s.m.bin(entry, Bin::Add, base, k);
++        let shift = self.s.m.i32(if sampler { 4 } else { 5 });
++        self.s.m.bin(entry, Bin::LShr, addr, shift)
++    }
++
+     /// The heap index to read descriptor `src` at, `index` being the title's:
+     /// for a buffer read as raw bytes, through a table or picked from the
+     /// heap itself (or picked and read as a constant buffer), the host's raw
+@@ -13224,6 +13289,111 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn descriptors_joined_by_nested_control_flow_lower_to_one_uniform_handle() {
++        // The view table at s0 (2D textures at entries 0 and 1, a raw UAV at
++        // dword 16) and a root constant at s1: entry 0 if s1 is 0, else
++        // entry 1 if it is 1, else entry 0 again, the inner if/else joined
++        // before the outer one. The join's edges are a load and a join.
++        let words = [
++            0xBE84_0300, // s_mov_b32 s4, s0
++            0xBE85_0380, // s_mov_b32 s5, 0
++            0xF408_0A02,
++            0xFA00_0040, // s_load_dwordx4 s[40:43], s[4:5], 0x40
++            0xBE88_03FF,
++            0x0000_0092, // s_mov_b32 s8, 0x92 (an immediate sampler)
++            0xBE89_0380, // s_mov_b32 s9, 0
++            0xBE8A_0380, // s_mov_b32 s10, 0
++            0xBE8B_0380, // s_mov_b32 s11, 0
++            0xBF06_8001, // s_cmp_eq_u32 s1, 0
++            0xBF84_0003, // s_cbranch_scc0 -> 0x38
++            0xF40C_0302,
++            0xFA00_0000, // s_load_dwordx8 s[12:19], s[4:5], 0x0
++            0xBF82_0008, // s_branch -> 0x58
++            0xBF06_8101, // 0x38: s_cmp_eq_u32 s1, 1
++            0xBF84_0003, // s_cbranch_scc0 -> 0x4c
++            0xF40C_0302,
++            0xFA00_0020, // s_load_dwordx8 s[12:19], s[4:5], 0x20
++            0xBF82_0002, // s_branch -> 0x54
++            0xF40C_0302,
++            0xFA00_0000, // 0x4c: s_load_dwordx8 s[12:19], s[4:5], 0x0
++            0xBE86_0301, // 0x54: s_mov_b32 s6, s1
++            0x7E04_02F0, // 0x58: v_mov_b32 v2, 0.5
++            0x7E06_02F0, // v_mov_b32 v3, 0.5
++            0x3420_0082, // v_lshlrev_b32 v16, 2, v0
++            0xBF8C_C07F, // s_waitcnt lgkmcnt(0)
++            0xF09C_0F08,
++            0x0043_0C02, // image_sample_lz v[12:15], v[2:3], s[12:19], s[8:11] dmask:0xf dim:SQ_RSRC_IMG_2D
++            0xE070_1000,
++            0x800A_0C10, // buffer_store_dword v12, v16, s[40:43], 0 offen
++            S_ENDPGM,
++        ];
++        let (_, mut used) = texture_and_uav_tables();
++        used.retain(|u| u.user_data == 0);
++        let layout = vec![root(RootType::Table, 0, 0), root(RootType::Constants, 1, 1)];
++        let l = lower_with(&words, layout, used).unwrap();
++        // One image handle from the joins' heap index, the same in all lanes.
++        assert_eq!(l.nonuniform_handles, 0);
++        assert_eq!(l.join_handles, 1);
++        if let Ok(mut v) = super::super::validator::Validator::load(
++            super::super::validator::Validator::default_path().as_deref(),
++        ) {
++            v.validate(&mut l.dxil.clone())
++                .expect("DXIL validation failed");
++        }
++    }
++
++    #[test]
++    fn descriptors_reloaded_from_a_root_table_share_one_handle() {
++        // The view table at s0 (2D textures at entries 0 and 1, a raw UAV at
++        // dword 16) and a root constant at s1. Entry 0 is loaded and sampled
++        // in a branch, then loaded again and sampled after it (the console
++        // compiler reloads a descriptor before each use rather than keep it).
++        let words = [
++            0xBE84_0300, // s_mov_b32 s4, s0
++            0xBE85_0380, // s_mov_b32 s5, 0
++            0xF408_0A02,
++            0xFA00_0040, // s_load_dwordx4 s[40:43], s[4:5], 0x40
++            0xBE88_03FF,
++            0x0000_0092, // s_mov_b32 s8, 0x92 (an immediate sampler)
++            0xBE89_0380, // s_mov_b32 s9, 0
++            0xBE8A_0380, // s_mov_b32 s10, 0
++            0xBE8B_0380, // s_mov_b32 s11, 0
++            0x7E04_02F0, // v_mov_b32 v2, 0.5
++            0x7E06_02F0, // v_mov_b32 v3, 0.5
++            0x3420_0082, // v_lshlrev_b32 v16, 2, v0
++            0xBF06_8001, // s_cmp_eq_u32 s1, 0
++            0xBF84_0005, // s_cbranch_scc0 -> the reload
++            0xF40C_0302,
++            0xFA00_0000, // s_load_dwordx8 s[12:19], s[4:5], 0x0
++            0xBF8C_C07F, // s_waitcnt lgkmcnt(0)
++            0xF09C_0F08,
++            0x0043_0C02, // image_sample_lz v[12:15], v[2:3], s[12:19], s[8:11] dmask:0xf dim:SQ_RSRC_IMG_2D
++            0xF40C_0302,
++            0xFA00_0000, // s_load_dwordx8 s[12:19], s[4:5], 0x0 (again)
++            0xBF8C_C07F, // s_waitcnt lgkmcnt(0)
++            0xF09C_0F08,
++            0x0043_0C02, // image_sample_lz v[12:15], v[2:3], s[12:19], s[8:11]
++            0xE070_1000,
++            0x800A_0C10, // buffer_store_dword v12, v16, s[40:43], 0 offen
++            S_ENDPGM,
++        ];
++        let (_, mut used) = texture_and_uav_tables();
++        used.retain(|u| u.user_data == 0);
++        let layout = vec![root(RootType::Table, 0, 0), root(RootType::Constants, 1, 1)];
++        let l = lower_with(&words, layout, used).unwrap();
++        // One image handle made in the entry block for both loads, and the
++        // UAV's.
++        assert_eq!(l.entry_handles, 2);
++        assert_eq!(l.join_handles, 0);
++        if let Ok(mut v) = super::super::validator::Validator::load(
++            super::super::validator::Validator::default_path().as_deref(),
++        ) {
++            v.validate(&mut l.dxil.clone())
++                .expect("DXIL validation failed");
++        }
++    }
++
+     #[test]
+     fn scalar_bit_tests_lower() {
+         // Each tests one bit of a constant into SCC and branches on it (only

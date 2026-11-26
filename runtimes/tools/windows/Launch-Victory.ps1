@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [ValidateSet('victory', 'xcl')]
     [string]$Backend = 'victory',
@@ -42,6 +42,8 @@ param(
     [switch]$PrewarmPipelines,
     [ValidateRange(1, 10000)]
     [int]$PrewarmLimit = 2048,
+    [ValidateRange(0, 10000000)]
+    [uint32[]]$PrewarmIndices,
     [ValidatePattern('^original-\d{8}-\d{6}-[a-f0-9]{8}$')]
     [string]$PipelineBookFrom,
     [ValidatePattern('^original-\d{8}-\d{6}-[a-f0-9]{8}$')]
@@ -79,6 +81,9 @@ if (($PipelineWorkers -or $PipelineBook -or $PrewarmPipelines) -and -not $amdFor
 }
 if ($PrewarmPipelines -and -not ($WarmCacheFrom -or $PipelineBookFrom)) {
     throw 'PrewarmPipelines requires WarmCacheFrom or PipelineBookFrom with a prior PipelineBook run.'
+}
+if ($PrewarmIndices.Count -gt 0 -and -not $PrewarmPipelines) {
+    throw 'PrewarmIndices requires PrewarmPipelines and a recorded pipeline book.'
 }
 if ($PipelineBookFrom -and (-not $amdFork -or -not $FreshState -or $WarmCacheFrom -or $PrepareOnly)) {
     throw 'PipelineBookFrom requires an AMD fork fresh state and cannot be combined with WarmCacheFrom or PrepareOnly.'
@@ -378,7 +383,11 @@ try {
                 }
             }
             if ($PrewarmPipelines) {
-                $arguments += @('--', 'warm', '--used', '--jobs', '2', '--limit', "$PrewarmLimit")
+                if ($PrewarmIndices.Count -gt 0) {
+                    $arguments += @('--', 'warm', '--these', ($PrewarmIndices -join ','))
+                } else {
+                    $arguments += @('--', 'warm', '--used', '--jobs', '2', '--limit', "$PrewarmLimit")
+                }
             } else {
                 $arguments += @('--', 'run', $title, '--console', $Console, '--execute')
             }
@@ -429,6 +438,7 @@ try {
             pipelineBook = [bool]$PipelineBook
             prewarmPipelines = [bool]$PrewarmPipelines
             prewarmLimit = if ($PrewarmPipelines) { $PrewarmLimit } else { $null }
+            prewarmIndices = @($PrewarmIndices)
             requestedSeconds = $Seconds
             diagnosticKeys = if ($DiagnosticKeys) { $DiagnosticKeys } else { $null }
             captureFrames = @($CaptureAt)

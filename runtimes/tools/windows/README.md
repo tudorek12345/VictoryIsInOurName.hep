@@ -58,3 +58,10 @@ Device-removal message counts do not replace checking Windows events.
 
 The two `Test-*.ps1` scripts use synthetic files only. The runner's additional
 tests are documented in `isolated-run/README.md`.
+
+For a bounded compiler reproduction, add `-PrewarmIndices 51362` (an example
+index, not a portable shader identity) to `-PrewarmPipelines -FreshState
+-PipelineBookFrom <run-id>`, with `-Seconds 150 -CommitMiB 6144
+-HostReserveMiB 3072`. Each index belongs to the exact recorded book. Inspect the
+reported `made` result and exit code; generating DXIL is not proof of successful
+pipeline creation. Offline crash logs remain in that run's local pipeline cache.
