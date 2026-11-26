@@ -44,6 +44,7 @@ param(
     [switch]$PipelineBook,
     [switch]$PrewarmPipelines,
     [switch]$PrewarmLibrary,
+    [switch]$PrewarmCurrentCache,
     [ValidateRange(1, 10000)]
     [int]$PrewarmLimit = 2048,
     [ValidateRange(0, 10000000)]
@@ -98,8 +99,8 @@ if (-not $useXcl -and $VictorySource -eq 'amd7900-series-s' -and -not ($PrepareO
 if (($PipelineWorkers -or $PipelineBook -or $PrewarmPipelines) -and -not $amdFork) {
     throw 'Pipeline worker, recording and prewarm options require the AMD fork.'
 }
-if ($PrewarmPipelines -and -not ($WarmCacheFrom -or $PipelineBookFrom)) {
-    throw 'PrewarmPipelines requires WarmCacheFrom or PipelineBookFrom with a prior PipelineBook run.'
+if ($PrewarmPipelines -and -not ($WarmCacheFrom -or $PipelineBookFrom -or $PrewarmCurrentCache)) {
+    throw 'PrewarmPipelines requires WarmCacheFrom, PipelineBookFrom, or explicit PrewarmCurrentCache.'
 }
 if ($PrewarmIndices.Count -gt 0 -and -not $PrewarmPipelines) {
     throw 'PrewarmIndices requires PrewarmPipelines and a recorded pipeline book.'
@@ -231,6 +232,19 @@ try {
     foreach ($name in $settings.Keys) {
         $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         [Environment]::SetEnvironmentVariable($name, $settings[$name], 'Process')
+    }
+    $currentPrewarmCache = $null
+    if ($PrewarmCurrentCache) {
+        # The launcher lease is held before validating or writing the normal
+        # cache. Cross-run seeds keep their separate exact-runtime checks.
+        $currentPrewarmCache = & (Join-Path $local 'Resolve-VictoryCurrentPrewarm.ps1') `
+            -StateRoot (Join-Path $toolHome 'stage\victory-amd-series-s-state') `
+            -Backend $Backend -VictorySource $VictorySource -Renderer $Renderer `
+            -PrewarmPipelines:$PrewarmPipelines -PrewarmLibrary:$PrewarmLibrary `
+            -PrepareOnly:$PrepareOnly -FreshState:$FreshState -Test720p:$Test720p `
+            -DisplayMode $DisplayMode -WarmCacheFrom $WarmCacheFrom `
+            -PipelineBookFrom $PipelineBookFrom -PipelineUseFrom $PipelineUseFrom
+        Write-Host "Prewarming the normal content-keyed cache at $($currentPrewarmCache.pipelineDirectory) with one library writer"
     }
     $checkout = $null
     $checkoutDirty = $null
@@ -518,6 +532,9 @@ try {
             pipelineBook = [bool]$PipelineBook
             prewarmPipelines = [bool]$PrewarmPipelines
             prewarmLibrary = [bool]$PrewarmLibrary
+            prewarmCurrentCache = [bool]$PrewarmCurrentCache
+            prewarmCacheMode = if ($PrewarmCurrentCache) { 'shared-content-keyed' } elseif ($PrewarmPipelines) { 'seeded' } else { $null }
+            prewarmCache = $currentPrewarmCache
             prewarmLimit = if ($PrewarmPipelines) { $PrewarmLimit } else { $null }
             prewarmIndices = @($PrewarmIndices)
             requestedSeconds = $Seconds

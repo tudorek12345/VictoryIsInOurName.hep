@@ -5903,5 +5903,45 @@
       "blockingFindings": 0,
       "scope": "Completed-list descriptor release ownership and lifetime; read-only review, not a title runtime test."
     }
+  },
+  "displayModeAttempt20261126": {
+    "run": "original-20261126-015434-7397c202",
+    "checkout": "f09f18eda4e94be557fdbbc2106abf87c93ad998",
+    "runtimeSha256": "7AE5559201187DEEF493FB19100FCA526234F2E72F95058D039C498973F9A3BB",
+    "requestedGuestDisplayMode": "1920x1080",
+    "reportedGuestDisplay": "1920x1080",
+    "observedSwapchain": "3840x2160",
+    "observedIntermediateTargets": [
+      "2560x1440"
+    ],
+    "internalResolutionReductionVerified": false,
+    "profile": "isolated copy of normal profile; no mission-selection arguments",
+    "missionIdentityVerified": false,
+    "responsiveControlVerified": false,
+    "cacheFilesSeeded": 2051,
+    "driverCacheFilesSeeded": 4,
+    "copiedSettingsFilesUpdated": 1,
+    "peakJobCommitBytes": 23329865728,
+    "launcherElapsedSeconds": 83.4,
+    "stopReason": "job commit reserve",
+    "exitCode": 126,
+    "restoredPackagePaths": 151,
+    "lastLoggedInterval": {
+      "logLine": 9950,
+      "timestamp": "2026-11-26T09:55:55.171778Z",
+      "fps": 1.8,
+      "frameMs": 545.4,
+      "prepareMs": 334.2,
+      "copyMs": 56.7,
+      "textureMs": 28.3,
+      "gpuMs": 12.6,
+      "readbackMs": 35.6,
+      "drawsPerFrame": 3903,
+      "droppedWithoutPipeline": 2970,
+      "pipelinesBeingMade": 5,
+      "droppedIndirect": 18
+    },
+    "interpretation": "Guest display request accepted, actual swapchain still 4K. No lower-resolution performance comparison or first-mission success established.",
+    "report": "docs/display-and-rendering-followup-20261126.md"
   }
 }
