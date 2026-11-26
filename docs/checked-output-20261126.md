@@ -89,6 +89,15 @@ access paths were restored, then profile deletion failed with sharing violation
 cleanup failure must not be called a gameplay crash or successful completion.
 Any later recovery does not erase the initial result.
 
+The exact stale profile was subsequently removed successfully after its recorded
+processes were confirmed absent. The runner now retries only sharing violations
+for up to 30 seconds of backoff, instead of the previous 4.875 seconds. It logs
+attempts and elapsed time; permanent errors remain cleanup failures, and a
+successful cleanup preserves the original runtime result. Ten deterministic
+policy tests and five isolated stub runs passed (normal exit, timer, physical
+reserve, system commit reserve, job reserve). This repairs cleanup handling;
+it does not extend the title's memory limit or change GPU resource lifetimes.
+
 ## Audio and Windows events
 
 The local recording contains 94.501 seconds of stereo 48 kHz, 16-bit PCM.

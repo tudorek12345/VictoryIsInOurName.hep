@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "profile-cleanup.h"
 
 namespace fs = std::filesystem;
 
@@ -203,16 +204,19 @@ struct Profile {
         if (name.empty()) return true;
         std::wstring profile;
         profile.swap(name);
-        auto result = DeleteAppContainerProfile(profile.c_str());
-        // Profile files can stay in use briefly after the job has exited.
-        constexpr DWORD delays_ms[]{125, 250, 500, 1000, 1000, 1000, 1000};
-        for (const auto delay : delays_ms) {
-            if (result != HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION)) break;
-            Sleep(delay);
-            result = DeleteAppContainerProfile(profile.c_str());
-        }
-        if (FAILED(result)) {
-            std::wcerr << L"DeleteAppContainerProfile failed for " << profile << L" (0x" << std::hex << result << L")\n";
+        // run() has confirmed zero active job processes and released its
+        // handles before normal cleanup. Windows can retain a profile-file
+        // sharing lock longer than the old 4.875-second backoff.
+        const auto result = profile_cleanup::remove(
+            [&] { return DeleteAppContainerProfile(profile.c_str()); },
+            [](std::uint32_t delay) { Sleep(delay); },
+            [] { return GetTickCount64(); });
+        std::wcout << L"AppContainer profile cleanup: attempts=" << result.attempts
+                   << L" elapsed_ms=" << result.elapsed_ms << L" waited_ms=" << result.waited_ms
+                   << L" result=0x" << std::hex << result.status << std::dec << L"\n";
+        if (!result.succeeded()) {
+            std::wcerr << L"DeleteAppContainerProfile failed for " << profile << L" (0x"
+                       << std::hex << result.status << std::dec << L")\n";
             return false;
         }
         return true;
@@ -660,9 +664,11 @@ int wmain(int argc, wchar_t** argv) {
         bool restored = true;
         if (external) restored &= external->restore();
         for (auto& access : grants) restored &= access->restore();
-        if (!container.remove() || !restored) return 125;
+        const bool profile_removed = container.remove();
+        const auto final_result = profile_cleanup::exit_code(result, profile_removed, restored);
+        if (!profile_removed || !restored) return static_cast<int>(final_result);
         std::wcout << L"Job ended and stage grants were restored. Child result " << result << L"\n";
-        return static_cast<int>(result);
+        return static_cast<int>(final_result);
     } catch (const Failure& failure) {
         std::wcerr << failure.operation << L" (0x" << std::hex << failure.code << L")\n";
     } catch (const std::exception& failure) {
