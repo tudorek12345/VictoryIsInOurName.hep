@@ -203,7 +203,34 @@ DeleteAppContainerProfile failed for Synthetic (0x80070020)
     Write-Text $metadata '{"requestedGuestOutput":"1920x1080"}'
     Write-Text $victory 'presenting to a window width=3840 height=2160 format=28'
     $r=Report
-    Assert ($r.resolution.requestedGuestOutput -eq '1920x1080' -and $null -eq $r.resolution.requestedGuestDisplayMode -and $r.resolution.observedSwapchain.width -eq 3840 -and $null -eq $r.resolution.swapchainMatchesRequest -and -not $r.resolution.Contains('guestOutputApplied')) 'A guest-output request must remain separate from a display-mode request and must not imply successful application or changed observed output.'
+    Assert ($r.resolution.requestedGuestOutput -eq '1920x1080' -and $null -eq $r.resolution.requestedGuestDisplayMode -and $r.resolution.observedSwapchain.width -eq 3840 -and $null -eq $r.resolution.swapchainMatchesRequest -and $null -eq $r.resolution.appliedGuestOutput) 'A guest-output request must remain separate from a display-mode request and must not imply successful application or changed observed output.'
+    $passed++
+    Write-Text $victory @"
+${esc}[2m2026-01-01T00:00:01Z${esc}[0m INFO victory_loader::resolution: guest output: sites verified; output applied; native scale unchanged width=1920 height=1080
+2026-01-01T00:00:02Z presenting to a window width=3840 height=2160 format=28
+2026-01-01T00:00:03Z INFO victory_loader::resolution: guest output: sites verified; output applied; native scale unchanged width=2560 height=1440
+2026-01-01T00:00:04Z INFO victory_loader::resolution: guest output: sites verified; output applied; native scale unchanged width=1280 height=720
+"@
+    $r=& $helper -Run synthetic -StageRoot $root -AsObject -IncludeSamples -TailSamples 2
+    Assert ($r.resolution.appliedGuestOutputCount -eq 3 -and $r.resolution.appliedGuestOutput.width -eq 1280 -and $r.resolution.appliedGuestOutput.height -eq 720 -and $r.resolution.appliedGuestOutput.nativeRenderScaleUnchanged -eq $true -and $r.resolution.appliedGuestOutput.logLine -eq 4 -and $r.resolution.appliedGuestOutput.timestamp -eq '2026-01-01T00:00:04Z') 'Only a complete verified loader success event must establish the applied guest-output dimensions and source position.'
+    Assert ($r.resolution.appliedGuestOutputHistory.Count -eq 2 -and $r.resolution.appliedGuestOutputHistory[0].width -eq 2560 -and $r.resolution.appliedGuestOutputHistory[0].logLine -eq 3 -and $r.resolution.appliedGuestOutputHistory[1].width -eq 1280 -and $r.resolution.requestedGuestOutput -eq '1920x1080' -and $r.resolution.observedSwapchain.width -eq 3840) 'Application history must remain bounded and ordered while requested, applied and observed dimensions remain independent.'
+    $passed++
+    Write-Text $victory 'presenting to a window width=1920 height=1080 format=28'
+    $r=Report
+    Assert ($r.resolution.requestedGuestOutput -eq '1920x1080' -and $r.resolution.observedSwapchain.width -eq 1920 -and $null -eq $r.resolution.appliedGuestOutput -and $r.resolution.appliedGuestOutputCount -eq 0 -and $r.resolution.appliedGuestOutputHistory.Count -eq 0) 'A requested size matching the observed swapchain must not manufacture a loader application event.'
+    $passed++
+    Write-Text $victory @'
+2026-01-01T00:00:01Z ERROR victory_loader::resolution: applying requested guest output before title execution: transaction failed width=1920 height=1080
+2026-01-01T00:00:02Z INFO victory_loader::resolution: guest output: sites verified; output not applied; native scale unchanged width=1920 height=1080
+2026-01-01T00:00:03Z INFO victory_loader::resolution: guest output: sites verified; output applied; native scale unchanged width=1920
+2026-01-01T00:00:04Z INFO victory_loader::resolution: guest output: sites verified; output applied; native scale unchanged width=999999999999999999999 height=1080
+2026-01-01T00:00:05Z INFO victory_loader::resolution: guest output: sites verified; output applied; native scale unchanged width=0 height=1080
+2026-01-01T00:00:06Z INFO other_module: guest output: sites verified; output applied; native scale unchanged width=1920 height=1080
+2026-01-01T00:00:07Z ERROR other_module: quoted INFO victory_loader::resolution: guest output: sites verified; output applied; native scale unchanged width=1920 height=1080
+guest output   1920x1080; native render scale unchanged
+'@
+    $r=Report
+    Assert ($null -eq $r.resolution.appliedGuestOutput -and $r.resolution.appliedGuestOutputCount -eq 0 -and $r.resolution.appliedGuestOutputHistory.Count -eq 0 -and $null -eq $r.resolution.observedSwapchain) 'Failure, partial, malformed, unrelated-module and caller status lines must not count as a verified application or actual presentation.'
     $passed++
     $thin='list calls translated by threads of ours per frame (VICTORY_THIN): 20 in 1.0 ms (all threads), 2.0 lists, 3.0 pieces; left in the middle 0.00'
     Write-Text $victory "2026-01-01T00:00:01Z INFO victory_gpu::list::thin: $thin"

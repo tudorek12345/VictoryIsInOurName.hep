@@ -65,6 +65,8 @@ $pipelineCache = New-Object 'System.Collections.Generic.List[object]'
 $displayModes = New-Object 'System.Collections.Generic.List[object]'
 $swapchains = New-Object 'System.Collections.Generic.Queue[object]'
 $swapchainState = @{ count=0; first=$null }
+$appliedGuestOutputs = New-Object 'System.Collections.Generic.Queue[object]'
+$appliedGuestOutputState = @{ count=0; last=$null }
 $thinUploadTail = New-Object 'System.Collections.Generic.Queue[object]'
 $thinUploadState = @{ count=0; maximum=$null; last=$null }
 $precompile = [ordered]@{ requested=$false; known=$null; previouslyProcessed=$null; previouslyBad=$null; selected=$null; processes=$null; completed=$false; processed=$null; refused=$null; childFailures=$null; elapsedSeconds=$null }
@@ -122,6 +124,20 @@ Read-LinesShared (Join-Path $logDir 'victory.log') {
             if ($null -eq $swapchainState.first) { $swapchainState.first=$size }
             $swapchains.Enqueue($size)
             if ($swapchains.Count -gt $TailSamples) { $null=$swapchains.Dequeue() }
+        }
+    }
+    # Only the loader's success event after the verified transaction, cache
+    # flush and protection restoration proves application. Neither a request
+    # nor the caller's human-readable output line establishes that event.
+    $eventLine = if ($timestamp) { $line.Substring($timestamp.Length).TrimStart() } else { $line.TrimStart() }
+    if ($eventLine -match '^INFO\s+victory_loader::resolution:\s+guest output: sites verified; output applied; native scale unchanged\s+width=(?<outputWidth>[1-9]\d*)\s+height=(?<outputHeight>[1-9]\d*)\s*$') {
+        $outputWidth=0; $outputHeight=0
+        if ([int]::TryParse($Matches['outputWidth'], [ref]$outputWidth) -and [int]::TryParse($Matches['outputHeight'], [ref]$outputHeight)) {
+            $applied=[pscustomobject]@{ logLine=$lineNumber; timestamp=$timestamp; width=$outputWidth; height=$outputHeight; nativeRenderScaleUnchanged=$true }
+            $appliedGuestOutputState.count++
+            $appliedGuestOutputState.last=$applied
+            $appliedGuestOutputs.Enqueue($applied)
+            if ($appliedGuestOutputs.Count -gt $TailSamples) { $null=$appliedGuestOutputs.Dequeue() }
         }
     }
     $match = [regex]::Match($line, $framePattern)
@@ -230,12 +246,14 @@ $report = [ordered]@{
     resolution=[ordered]@{
         requestedGuestDisplayMode=$metadata.requestedGuestDisplayMode
         requestedGuestOutput=$metadata.requestedGuestOutput
+        appliedGuestOutput=$appliedGuestOutputState.last; appliedGuestOutputCount=$appliedGuestOutputState.count
+        appliedGuestOutputHistory=@($appliedGuestOutputs.ToArray())
         legacyPresentationOnly=$metadata.legacy720pPresentationOnly
         reportedGuestDisplay=$lastDisplay; observedSwapchain=$lastSwapchain
         initialSwapchain=$swapchainState.first; swapchainObservationCount=$swapchainState.count
         swapchainHistory=@($swapchains.ToArray())
         swapchainMatchesRequest=$swapchainMatchesRequest
-        interpretation='The guest display report, swapchain and internal render targets are different. Display-mode and guest-output requests do not prove that a change was applied. observedSwapchain is the latest recognized creation or resize, not the size of the entire run. swapchainHistory is a bounded tail in log order. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown.'
+        interpretation='The guest display report, swapchain and internal render targets are different. Display-mode and guest-output requests do not prove that a change was applied. appliedGuestOutput records only the verified loader success event; its absence is unknown, not proof of failure, and its presence does not establish actual rendering dimensions. observedSwapchain is the latest recognized creation or resize, not the size of the entire run. Both histories are bounded tails in log order. A matching swapchain alone does not prove every pass renders at that size. Missing observations remain unknown.'
     }
     elapsedSeconds=$metadata.elapsedSeconds; launcherExitCode=$metadata.exitCode
     stopReason=$state.stopReason; childResult=$state.childResult
